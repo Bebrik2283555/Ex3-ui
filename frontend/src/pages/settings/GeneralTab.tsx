@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Button,
   Input,
   InputNumber,
   Select,
+  Space,
   Switch,
   Tabs,
 } from 'antd';
@@ -17,6 +19,7 @@ import {
 } from '@ant-design/icons';
 import type { AllSetting } from '@/models/setting';
 import { HttpUtil, LanguageManager } from '@/utils';
+import { getMessage } from '@/utils/messageBus';
 import { onNumber } from '@/utils/onNumber';
 import { DefaultSettingTag, SettingListItem } from '@/components/ui';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -47,6 +50,28 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
   const [inboundOptions, setInboundOptions] = useState<{ label: string; value: string }[]>([]);
   const [outboundTagList, setOutboundTagList] = useState<string[]>([]);
   const [balancerTagList, setBalancerTagList] = useState<string[]>([]);
+  const [selfSignedHost, setSelfSignedHost] = useState('');
+  const [selfSignedBusy, setSelfSignedBusy] = useState(false);
+
+  const generateSelfSigned = async () => {
+    const host = selfSignedHost.trim();
+    if (!host) return;
+    setSelfSignedBusy(true);
+    try {
+      const msg = await HttpUtil.post('/panel/api/server/selfsignedCert', { host }) as ApiMsg<{
+        webCertFile: string;
+        webKeyFile: string;
+      }>;
+      if (!msg?.success || !msg.obj?.webCertFile) {
+        getMessage().error(t('somethingWentWrong'));
+        return;
+      }
+      updateSetting({ webCertFile: msg.obj.webCertFile, webKeyFile: msg.obj.webKeyFile });
+      getMessage().success(t('pages.settings.selfSignedSuccess'));
+    } finally {
+      setSelfSignedBusy(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -254,6 +279,19 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
             </SettingListItem>
             <SettingListItem paddings="small" title={t('pages.settings.privateKeyPath')} description={t('pages.settings.privateKeyPathDesc')}>
               <Input value={allSetting.webKeyFile} onChange={(e) => updateSetting({ webKeyFile: e.target.value })} />
+            </SettingListItem>
+            <SettingListItem paddings="small" title={t('pages.settings.selfSignedTitle')} description={t('pages.settings.selfSignedDesc')}>
+              <Space.Compact style={{ width: '100%' }}>
+                <Input
+                  value={selfSignedHost}
+                  onChange={(e) => setSelfSignedHost(e.target.value)}
+                  placeholder="example.com or 1.2.3.4"
+                  onPressEnter={() => void generateSelfSigned()}
+                />
+                <Button type="primary" loading={selfSignedBusy} onClick={() => void generateSelfSigned()}>
+                  {t('pages.settings.selfSignedGenerate')}
+                </Button>
+              </Space.Compact>
             </SettingListItem>
           </>
         ),

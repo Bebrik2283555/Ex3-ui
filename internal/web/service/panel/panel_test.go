@@ -3,6 +3,7 @@ package panel
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
+	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 )
 
@@ -39,6 +41,23 @@ func TestCompareVersionStringsRejectsUnexpectedFormats(t *testing.T) {
 	}
 	if _, ok := compareVersionStrings("v2.9", "2.9.3"); ok {
 		t.Fatal("expected short version to be rejected")
+	}
+}
+
+func TestGetUpdateInfoIsForkVersionNoUpdate(t *testing.T) {
+	if _, ok := parseVersionParts(config.GetBaseVersion()); ok {
+		t.Fatalf("fork base version %q must not parse as a semver tag", config.GetBaseVersion())
+	}
+	if err := database.InitDB(filepath.Join(t.TempDir(), "x-ui.db")); err != nil {
+		t.Fatalf("InitDB: %v", err)
+	}
+	t.Cleanup(func() { _ = database.CloseDB() })
+	info, err := (&PanelService{}).GetUpdateInfo()
+	if err != nil {
+		t.Fatalf("GetUpdateInfo: unexpected error: %v", err)
+	}
+	if info.UpdateAvailable {
+		t.Fatalf("UpdateAvailable = true, want false for fork version %q", config.GetBaseVersion())
 	}
 }
 

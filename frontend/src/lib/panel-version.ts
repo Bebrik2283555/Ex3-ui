@@ -18,12 +18,14 @@ function parseVersionParts(version: string): [number, number, number] | null {
 // identity (see config.GetPanelVersion); show those — and any other
 // non-numeric label — verbatim. Semantic versions get a single normalized "v"
 // prefix, so a raw "v3.4.0" tag and a bare "3.4.0" both render as "v3.4.0"
-// instead of doubling up to "vv3.4.0".
+// instead of doubling up to "vv3.4.0". Fork labels such as
+// "1.0 (Based on 3X_UI 3.6.0)" are not plain dotted tags and pass through
+// untouched.
 export function formatPanelVersion(version: string | undefined | null): string {
   const v = (version || '').trim();
   if (!v) return '';
   const normalized = v.replace(/^v/i, '');
-  return /^\d/.test(normalized) ? `v${normalized}` : v;
+  return /^\d+(\.\d+){1,2}$/.test(normalized) ? `v${normalized}` : v;
 }
 
 export function isPanelUpdateAvailable(latest: string, current: string): boolean {

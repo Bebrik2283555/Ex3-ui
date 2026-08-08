@@ -5,6 +5,11 @@
 .settings-page,
 .nodes-page,
 .groups-page,
+.hosts-page,
+.extras-page,
+.optimize-page,
+.zapret-page,
+.hostsfile-page,
 .api-docs-page {
   --bg-page: #e6e8ec;
   --bg-card: #ffffff;
@@ -19,6 +24,11 @@
 .settings-page.is-dark,
 .nodes-page.is-dark,
 .groups-page.is-dark,
+.hosts-page.is-dark,
+.extras-page.is-dark,
+.optimize-page.is-dark,
+.zapret-page.is-dark,
+.hostsfile-page.is-dark,
 .api-docs-page.is-dark {
   --bg-page: #1a1b1f;
   --bg-card: #23252b;
@@ -31,6 +41,11 @@
 .settings-page.is-dark.is-ultra,
 .nodes-page.is-dark.is-ultra,
 .groups-page.is-dark.is-ultra,
+.hosts-page.is-dark.is-ultra,
+.extras-page.is-dark.is-ultra,
+.optimize-page.is-dark.is-ultra,
+.zapret-page.is-dark.is-ultra,
+.hostsfile-page.is-dark.is-ultra,
 .api-docs-page.is-dark.is-ultra {
   --bg-page: #000;
   --bg-card: #101013;
@@ -50,6 +65,16 @@
 .nodes-page .ant-layout-content,
 .groups-page .ant-layout,
 .groups-page .ant-layout-content,
+.hosts-page .ant-layout,
+.hosts-page .ant-layout-content,
+.extras-page .ant-layout,
+.extras-page .ant-layout-content,
+.optimize-page .ant-layout,
+.optimize-page .ant-layout-content,
+.zapret-page .ant-layout,
+.zapret-page .ant-layout-content,
+.hostsfile-page .ant-layout,
+.hostsfile-page .ant-layout-content,
 .api-docs-page .ant-layout,
 .api-docs-page .ant-layout-content {
   background: transparent;
@@ -62,6 +87,11 @@
 .settings-page .content-shell,
 .nodes-page .content-shell,
 .groups-page .content-shell,
+.hosts-page .content-shell,
+.extras-page .content-shell,
+.optimize-page .content-shell,
+.zapret-page .content-shell,
+.hostsfile-page .content-shell,
 .api-docs-page .content-shell {
   background: transparent;
 }
@@ -72,7 +102,12 @@
 .xray-page .content-area,
 .settings-page .content-area,
 .nodes-page .content-area,
-.groups-page .content-area {
+.groups-page .content-area,
+.hosts-page .content-area,
+.extras-page .content-area,
+.optimize-page .content-area,
+.zapret-page .content-area,
+.hostsfile-page .content-area {
   padding: 24px;
 }
 
@@ -80,7 +115,12 @@
   .clients-page .content-area,
   .inbounds-page .content-area,
   .nodes-page .content-area,
-  .groups-page .content-area {
+  .groups-page .content-area,
+  .hosts-page .content-area,
+  .extras-page .content-area,
+  .optimize-page .content-area,
+  .zapret-page .content-area,
+  .hostsfile-page .content-area {
     padding: 8px;
   }
 }
@@ -177,41 +217,13 @@ body.dark .ant-dropdown-menu-item-divider {
   }
 }
 
-/* Hosts page shares the standard panel page shell (background, transparent
-   layout, content padding, summary-card padding). */
-.hosts-page {
-  --bg-page: #e6e8ec;
-  --bg-card: #ffffff;
-  min-height: 100vh;
-  background: var(--bg-page);
-}
-
-.hosts-page.is-dark {
-  --bg-page: #1a1b1f;
-  --bg-card: #23252b;
-}
-
-.hosts-page.is-dark.is-ultra {
-  --bg-page: #000;
-  --bg-card: #101013;
-}
-
-.hosts-page .ant-layout,
-.hosts-page .ant-layout-content,
-.hosts-page .content-shell {
-  background: transparent;
-}
-
-.hosts-page .content-area {
-  padding: 24px;
-}
-
+/* Hosts page shares the standard panel page shell; only its summary-card
+   padding differs from the common rules above. */
 .hosts-page .summary-card {
   padding: 16px;
 }
 
 @media (max-width: 768px) {
-  .hosts-page .content-area,
   .hosts-page .summary-card {
     padding: 8px;
   }

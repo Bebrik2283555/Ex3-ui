@@ -30,6 +30,11 @@ func (a *BaseController) checkLogin(c *gin.Context) {
 	}
 }
 
+// urlForm carries a remote download link for the fetch-from-URL endpoints.
+type urlForm struct {
+	URL string `json:"url" binding:"required"`
+}
+
 // I18nWeb retrieves an internationalized message for the web interface based on the current locale.
 func I18nWeb(c *gin.Context, name string, params ...string) string {
 	anyfunc, funcExists := c.Get("I18n")

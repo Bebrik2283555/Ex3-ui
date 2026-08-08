@@ -2897,6 +2897,14 @@
       "description": "Xray configuration template, outbound management, Warp/Nord integration, and config testing. All endpoints under /panel/api/xray."
     },
     {
+      "name": "Extra Cores",
+      "description": "Manage the bundled sidecar cores (qwdtt and olcRTC) that run outside Xray as separate processes, including their configs and binary updates."
+    },
+    {
+      "name": "System Tools",
+      "description": "One-shot tuning for weak VPSes (DNS, BBR/sysctl, swap), the transparent zapret DPI-bypass service, and the /etc/hosts file used by the extra cores."
+    },
+    {
       "name": "Subscription Server",
       "description": "A separate HTTP/HTTPS server that serves proxy subscription links (standard, JSON, and Clash) to clients. The server listens on its own port (default 10882) and is configured in Settings → Subscription. Paths are configurable; defaults are shown below. All subscription endpoints set response headers for client apps to read traffic/expiry info."
     },
@@ -4637,6 +4645,65 @@
                   "obj": {
                     "webCertFile": "/root/cert/example.com/fullchain.pem",
                     "webKeyFile": "/root/cert/example.com/privkey.pem"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/selfsignedCert": {
+      "post": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Generate a 10-year self-signed TLS certificate for the given host name or IP, save it next to the panel database and point the panel webTLS settings at it. Useful for HTTPS testing when Let's Encrypt issuance is rate-limited or the host has no public domain. The panel must be restarted to pick up the new certificate.",
+        "operationId": "post_panel_api_server_selfsignedCert",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "description": "Host name or IP address the certificate must cover (scheme and port are stripped)."
+                  }
+                },
+                "required": [
+                  "host"
+                ]
+              },
+              "example": {
+                "host": "example.com"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "webCertFile": "/etc/x-ui/selfsigned.pem",
+                    "webKeyFile": "/etc/x-ui/selfsigned.key"
                   }
                 }
               }
@@ -11077,6 +11144,1069 @@
         ],
         "summary": "Preview a subscription URL: fetch and parse it into outbounds without persisting anything.",
         "operationId": "post_panel_api_xray_outbound_subs_parse",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/extra/services": {
+      "get": {
+        "tags": [
+          "Extra Cores"
+        ],
+        "summary": "List every extra core with its status (enabled, running, binary present) and effective config.",
+        "operationId": "get_panel_api_extra_services",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    {
+                      "name": "qwdtt",
+                      "displayName": "qWDTT",
+                      "enabled": true,
+                      "running": true,
+                      "binaryExists": true,
+                      "config": {
+                        "listenAddr": "0.0.0.0:56000",
+                        "wgPort": 56001
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/extra/services/{name}/status": {
+      "get": {
+        "tags": [
+          "Extra Cores"
+        ],
+        "summary": "Status of a single extra core.",
+        "operationId": "get_panel_api_extra_services_name_status",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Core name: qwdtt or olcrtc.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/extra/services/{name}/config": {
+      "get": {
+        "tags": [
+          "Extra Cores"
+        ],
+        "summary": "Current stored configuration of an extra core.",
+        "operationId": "get_panel_api_extra_services_name_config",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Core name: qwdtt or olcrtc.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Extra Cores"
+        ],
+        "summary": "Update the configuration of an extra core and apply it (restarts the process when its settings changed).",
+        "operationId": "put_panel_api_extra_services_name_config",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Core name: qwdtt or olcrtc.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "enabled": true,
+                "autoStart": true,
+                "listenAddr": "0.0.0.0:56000",
+                "wgPort": 56001,
+                "password": "secret",
+                "dns": "8.8.8.8"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/extra/services/{name}/start": {
+      "post": {
+        "tags": [
+          "Extra Cores"
+        ],
+        "summary": "Start an extra core process.",
+        "operationId": "post_panel_api_extra_services_name_start",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Core name: qwdtt or olcrtc.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/extra/services/{name}/stop": {
+      "post": {
+        "tags": [
+          "Extra Cores"
+        ],
+        "summary": "Stop an extra core process.",
+        "operationId": "post_panel_api_extra_services_name_stop",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Core name: qwdtt or olcrtc.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/extra/services/{name}/restart": {
+      "post": {
+        "tags": [
+          "Extra Cores"
+        ],
+        "summary": "Restart an extra core process.",
+        "operationId": "post_panel_api_extra_services_name_restart",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Core name: qwdtt or olcrtc.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/extra/services/{name}/logs": {
+      "get": {
+        "tags": [
+          "Extra Cores"
+        ],
+        "summary": "Recent output lines of an extra core process.",
+        "operationId": "get_panel_api_extra_services_name_logs",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Core name: qwdtt or olcrtc.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lines",
+            "in": "query",
+            "required": false,
+            "description": "How many lines to return (default 200).",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/extra/services/{name}/upload": {
+      "post": {
+        "tags": [
+          "Extra Cores"
+        ],
+        "summary": "Replace the binary of an extra core (multipart form field \"file\"). Saved to bin/extra-<name>.",
+        "operationId": "post_panel_api_extra_services_name_upload",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Core name: qwdtt or olcrtc.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/extra/services/{name}/download": {
+      "post": {
+        "tags": [
+          "Extra Cores"
+        ],
+        "summary": "Fetch the binary of an extra core from a public URL (file host, Google Drive, CDN) and save it to bin/extra-<name>.",
+        "operationId": "post_panel_api_extra_services_name_download",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Core name: qwdtt or olcrtc.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/extra/services/{name}/binary": {
+      "delete": {
+        "tags": [
+          "Extra Cores"
+        ],
+        "summary": "Stop an extra core and delete its binary from disk.",
+        "operationId": "delete_panel_api_extra_services_name_binary",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "Core name: qwdtt or olcrtc.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/optimize/status": {
+      "get": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Which optimizations are already applied (BBR, TCP buffers, swap, DNS resolvers).",
+        "operationId": "get_panel_api_optimize_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/optimize/apply": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Apply the selected tuning steps. At least one of dns/bbr/swap must be true.",
+        "operationId": "post_panel_api_optimize_apply",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "dns": true,
+                "bbr": true,
+                "swap": true,
+                "swapSize": 1024
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    "dns",
+                    "bbr",
+                    "swap"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/optimize/revert": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Undo the applied optimizations (remove sysctl file and swapfile).",
+        "operationId": "post_panel_api_optimize_revert",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/status": {
+      "get": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Whether zapret is installed, running, enabled and which firewall it uses.",
+        "operationId": "get_panel_api_zapret_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/install": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Install zapret from the bundled assets to /opt/zapret, write the systemd unit and start it.",
+        "operationId": "post_panel_api_zapret_install",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "firewall": "nftables",
+                "ifaceWan": "eth0",
+                "ifaceLan": ""
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/download": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Download a zapret release ZIP from a public URL, unpack it and install to /opt/zapret (same layout as install).",
+        "operationId": "post_panel_api_zapret_download",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "url": "https://example.com/zapret-master.zip",
+                "firewall": "nftables",
+                "ifaceWan": "eth0",
+                "ifaceLan": ""
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/uninstall": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Stop and remove zapret and its systemd unit.",
+        "operationId": "post_panel_api_zapret_uninstall",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/start": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Start the zapret service.",
+        "operationId": "post_panel_api_zapret_start",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/stop": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Stop the zapret service.",
+        "operationId": "post_panel_api_zapret_stop",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/restart": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Restart the zapret service (re-applies iptables/nftables rules and nfqws).",
+        "operationId": "post_panel_api_zapret_restart",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/hosts": {
+      "get": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "The current zapret domain lists (bypass and ignore).",
+        "operationId": "get_panel_api_zapret_hosts",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "bypass": [
+                      "example.com"
+                    ],
+                    "ignore": []
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Replace the zapret domain lists and restart the service to apply them.",
+        "operationId": "put_panel_api_zapret_hosts",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "bypass": [
+                  "example.com"
+                ],
+                "ignore": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/logs": {
+      "get": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Recent zapret service output from journald.",
+        "operationId": "get_panel_api_zapret_logs",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/hostsfile": {
+      "get": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Read the system hosts file (/etc/hosts) as raw text plus parsed entries.",
+        "operationId": "get_panel_api_hostsfile",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Replace the system hosts file. Useful to pin domains for the extra cores.",
+        "operationId": "put_panel_api_hostsfile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "raw": "# Managed by x-ui\n1.2.3.4 example.com\n"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/hostsfile/download": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Fetch the hosts content from a public URL and replace /etc/hosts with it.",
+        "operationId": "post_panel_api_hostsfile_download",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "url": "https://example.com/hosts"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful response",

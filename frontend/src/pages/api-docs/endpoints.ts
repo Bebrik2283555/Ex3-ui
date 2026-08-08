@@ -363,6 +363,16 @@ export const sections: readonly Section[] = [
         response: '{\n  "success": true,\n  "obj": {\n    "webCertFile": "/root/cert/example.com/fullchain.pem",\n    "webKeyFile": "/root/cert/example.com/privkey.pem"\n  }\n}',
       },
       {
+        method: 'POST',
+        path: '/panel/api/server/selfsignedCert',
+        summary: 'Generate a 10-year self-signed TLS certificate for the given host name or IP, save it next to the panel database and point the panel webTLS settings at it. Useful for HTTPS testing when Let\'s Encrypt issuance is rate-limited or the host has no public domain. The panel must be restarted to pick up the new certificate.',
+        params: [
+          { name: 'host', in: 'body', type: 'string', desc: 'Host name or IP address the certificate must cover (scheme and port are stripped).' },
+        ],
+        body: '{\n  "host": "example.com"\n}',
+        response: '{\n  "success": true,\n  "obj": {\n    "webCertFile": "/etc/x-ui/selfsigned.pem",\n    "webKeyFile": "/etc/x-ui/selfsigned.key"\n  }\n}',
+      },
+      {
         method: 'GET',
         path: '/panel/api/server/descendants',
         summary: 'Read-only summaries (guid, parentGuid, name, address, status, versions) of the nodes this panel manages. A parent panel calls it on a node (via the node API token) to surface transitive sub-nodes in a chained topology. Counts are computed by the parent, not returned here.',
@@ -1460,6 +1470,202 @@ export const sections: readonly Section[] = [
         params: [
           { name: 'url', in: 'body (form)', type: 'string', desc: 'Subscription URL to preview (required).' },
         ],
+      },
+    ],
+  },
+
+  {
+    id: 'extra-cores',
+    title: 'Extra Cores',
+    description:
+      'Manage the bundled sidecar cores (qwdtt and olcRTC) that run outside Xray as separate processes, including their configs and binary updates.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/extra/services',
+        summary: 'List every extra core with its status (enabled, running, binary present) and effective config.',
+        response: '{\n  "success": true,\n  "obj": [\n    { "name": "qwdtt", "displayName": "qWDTT", "enabled": true, "running": true, "binaryExists": true, "config": { "listenAddr": "0.0.0.0:56000", "wgPort": 56001 } }\n  ]\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/extra/services/:name/status',
+        summary: 'Status of a single extra core.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
+        ],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/extra/services/:name/config',
+        summary: 'Current stored configuration of an extra core.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
+        ],
+      },
+      {
+        method: 'PUT',
+        path: '/panel/api/extra/services/:name/config',
+        summary: 'Update the configuration of an extra core and apply it (restarts the process when its settings changed).',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
+        ],
+        body: '{\n  "enabled": true,\n  "autoStart": true,\n  "listenAddr": "0.0.0.0:56000",\n  "wgPort": 56001,\n  "password": "secret",\n  "dns": "8.8.8.8"\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/extra/services/:name/start',
+        summary: 'Start an extra core process.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/extra/services/:name/stop',
+        summary: 'Stop an extra core process.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/extra/services/:name/restart',
+        summary: 'Restart an extra core process.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
+        ],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/extra/services/:name/logs',
+        summary: 'Recent output lines of an extra core process.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
+          { name: 'lines', in: 'query', type: 'integer', optional: true, desc: 'How many lines to return (default 200).' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/extra/services/:name/upload',
+        summary: 'Replace the binary of an extra core (multipart form field "file"). Saved to bin/extra-<name>.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
+          { name: 'file', in: 'body (multipart)', type: 'file', desc: 'The new binary.' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/extra/services/:name/download',
+        summary: 'Fetch the binary of an extra core from a public URL (file host, Google Drive, CDN) and save it to bin/extra-<name>.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
+          { name: 'url', in: 'body (json)', type: 'string', desc: 'Direct download link to the core binary.' },
+        ],
+      },
+      {
+        method: 'DELETE',
+        path: '/panel/api/extra/services/:name/binary',
+        summary: 'Stop an extra core and delete its binary from disk.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'system-tools',
+    title: 'System Tools',
+    description:
+      'One-shot tuning for weak VPSes (DNS, BBR/sysctl, swap), the transparent zapret DPI-bypass service, and the /etc/hosts file used by the extra cores.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/optimize/status',
+        summary: 'Which optimizations are already applied (BBR, TCP buffers, swap, DNS resolvers).',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/optimize/apply',
+        summary: 'Apply the selected tuning steps. At least one of dns/bbr/swap must be true.',
+        body: '{\n  "dns": true,\n  "bbr": true,\n  "swap": true,\n  "swapSize": 1024\n}',
+        response: '{\n  "success": true,\n  "obj": ["dns", "bbr", "swap"]\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/optimize/revert',
+        summary: 'Undo the applied optimizations (remove sysctl file and swapfile).',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/zapret/status',
+        summary: 'Whether zapret is installed, running, enabled and which firewall it uses.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/install',
+        summary: 'Install zapret from the bundled assets to /opt/zapret, write the systemd unit and start it.',
+        body: '{\n  "firewall": "nftables",\n  "ifaceWan": "eth0",\n  "ifaceLan": ""\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/download',
+        summary: 'Download a zapret release ZIP from a public URL, unpack it and install to /opt/zapret (same layout as install).',
+        body: '{\n  "url": "https://example.com/zapret-master.zip",\n  "firewall": "nftables",\n  "ifaceWan": "eth0",\n  "ifaceLan": ""\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/uninstall',
+        summary: 'Stop and remove zapret and its systemd unit.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/start',
+        summary: 'Start the zapret service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/stop',
+        summary: 'Stop the zapret service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/restart',
+        summary: 'Restart the zapret service (re-applies iptables/nftables rules and nfqws).',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/zapret/hosts',
+        summary: 'The current zapret domain lists (bypass and ignore).',
+        response: '{\n  "success": true,\n  "obj": { "bypass": ["example.com"], "ignore": [] }\n}',
+      },
+      {
+        method: 'PUT',
+        path: '/panel/api/zapret/hosts',
+        summary: 'Replace the zapret domain lists and restart the service to apply them.',
+        body: '{\n  "bypass": ["example.com"],\n  "ignore": []\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/zapret/logs',
+        summary: 'Recent zapret service output from journald.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/hostsfile',
+        summary: 'Read the system hosts file (/etc/hosts) as raw text plus parsed entries.',
+      },
+      {
+        method: 'PUT',
+        path: '/panel/api/hostsfile',
+        summary: 'Replace the system hosts file. Useful to pin domains for the extra cores.',
+        body: '{\n  "raw": "# Managed by x-ui\\n1.2.3.4 example.com\\n"\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/hostsfile/download',
+        summary: 'Fetch the hosts content from a public URL and replace /etc/hosts with it.',
+        body: '{\n  "url": "https://example.com/hosts"\n}',
       },
     ],
   },

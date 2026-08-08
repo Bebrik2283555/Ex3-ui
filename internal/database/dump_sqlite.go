@@ -1,4 +1,4 @@
-package database
+﻿package database
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

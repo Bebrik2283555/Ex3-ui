@@ -129,7 +129,7 @@ before_show_menu() {
 }
 
 install() {
-    bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/main/install.sh)
+    bash <(curl -Ls https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/install.sh)
     if [[ $? == 0 ]]; then
         if [[ $# == 0 ]]; then
             start
@@ -148,7 +148,7 @@ update() {
         fi
         return 0
     fi
-    bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/main/update.sh)
+    bash <(curl -Ls https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/update.sh)
     if [[ $? == 0 ]]; then
         LOGI "Update is complete, Panel has automatically restarted "
         before_show_menu
@@ -166,7 +166,7 @@ update_dev() {
     fi
     # XUI_UPDATE_TAG tells update.sh to install the dev-latest pre-release
     # instead of the latest stable tag.
-    XUI_UPDATE_TAG="dev-latest" bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/main/update.sh)
+    XUI_UPDATE_TAG="dev-latest" bash <(curl -Ls https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/update.sh)
     if [[ $? == 0 ]]; then
         LOGI "Dev update is complete, Panel has automatically restarted "
         before_show_menu
@@ -219,7 +219,7 @@ update_menu() {
         return 0
     fi
 
-    if replace_xui_script "https://raw.githubusercontent.com/MHSanaei/3x-ui/main/x-ui.sh" "false"; then
+    if replace_xui_script "https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/x-ui.sh" "false"; then
         chmod +x ${xui_folder}/x-ui.sh
         echo -e "${green}Update successful. The panel has automatically restarted.${plain}"
         exit 0
@@ -238,7 +238,7 @@ legacy_version() {
         exit 1
     fi
     # Use the entered panel version in the download link
-    install_command="bash <(curl -Ls "https://raw.githubusercontent.com/mhsanaei/3x-ui/v$tag_version/install.sh") v$tag_version"
+    install_command="bash <(curl -Ls "https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/v$tag_version/install.sh") v$tag_version"
 
     echo "Downloading and installing panel version $tag_version..."
     eval $install_command
@@ -303,7 +303,7 @@ uninstall() {
     echo ""
     echo -e "Uninstalled Successfully.\n"
     echo "If you need to install this panel again, you can use below command:"
-    echo -e "${green}bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)${plain}"
+    echo -e "${green}bash <(curl -Ls https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/master/install.sh)${plain}"
     echo ""
     # Trap the SIGTERM signal
     trap delete_script SIGTERM
@@ -742,101 +742,8 @@ show_log() {
     fi
 }
 
-bbr_menu() {
-    echo -e "${green}\t1.${plain} Enable BBR"
-    echo -e "${green}\t2.${plain} Disable BBR"
-    echo -e "${green}\t0.${plain} Back to Main Menu"
-    read -rp "Choose an option: " choice
-    case "$choice" in
-        0)
-            show_menu
-            ;;
-        1)
-            enable_bbr
-            bbr_menu
-            ;;
-        2)
-            disable_bbr
-            bbr_menu
-            ;;
-        *)
-            echo -e "${red}Invalid option. Please select a valid number.${plain}\n"
-            bbr_menu
-            ;;
-    esac
-}
-
-disable_bbr() {
-
-    if [[ $(sysctl -n net.ipv4.tcp_congestion_control) != "bbr" ]] || [[ ! $(sysctl -n net.core.default_qdisc) =~ ^(fq|cake)$ ]]; then
-        echo -e "${yellow}BBR is not currently enabled.${plain}"
-        before_show_menu
-    fi
-
-    if [ -f "/etc/sysctl.d/99-bbr-x-ui.conf" ]; then
-        old_settings=$(head -1 /etc/sysctl.d/99-bbr-x-ui.conf | tr -d '#')
-        # sysctl -w already restores the live values, so no `sysctl --system`
-        # afterwards — it would re-apply every sysctl file on the host and
-        # surface unrelated errors from the distro's own defaults (see issue #5160)
-        sysctl -w net.core.default_qdisc="${old_settings%:*}"
-        sysctl -w net.ipv4.tcp_congestion_control="${old_settings#*:}"
-        rm /etc/sysctl.d/99-bbr-x-ui.conf
-    else
-        # Replace BBR with CUBIC configurations
-        if [ -f "/etc/sysctl.conf" ]; then
-            sed -i 's/net.core.default_qdisc=fq/net.core.default_qdisc=pfifo_fast/' /etc/sysctl.conf
-            sed -i 's/net.ipv4.tcp_congestion_control=bbr/net.ipv4.tcp_congestion_control=cubic/' /etc/sysctl.conf
-            sysctl -p
-        fi
-    fi
-
-    if [[ $(sysctl -n net.ipv4.tcp_congestion_control) != "bbr" ]]; then
-        echo -e "${green}BBR has been replaced with CUBIC successfully.${plain}"
-    else
-        echo -e "${red}Failed to replace BBR with CUBIC. Please check your system configuration.${plain}"
-    fi
-}
-
-enable_bbr() {
-    if [[ $(sysctl -n net.ipv4.tcp_congestion_control) == "bbr" ]] && [[ $(sysctl -n net.core.default_qdisc) =~ ^(fq|cake)$ ]]; then
-        echo -e "${green}BBR is already enabled!${plain}"
-        before_show_menu
-    fi
-
-    # Enable BBR
-    if [ -d "/etc/sysctl.d/" ]; then
-        {
-            echo "#$(sysctl -n net.core.default_qdisc):$(sysctl -n net.ipv4.tcp_congestion_control)"
-            echo "net.core.default_qdisc = fq"
-            echo "net.ipv4.tcp_congestion_control = bbr"
-        } > "/etc/sysctl.d/99-bbr-x-ui.conf"
-        if [ -f "/etc/sysctl.conf" ]; then
-            # Backup old settings from sysctl.conf, if any
-            sed -i 's/^net.core.default_qdisc/# &/' /etc/sysctl.conf
-            sed -i 's/^net.ipv4.tcp_congestion_control/# &/' /etc/sysctl.conf
-        fi
-        # Apply only our config file; `sysctl --system` would re-apply every
-        # sysctl file on the host and surface unrelated errors from the distro's
-        # own defaults (see issue #5160)
-        sysctl -p /etc/sysctl.d/99-bbr-x-ui.conf
-    else
-        sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
-        sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
-        echo "net.core.default_qdisc=fq" | tee -a /etc/sysctl.conf
-        echo "net.ipv4.tcp_congestion_control=bbr" | tee -a /etc/sysctl.conf
-        sysctl -p
-    fi
-
-    # Verify that BBR is enabled
-    if [[ $(sysctl -n net.ipv4.tcp_congestion_control) == "bbr" ]]; then
-        echo -e "${green}BBR has been enabled successfully.${plain}"
-    else
-        echo -e "${red}Failed to enable BBR. Please check your system configuration.${plain}"
-    fi
-}
-
 update_shell() {
-    if replace_xui_script "https://github.com/MHSanaei/3x-ui/raw/main/x-ui.sh" "true"; then
+    if replace_xui_script "https://github.com/Bebrik2283555/Ex3-ui/raw/main/x-ui.sh" "true"; then
         LOGI "Upgrade script succeeded, Please rerun the script"
         before_show_menu
     else
@@ -1346,6 +1253,7 @@ ssl_cert_issue_main() {
     echo -e "${green}\t4.${plain} Show Existing Domains"
     echo -e "${green}\t5.${plain} Set Cert paths for the panel"
     echo -e "${green}\t6.${plain} Get SSL for IP Address (6-day cert, auto-renews)"
+    echo -e "${green}\t7.${plain} Self-signed certificate for IP/domain (no renewal)"
     echo -e "${green}\t0.${plain} Back to Main Menu"
 
     read -rp "Choose an option: " choice
@@ -1511,6 +1419,43 @@ ssl_cert_issue_main() {
             if [[ $? == 0 ]]; then
                 ssl_cert_issue_for_ip
             fi
+            ssl_cert_issue_main
+            ;;
+        7)
+            # Self-signed certificate for a panel accessed by IP (no domain,
+            # no port 80 needed). The browser warns once — accept the exception.
+            echo -e "${yellow}Self-signed certificate (10-year validity, no renewal)${plain}"
+            local self_host=""
+            read -rp "Enter the IP or domain the panel is accessed by: " self_host
+            self_host="${self_host// /}"
+            if [[ -z "${self_host}" ]]; then
+                LOGE "No host entered; aborting."
+                ssl_cert_issue_main
+                return
+            fi
+            local cert_dir="/etc/x-ui"
+            mkdir -p "${cert_dir}"
+            local san="DNS:${self_host}"
+            if [[ "${self_host}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                san="IP:${self_host}"
+            fi
+            if ! openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -sha256 \
+                -keyout "${cert_dir}/selfsigned.key" -out "${cert_dir}/selfsigned.pem" \
+                -subj "/CN=${self_host}" -addext "subjectAltName=${san},DNS:localhost" > /dev/null 2>&1; then
+                if ! openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -sha256 \
+                    -keyout "${cert_dir}/selfsigned.key" -out "${cert_dir}/selfsigned.pem" \
+                    -subj "/CN=${self_host}" > /dev/null 2>&1; then
+                    LOGE "Failed to generate the self-signed certificate (is openssl installed?)."
+                    ssl_cert_issue_main
+                    return
+                fi
+            fi
+            chmod 600 "${cert_dir}/selfsigned.key"
+            chmod 644 "${cert_dir}/selfsigned.pem"
+            ${xui_folder}/x-ui cert -webCert "${cert_dir}/selfsigned.pem" -webCertKey "${cert_dir}/selfsigned.key"
+            LOGI "Self-signed certificate configured for ${self_host}: ${cert_dir}/selfsigned.pem"
+            LOGI "Browsers will warn once about the untrusted certificate — accept the exception."
+            restart
             ssl_cert_issue_main
             ;;
 
@@ -3438,13 +3383,12 @@ show_menu() {
 │  ${green}24.${plain} SSH Port Forwarding Management           │
 │  ${green}25.${plain} PostgreSQL Management                    │
 │────────────────────────────────────────────────│
-│  ${green}26.${plain} Enable BBR                               │
-│  ${green}27.${plain} Update Geo Files                         │
-│  ${green}28.${plain} Speedtest by Ookla                       │
+│  ${green}26.${plain} Update Geo Files                         │
+│  ${green}27.${plain} Speedtest by Ookla                       │
 ╚────────────────────────────────────────────────╝
 "
     show_status
-    echo && read -rp "Please enter your selection [0-28]: " num
+    echo && read -rp "Please enter your selection [0-27]: " num
 
     case "${num}" in
         0)
@@ -3526,16 +3470,13 @@ show_menu() {
             postgresql_menu
             ;;
         26)
-            bbr_menu
-            ;;
-        27)
             update_geo
             ;;
-        28)
+        27)
             run_speedtest
             ;;
         *)
-            LOGE "Please enter the correct number [0-28]"
+            LOGE "Please enter the correct number [0-27]"
             ;;
     esac
 }

@@ -26,12 +26,15 @@ import {
   PushpinFilled,
   PushpinOutlined,
   ReadOutlined,
+  RocketOutlined,
+  SafetyCertificateOutlined,
   SafetyOutlined,
   SettingOutlined,
   SunOutlined,
   SwapOutlined,
   TagsOutlined,
   TeamOutlined,
+  ThunderboltOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
 
@@ -51,7 +54,7 @@ const SIDEBAR_PINNED_KEY = 'sidebar-pinned';
 
 let hoveredAcrossRemounts = false;
 
-type IconName = 'dashboard' | 'inbound' | 'team' | 'groups' | 'setting' | 'tool' | 'cluster' | 'hosts' | 'logout' | 'apidocs' | 'outbound' | 'routing';
+type IconName = 'dashboard' | 'inbound' | 'team' | 'groups' | 'setting' | 'tool' | 'cluster' | 'hosts' | 'logout' | 'apidocs' | 'outbound' | 'routing' | 'extras' | 'optimize' | 'zapret' | 'hostsfile';
 
 const iconByName: Record<IconName, ComponentType> = {
   dashboard: DashboardOutlined,
@@ -66,6 +69,10 @@ const iconByName: Record<IconName, ComponentType> = {
   apidocs: ApiOutlined,
   outbound: ExportOutlined,
   routing: SwapOutlined,
+  extras: RocketOutlined,
+  optimize: ThunderboltOutlined,
+  zapret: SafetyCertificateOutlined,
+  hostsfile: CloudServerOutlined,
 };
 
 function DonateButton({ ariaLabel }: { ariaLabel: string }) {
@@ -203,6 +210,10 @@ export default function AppSidebar() {
     { key: '/routing', icon: 'routing', title: t('menu.routing') },
     { key: '/settings', icon: 'setting', title: t('menu.settings') },
     { key: '/xray', icon: 'tool', title: t('menu.xray') },
+    { key: '/extras', icon: 'extras', title: t('menu.extras') },
+    { key: '/optimize', icon: 'optimize', title: t('menu.optimize') },
+    { key: '/zapret', icon: 'zapret', title: t('menu.zapret') },
+    { key: '/hostsfile', icon: 'hostsfile', title: t('menu.hostsFile') },
     { key: '/api-docs', icon: 'apidocs', title: t('menu.apiDocs') },
     { key: LOGOUT_KEY, icon: 'logout', title: t('logout') },
   ], [t]);
@@ -302,7 +313,7 @@ export default function AppSidebar() {
       >
         <div className="sider-brand">
           <div className="brand-block">
-            <span className="brand-text">{railCollapsed ? '3X' : '3X-UI'}</span>
+            <span className="brand-text">{railCollapsed ? 'EX3' : 'EX3-UI'}</span>
           </div>
           {!railCollapsed && (
             <div className="brand-actions">
@@ -366,7 +377,7 @@ export default function AppSidebar() {
       >
         <div className="drawer-header">
           <div className="brand-block">
-            <span className="drawer-brand">3X-UI</span>
+            <span className="drawer-brand">EX3-UI</span>
           </div>
           <div className="drawer-header-actions">
             <DocsButton ariaLabel={t('menu.docs') || 'Documentation'} />

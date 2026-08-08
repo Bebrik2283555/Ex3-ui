@@ -1,4 +1,4 @@
-package database
+﻿package database
 
 import (
 	"path/filepath"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
 

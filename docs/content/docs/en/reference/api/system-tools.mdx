@@ -1,0 +1,122 @@
+---
+title: System Tools
+description: One-shot tuning for weak VPSes (DNS, BBR/sysctl, swap), the
+  transparent zapret DPI-bypass service, and the /etc/hosts file used by the
+  extra cores.
+full: true
+_openapi:
+  preload:
+    - ./public/openapi.json
+  toc:
+    - depth: 2
+      title: Which optimizations are already applied (BBR, TCP buffers, swap, DNS
+        resolvers).
+      url: '#which-optimizations-are-already-applied-bbr-tcp-buffers-swap-dns-resolvers'
+    - depth: 2
+      title: Apply the selected tuning steps. At least one of dns/bbr/swap must be
+        true.
+      url: '#apply-the-selected-tuning-steps-at-least-one-of-dnsbbrswap-must-be-true'
+    - depth: 2
+      title: Undo the applied optimizations (remove sysctl file and swapfile).
+      url: '#undo-the-applied-optimizations-remove-sysctl-file-and-swapfile'
+    - depth: 2
+      title: Whether zapret is installed, running, enabled and which firewall it uses.
+      url: '#whether-zapret-is-installed-running-enabled-and-which-firewall-it-uses'
+    - depth: 2
+      title: Install zapret from the bundled assets to /opt/zapret, write the systemd
+        unit and start it.
+      url: '#install-zapret-from-the-bundled-assets-to-optzapret-write-the-systemd-unit-and-start-it'
+    - depth: 2
+      title: Download a zapret release ZIP from a public URL, unpack it and install to
+        /opt/zapret (same layout as install).
+      url: '#download-a-zapret-release-zip-from-a-public-url-unpack-it-and-install-to-optzapret-same-layout-as-install'
+    - depth: 2
+      title: Stop and remove zapret and its systemd unit.
+      url: '#stop-and-remove-zapret-and-its-systemd-unit'
+    - depth: 2
+      title: Start the zapret service.
+      url: '#start-the-zapret-service'
+    - depth: 2
+      title: Stop the zapret service.
+      url: '#stop-the-zapret-service'
+    - depth: 2
+      title: Restart the zapret service (re-applies iptables/nftables rules and
+        nfqws).
+      url: '#restart-the-zapret-service-re-applies-iptablesnftables-rules-and-nfqws'
+    - depth: 2
+      title: The current zapret domain lists (bypass and ignore).
+      url: '#the-current-zapret-domain-lists-bypass-and-ignore'
+    - depth: 2
+      title: Replace the zapret domain lists and restart the service to apply them.
+      url: '#replace-the-zapret-domain-lists-and-restart-the-service-to-apply-them'
+    - depth: 2
+      title: Recent zapret service output from journald.
+      url: '#recent-zapret-service-output-from-journald'
+    - depth: 2
+      title: Read the system hosts file (/etc/hosts) as raw text plus parsed entries.
+      url: '#read-the-system-hosts-file-etchosts-as-raw-text-plus-parsed-entries'
+    - depth: 2
+      title: Replace the system hosts file. Useful to pin domains for the extra cores.
+      url: '#replace-the-system-hosts-file-useful-to-pin-domains-for-the-extra-cores'
+    - depth: 2
+      title: Fetch the hosts content from a public URL and replace /etc/hosts with it.
+      url: '#fetch-the-hosts-content-from-a-public-url-and-replace-etchosts-with-it'
+  structuredData:
+    headings:
+      - content: Which optimizations are already applied (BBR, TCP buffers, swap, DNS
+          resolvers).
+        id: which-optimizations-are-already-applied-bbr-tcp-buffers-swap-dns-resolvers
+      - content: Apply the selected tuning steps. At least one of dns/bbr/swap must be
+          true.
+        id: apply-the-selected-tuning-steps-at-least-one-of-dnsbbrswap-must-be-true
+      - content: Undo the applied optimizations (remove sysctl file and swapfile).
+        id: undo-the-applied-optimizations-remove-sysctl-file-and-swapfile
+      - content: Whether zapret is installed, running, enabled and which firewall it
+          uses.
+        id: whether-zapret-is-installed-running-enabled-and-which-firewall-it-uses
+      - content: Install zapret from the bundled assets to /opt/zapret, write the
+          systemd unit and start it.
+        id: install-zapret-from-the-bundled-assets-to-optzapret-write-the-systemd-unit-and-start-it
+      - content: Download a zapret release ZIP from a public URL, unpack it and install
+          to /opt/zapret (same layout as install).
+        id: download-a-zapret-release-zip-from-a-public-url-unpack-it-and-install-to-optzapret-same-layout-as-install
+      - content: Stop and remove zapret and its systemd unit.
+        id: stop-and-remove-zapret-and-its-systemd-unit
+      - content: Start the zapret service.
+        id: start-the-zapret-service
+      - content: Stop the zapret service.
+        id: stop-the-zapret-service
+      - content: Restart the zapret service (re-applies iptables/nftables rules and
+          nfqws).
+        id: restart-the-zapret-service-re-applies-iptablesnftables-rules-and-nfqws
+      - content: The current zapret domain lists (bypass and ignore).
+        id: the-current-zapret-domain-lists-bypass-and-ignore
+      - content: Replace the zapret domain lists and restart the service to apply them.
+        id: replace-the-zapret-domain-lists-and-restart-the-service-to-apply-them
+      - content: Recent zapret service output from journald.
+        id: recent-zapret-service-output-from-journald
+      - content: Read the system hosts file (/etc/hosts) as raw text plus parsed
+          entries.
+        id: read-the-system-hosts-file-etchosts-as-raw-text-plus-parsed-entries
+      - content: Replace the system hosts file. Useful to pin domains for the extra
+          cores.
+        id: replace-the-system-hosts-file-useful-to-pin-domains-for-the-extra-cores
+      - content: Fetch the hosts content from a public URL and replace /etc/hosts with
+          it.
+        id: fetch-the-hosts-content-from-a-public-url-and-replace-etchosts-with-it
+    contents: []
+---
+
+{/* This file was generated by Fumadocs. Do not edit this file directly. Any changes should be made by running the generation command again. */}
+
+export default function Layout(props) {
+  const { APIPage, OpenAPIPage } = props.components ?? {};
+  // "APIPage" is the old name from v10, this allows both for backward compatibility
+  const Comp = OpenAPIPage ?? APIPage;
+  return (
+    <>
+      {props.children}
+      <Comp document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/optimize/status","method":"get"},{"path":"/panel/api/optimize/apply","method":"post"},{"path":"/panel/api/optimize/revert","method":"post"},{"path":"/panel/api/zapret/status","method":"get"},{"path":"/panel/api/zapret/install","method":"post"},{"path":"/panel/api/zapret/download","method":"post"},{"path":"/panel/api/zapret/uninstall","method":"post"},{"path":"/panel/api/zapret/start","method":"post"},{"path":"/panel/api/zapret/stop","method":"post"},{"path":"/panel/api/zapret/restart","method":"post"},{"path":"/panel/api/zapret/hosts","method":"get"},{"path":"/panel/api/zapret/hosts","method":"put"},{"path":"/panel/api/zapret/logs","method":"get"},{"path":"/panel/api/hostsfile","method":"get"},{"path":"/panel/api/hostsfile","method":"put"},{"path":"/panel/api/hostsfile/download","method":"post"}]} showTitle />
+    </>
+  );
+}

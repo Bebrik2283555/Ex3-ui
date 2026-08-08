@@ -1,4 +1,4 @@
-package database
+﻿package database
 
 import (
 	"context"
@@ -15,13 +15,13 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
 // migrationModels is the FK-aware order in which tables are created and copied
-// during `x-ui migrate-db --dsn` (SQLite → PostgreSQL data migration) and in
+// during `x-ui migrate-db --dsn` (SQLite в†’ PostgreSQL data migration) and in
 // related tests.
 //
 // Important: When adding a new top-level model (like OutboundSubscription),
@@ -284,7 +284,7 @@ func resetPostgresSequences(dst *gorm.DB) error {
 }
 
 // resyncPostgresSequences sets each model's id sequence to MAX(id); idempotent. Id-less
-// composite-PK tables are skipped — Postgres rejects MAX(id) at parse time and logs it (#5665).
+// composite-PK tables are skipped вЂ” Postgres rejects MAX(id) at parse time and logs it (#5665).
 func resyncPostgresSequences(db *gorm.DB, models []any) error {
 	for _, m := range models {
 		t, ok := tableWithIdColumn(db, m)

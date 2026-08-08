@@ -73,7 +73,7 @@ func TestBackupSQLiteProducesValidSnapshotDuringWrites(t *testing.T) {
 		t.Fatalf("validate backup: %v", err)
 	}
 
-	backup, err := sql.Open("sqlite3", backupPath)
+	backup, err := sql.Open("sqlite", backupPath)
 	if err != nil {
 		t.Fatalf("open backup: %v", err)
 	}

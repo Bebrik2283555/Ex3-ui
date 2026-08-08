@@ -53,4 +53,8 @@ describe('formatPanelVersion', () => {
     expect(formatPanelVersion(undefined)).toBe('');
     expect(formatPanelVersion('?')).toBe('?');
   });
+
+  it('passes fork version labels through verbatim', () => {
+    expect(formatPanelVersion('1.0 (Based on 3X_UI 3.6.0)')).toBe('1.0 (Based on 3X_UI 3.6.0)');
+  });
 });

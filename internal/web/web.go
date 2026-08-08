@@ -18,6 +18,7 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/eventbus"
+	"github.com/mhsanaei/3x-ui/v3/internal/extra"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/mtproto"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
@@ -170,9 +171,10 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	// transactions via bulk create/attach/import endpoints. GET/HEAD/OPTIONS
 	// carry no body and are left untouched. Database restore legitimately accepts
 	// large backups and streams them to disk, so only its exact route suffix is
-	// exempt. Follow-up: make the limit a setting.
+	// exempt, along with extra-core binary uploads which can exceed the cap.
+	// Follow-up: make the limit a setting.
 	const maxRequestBodyBytes = 10 << 20 // 10 MiB
-	engine.Use(middleware.MaxBodyBytes(maxRequestBodyBytes, "/panel/api/server/importDB"))
+	engine.Use(middleware.MaxBodyBytes(maxRequestBodyBytes, "/panel/api/server/importDB", "/upload"))
 
 	webDomain, err := s.settingService.GetWebDomain()
 	if err != nil {
@@ -264,6 +266,24 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		c.JSON(http.StatusOK, gin.H{})
 	})
 
+	// Public qwdtt subscription file. The secret token in the path is the only
+	// gate (deliberately placed outside the authenticated /panel group so clients
+	// can fetch it without logging in), matching how the qWDTT Android app imports
+	// HTTPS JSON subscriptions.
+	engine.GET(basePath+"panel/qwdtt/sub/:token", func(c *gin.Context) {
+		mgr := extra.ManagerSingleton()
+		if mgr == nil || mgr.SubscriptionToken(extra.WDTT) != c.Param("token") {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+		doc, err := mgr.SubscriptionFor(extra.WDTT)
+		if err != nil {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+		c.JSON(http.StatusOK, doc)
+	})
+
 	// Let unknown panel document routes fall back to the SPA shell, while every
 	// non-SPA miss still returns a hard 404.
 	engine.NoRoute(func(c *gin.Context) {
@@ -283,17 +303,18 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 // node/xray state is unchanged, and export per-job duration/skipped/error
 // counters.
 const (
-	cadenceXrayRunning   = "@every 1s"
-	cadenceXrayRestart   = "@every 30s"
-	cadenceXrayTraffic   = "@every 5s"
-	cadenceMtproto       = "@every 10s"
-	cadenceClientIPScan  = "@every 10s"
-	cadenceNodeHeartbeat = "@every 5s"
-	cadenceNodeTraffic   = "@every 5s"
-	cadenceOutboundSub   = "@every 5m"
-	cadenceReapOrphans   = "@every 5m"
-	cadenceXrayLogPrune  = "@every 10m"
-	cadenceCheckHash     = "@every 2m"
+	cadenceXrayRunning    = "@every 1s"
+	cadenceXrayRestart    = "@every 30s"
+	cadenceXrayTraffic    = "@every 5s"
+	cadenceMtproto        = "@every 10s"
+	cadenceExtraReconcile = "@every 10s"
+	cadenceClientIPScan   = "@every 10s"
+	cadenceNodeHeartbeat  = "@every 5s"
+	cadenceNodeTraffic    = "@every 5s"
+	cadenceOutboundSub    = "@every 5m"
+	cadenceReapOrphans    = "@every 5m"
+	cadenceXrayLogPrune   = "@every 10m"
+	cadenceCheckHash      = "@every 2m"
 	// cpu.Percent samples over a full minute (blocking), so a finer cadence just
 	// stacks overlapping samplers; subscribers rate-limit alerts to 1/min anyway.
 	cadenceCPUAlarm    = "@every 1m"
@@ -326,6 +347,14 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	mtJob := job.NewMtprotoJob()
 	_, _ = s.cron.AddJob(cadenceMtproto, mtJob)
 	go mtJob.Run()
+
+	// Reconcile the extra cores (qwdtt/olcRTC): auto-start enabled ones whose
+	// binary exists and are not running yet.
+	_, _ = s.cron.AddFunc(cadenceExtraReconcile, func() {
+		if mgr := extra.ManagerSingleton(); mgr != nil {
+			mgr.Reconcile()
+		}
+	})
 
 	// check client ips from log file every 10 sec
 	_, _ = s.cron.AddJob(cadenceClientIPScan, job.NewCheckClientIpJob())

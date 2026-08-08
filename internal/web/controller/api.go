@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service/tgbot"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
@@ -105,6 +106,12 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	// /panel/api/xray/*.
 	a.settingController = NewSettingController(api)
 	a.xraySettingController = NewXraySettingController(api)
+
+	// Extra cores (qwdtt / olcRTC), system optimization and zapret
+	NewExtraController(api, &service.SettingService{})
+	NewOptimizeController(api)
+	NewZapretController(api)
+	NewHostsFileController(api)
 
 	// Extra routes
 	api.POST("/backuptotgbot", a.BackuptoTgbot)

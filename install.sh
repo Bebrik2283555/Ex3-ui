@@ -823,12 +823,15 @@ prompt_and_setup_ssl() {
     echo -e "${green}2.${plain} Let's Encrypt for IP Address (6-day validity, auto-renews)"
     echo -e "${green}3.${plain} Custom SSL Certificate (Path to existing files)"
     echo -e "${green}4.${plain} Skip SSL (advanced — behind reverse proxy / SSH tunnel only)"
+    echo -e "${green}5.${plain} Self-signed certificate for IP/domain (10-year, no renewal)"
     echo -e "${blue}Note:${plain} Options 1 & 2 require port 80 open. Option 3 requires manual paths."
     echo -e "${blue}Note:${plain} Option 4 serves the panel over plain HTTP — only safe behind nginx/Caddy or an SSH tunnel."
+    echo -e "${blue}Note:${plain} Option 5 works without a domain or port 80; browsers will show a one-time warning."
     if [[ "$NONINTERACTIVE" == "1" ]]; then
         case "${XUI_SSL_MODE:-none}" in
             domain) ssl_choice="1" ;;
             ip) ssl_choice="2" ;;
+            selfsigned) ssl_choice="5" ;;
             none | "") ssl_choice="4" ;;
             *)
                 echo -e "${yellow}Unknown XUI_SSL_MODE='${XUI_SSL_MODE}', defaulting to none (HTTP).${plain}"
@@ -839,8 +842,8 @@ prompt_and_setup_ssl() {
         read -rp "Choose an option (default 2 for IP): " ssl_choice
         ssl_choice="${ssl_choice// /}" # Trim whitespace
 
-        # Default to 2 (IP cert) if input is empty or invalid (not 1, 3 or 4)
-        if [[ "$ssl_choice" != "1" && "$ssl_choice" != "3" && "$ssl_choice" != "4" ]]; then
+        # Default to 2 (IP cert) if input is empty or invalid (not 1, 3, 4 or 5)
+        if [[ "$ssl_choice" != "1" && "$ssl_choice" != "3" && "$ssl_choice" != "4" && "$ssl_choice" != "5" ]]; then
             ssl_choice="2"
         fi
     fi
@@ -1009,6 +1012,50 @@ prompt_and_setup_ssl() {
 
             systemctl restart x-ui > /dev/null 2>&1 || rc-service x-ui restart > /dev/null 2>&1
             echo -e "${green}✓ SSL setup skipped.${plain}"
+            ;;
+        5)
+            # Self-signed certificate for a panel accessed by IP (no domain,
+            # no port 80 needed). The browser warns once — accept the exception.
+            echo -e "${green}Generating a self-signed certificate...${plain}"
+            local self_host="${server_ip}"
+            if [[ "$NONINTERACTIVE" != "1" ]]; then
+                read -rp "Enter the IP or domain the panel is accessed by [${server_ip}]: " self_host
+                self_host="${self_host// /}"
+                self_host="${self_host:-${server_ip}}"
+            fi
+            self_host="${self_host:-${server_ip}}"
+            local cert_dir="/etc/x-ui"
+            mkdir -p "${cert_dir}"
+            local san="DNS:${self_host}"
+            if [[ "${self_host}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                san="IP:${self_host}"
+            fi
+            if ! openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -sha256 \
+                -keyout "${cert_dir}/selfsigned.key" -out "${cert_dir}/selfsigned.pem" \
+                -subj "/CN=${self_host}" -addext "subjectAltName=${san},DNS:localhost" > /dev/null 2>&1; then
+                # Older openssl (< 1.1.1) has no -addext; retry without SANs.
+                if ! openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -sha256 \
+                    -keyout "${cert_dir}/selfsigned.key" -out "${cert_dir}/selfsigned.pem" \
+                    -subj "/CN=${self_host}" > /dev/null 2>&1; then
+                    echo -e "${red}✗ Failed to generate the self-signed certificate (is openssl installed?).${plain}"
+                    SSL_SCHEME="http"
+                else
+                    SSL_HOST="${self_host}"
+                fi
+            else
+                SSL_HOST="${self_host}"
+            fi
+            if [[ "$SSL_SCHEME" == "https" ]]; then
+                chmod 600 "${cert_dir}/selfsigned.key"
+                chmod 644 "${cert_dir}/selfsigned.pem"
+                ${xui_folder}/x-ui cert -webCert "${cert_dir}/selfsigned.pem" -webCertKey "${cert_dir}/selfsigned.key" > /dev/null 2>&1
+                systemctl restart x-ui > /dev/null 2>&1 || rc-service x-ui restart > /dev/null 2>&1
+                echo -e "${green}✓ Self-signed certificate generated for ${SSL_HOST}${plain}"
+                echo -e "${yellow}Note: browsers warn about the untrusted certificate once — accept the exception.${plain}"
+            else
+                SSL_HOST="${server_ip}"
+                echo -e "${red}✗ Self-signed certificate setup failed; panel stays on HTTP.${plain}"
+            fi
             ;;
         *)
             echo -e "${red}Invalid option. Skipping SSL setup.${plain}"
@@ -1414,67 +1461,87 @@ _install_xui_service_unit() {
 install_x-ui() {
     cd ${xui_folder%/x-ui}/
 
-    # Download resources
-    if [ $# == 0 ]; then
-        tag_version=$(curl -Ls --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60 "https://api.github.com/repos/MHSanaei/3x-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-        if [[ ! -n "$tag_version" ]]; then
-            echo -e "${red}Failed to fetch x-ui version, it may be due to GitHub API restrictions, please try it later${plain}"
+    # Offline install: when install.sh sits in the fork release folder that also
+    # carries the local x-ui binary and x-ui.sh, copy them instead of pulling the
+    # official release from GitHub. Without them we fall back to the online path.
+    local local_release_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local offline=false
+    if [[ -f "${local_release_dir}/x-ui" && -f "${local_release_dir}/x-ui.sh" ]]; then
+        offline=true
+        tag_version="offline-fork"
+        echo -e "${green}Found a local fork release next to install.sh — installing offline.${plain}"
+        xui_script_temp="/usr/bin/x-ui-temp.$$"
+        rm -f "${xui_script_temp}"
+        cp -f "${local_release_dir}/x-ui.sh" "${xui_script_temp}"
+        if [[ $? -ne 0 || ! -s "${xui_script_temp}" ]]; then
+            rm -f "${xui_script_temp}"
+            echo -e "${red}Failed to copy the local x-ui.sh${plain}"
             exit 1
         fi
-        echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
-        curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o ${xui_folder}-linux-$(arch).tar.gz https://github.com/MHSanaei/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz
-        if [[ $? -ne 0 ]]; then
-            echo -e "${red}Downloading x-ui failed, please be sure that your server can access GitHub ${plain}"
-            exit 1
-        fi
-        if [[ ! -s ${xui_folder}-linux-$(arch).tar.gz ]]; then
-            rm ${xui_folder}-linux-$(arch).tar.gz -f
-            echo -e "${red}Downloaded x-ui release archive is empty${plain}"
-            exit 1
-        fi
+        chmod +x "${xui_script_temp}"
     else
-        tag_version=$1
-        # The rolling dev channel ships under a fixed, non-semver tag that is
-        # force-moved to the latest main commit on every push. Accept `dev` as a
-        # convenient alias and skip the numeric floor check for it.
-        if [[ "$tag_version" == "dev" || "$tag_version" == "dev-latest" ]]; then
-            tag_version="dev-latest"
-            echo -e "${yellow}Installing the rolling dev build (tag: dev-latest). This is a per-commit pre-release, not a stable version.${plain}"
+        # Download resources
+        if [ $# == 0 ]; then
+            tag_version=$(curl -Ls --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60 "https://api.github.com/repos/Bebrik2283555/Ex3-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+            if [[ ! -n "$tag_version" ]]; then
+                echo -e "${red}Failed to fetch x-ui version, it may be due to GitHub API restrictions, please try it later${plain}"
+                exit 1
+            fi
+            echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
+            curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o ${xui_folder}-linux-$(arch).tar.gz https://github.com/Bebrik2283555/Ex3-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz
+            if [[ $? -ne 0 ]]; then
+                echo -e "${red}Downloading x-ui failed, please be sure that your server can access GitHub ${plain}"
+                exit 1
+            fi
+            if [[ ! -s ${xui_folder}-linux-$(arch).tar.gz ]]; then
+                rm ${xui_folder}-linux-$(arch).tar.gz -f
+                echo -e "${red}Downloaded x-ui release archive is empty${plain}"
+                exit 1
+            fi
         else
-            tag_version_numeric=${tag_version#v}
-            min_version="2.3.5"
+            tag_version=$1
+            # The rolling dev channel ships under a fixed, non-semver tag that is
+            # force-moved to the latest main commit on every push. Accept `dev` as a
+            # convenient alias and skip the numeric floor check for it.
+            if [[ "$tag_version" == "dev" || "$tag_version" == "dev-latest" ]]; then
+                tag_version="dev-latest"
+                echo -e "${yellow}Installing the rolling dev build (tag: dev-latest). This is a per-commit pre-release, not a stable version.${plain}"
+            else
+                tag_version_numeric=${tag_version#v}
+                min_version="1.0"
 
-            if [[ "$(printf '%s\n' "$min_version" "$tag_version_numeric" | sort -V | head -n1)" != "$min_version" ]]; then
-                echo -e "${red}Please use a newer version (at least v2.3.5). Exiting installation.${plain}"
+                if [[ "$(printf '%s\n' "$min_version" "$tag_version_numeric" | sort -V | head -n1)" != "$min_version" ]]; then
+                    echo -e "${red}Please use a newer version (at least v1.0). Exiting installation.${plain}"
+                    exit 1
+                fi
+            fi
+
+            url="https://github.com/Bebrik2283555/Ex3-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
+            echo -e "Beginning to install x-ui ${tag_version}"
+            curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o ${xui_folder}-linux-$(arch).tar.gz ${url}
+            if [[ $? -ne 0 ]]; then
+                echo -e "${red}Download x-ui ${tag_version} failed, please check if the version exists ${plain}"
+                exit 1
+            fi
+            if [[ ! -s ${xui_folder}-linux-$(arch).tar.gz ]]; then
+                rm ${xui_folder}-linux-$(arch).tar.gz -f
+                echo -e "${red}Downloaded x-ui release archive is empty${plain}"
                 exit 1
             fi
         fi
-
-        url="https://github.com/MHSanaei/3x-ui/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz"
-        echo -e "Beginning to install x-ui ${tag_version}"
-        curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --speed-limit 1 --speed-time 300 -o ${xui_folder}-linux-$(arch).tar.gz ${url}
+        xui_script_temp="/usr/bin/x-ui-temp.$$"
+        rm -f "${xui_script_temp}"
+        curl -fLRo "${xui_script_temp}" https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/x-ui.sh
         if [[ $? -ne 0 ]]; then
-            echo -e "${red}Download x-ui ${tag_version} failed, please check if the version exists ${plain}"
+            rm -f "${xui_script_temp}"
+            echo -e "${red}Failed to download x-ui.sh${plain}"
             exit 1
         fi
-        if [[ ! -s ${xui_folder}-linux-$(arch).tar.gz ]]; then
-            rm ${xui_folder}-linux-$(arch).tar.gz -f
-            echo -e "${red}Downloaded x-ui release archive is empty${plain}"
+        if [[ ! -s "${xui_script_temp}" ]]; then
+            rm -f "${xui_script_temp}"
+            echo -e "${red}Downloaded x-ui.sh is empty${plain}"
             exit 1
         fi
-    fi
-    local xui_script_temp="/usr/bin/x-ui-temp.$$"
-    rm -f "${xui_script_temp}"
-    curl -fLRo "${xui_script_temp}" https://raw.githubusercontent.com/MHSanaei/3x-ui/main/x-ui.sh
-    if [[ $? -ne 0 ]]; then
-        rm -f "${xui_script_temp}"
-        echo -e "${red}Failed to download x-ui.sh${plain}"
-        exit 1
-    fi
-    if [[ ! -s "${xui_script_temp}" ]]; then
-        rm -f "${xui_script_temp}"
-        echo -e "${red}Downloaded x-ui.sh is empty${plain}"
-        exit 1
     fi
 
     # Stop x-ui service and remove old resources
@@ -1493,14 +1560,37 @@ install_x-ui() {
     fi
 
     # Extract resources and set permissions
-    tar zxvf x-ui-linux-$(arch).tar.gz
-    if [[ $? -ne 0 ]]; then
+    if [[ $offline == true ]]; then
+        # Copy the local fork release into x-ui/ instead of unpacking a tarball.
+        mkdir -p x-ui
+        cp -f "${local_release_dir}/x-ui" x-ui/x-ui
+        if [[ $? -ne 0 || ! -s x-ui/x-ui ]]; then
+            echo -e "${red}Local release is missing the x-ui binary${plain}"
+            exit 1
+        fi
+        for f in x-ui.service.debian x-ui.service.arch x-ui.service.rhel x-ui.sh; do
+            if [[ -f "${local_release_dir}/$f" ]]; then
+                cp -f "${local_release_dir}/$f" "x-ui/$f"
+            fi
+        done
+        if [[ -d "${local_release_dir}/bin" ]]; then
+            cp -rf "${local_release_dir}/bin" x-ui/bin
+        fi
+        # Extra cores (qwdtt/olcrtc) lose the exec bit on Windows transfers;
+        # without it the panel cannot start them.
+        for f in x-ui/bin/extra-*; do
+            [ -f "$f" ] && chmod +x "$f"
+        done
+    else
+        tar zxvf x-ui-linux-$(arch).tar.gz
+        if [[ $? -ne 0 ]]; then
+            rm x-ui-linux-$(arch).tar.gz -f
+            rm -f "${xui_script_temp}"
+            echo -e "${red}Failed to extract the x-ui release archive -- the previous installation has already been removed, so the panel will not start until this is fixed; try running the installer again${plain}"
+            exit 1
+        fi
         rm x-ui-linux-$(arch).tar.gz -f
-        rm -f "${xui_script_temp}"
-        echo -e "${red}Failed to extract the x-ui release archive -- the previous installation has already been removed, so the panel will not start until this is fixed; try running the installer again${plain}"
-        exit 1
     fi
-    rm x-ui-linux-$(arch).tar.gz -f
 
     cd x-ui
     if [[ $? -ne 0 || ! -s x-ui ]]; then
@@ -1557,7 +1647,7 @@ install_x-ui() {
     if [[ $release == "alpine" ]]; then
         xui_rc_temp="/etc/init.d/x-ui.tmp.$$"
         rm -f "${xui_rc_temp}"
-        curl -fLRo "${xui_rc_temp}" https://raw.githubusercontent.com/MHSanaei/3x-ui/main/x-ui.rc
+        curl -fLRo "${xui_rc_temp}" https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/x-ui.rc
         if [[ $? -ne 0 ]]; then
             rm -f "${xui_rc_temp}"
             echo -e "${red}Failed to download x-ui.rc${plain}"
@@ -1622,13 +1712,13 @@ install_x-ui() {
             echo -e "${yellow}Service files not found in tar.gz, downloading from GitHub...${plain}"
             case "${release}" in
                 ubuntu | debian | armbian)
-                    service_unit_url="https://raw.githubusercontent.com/MHSanaei/3x-ui/main/x-ui.service.debian"
+                    service_unit_url="https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/x-ui.service.debian"
                     ;;
                 arch | manjaro | parch)
-                    service_unit_url="https://raw.githubusercontent.com/MHSanaei/3x-ui/main/x-ui.service.arch"
+                    service_unit_url="https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/x-ui.service.arch"
                     ;;
                 *)
-                    service_unit_url="https://raw.githubusercontent.com/MHSanaei/3x-ui/main/x-ui.service.rhel"
+                    service_unit_url="https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/x-ui.service.rhel"
                     ;;
             esac
 

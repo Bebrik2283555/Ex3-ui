@@ -357,6 +357,24 @@ func (s *SettingService) setString(key string, value string) error {
 	return s.saveSetting(key, value)
 }
 
+// GetRawSetting returns the stored value for an arbitrary settings key, or an
+// empty string when the key has never been saved (a missing key is not an error).
+func (s *SettingService) GetRawSetting(key string) (string, error) {
+	setting, err := s.getSetting(key)
+	if database.IsNotFound(err) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+	return setting.Value, nil
+}
+
+// SetRawSetting persists a value under an arbitrary settings key.
+func (s *SettingService) SetRawSetting(key string, value string) error {
+	return s.saveSetting(key, value)
+}
+
+
 func effectiveSettingValue(key, stored string) string {
 	if stored == "" {
 		if def, ok := defaultValueMap[key]; ok {

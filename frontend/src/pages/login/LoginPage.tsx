@@ -67,7 +67,10 @@ export default function LoginPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const msg = await HttpUtil.post('/getTwoFactorEnable');
+      // Bound the 2FA probe: while the panel restarts (e.g. right after a DB
+      // import) this request can hang indefinitely, leaving an eternal spinner
+      // with no way forward. On timeout the form still renders.
+      const msg = await HttpUtil.post('/getTwoFactorEnable', undefined, { timeout: 10_000 });
       if (cancelled) return;
       if (msg.success) setTwoFactorEnable(!!msg.obj);
       setFetched(true);
@@ -175,7 +178,7 @@ export default function LoginPage() {
             ) : (
               <div className="login-card">
                 <div className="brand">
-                  <span className="brand-name">3X-UI</span>
+                  <span className="brand-name">EX3-UI</span>
                   <span className="brand-accent" aria-hidden="true" />
                 </div>
                 <h2 className="welcome">

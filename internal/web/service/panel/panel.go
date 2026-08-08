@@ -132,11 +132,20 @@ func (s *PanelService) GetUpdateInfo() (*PanelUpdateInfo, error) {
 	if devChannelActive() {
 		return getDevUpdateInfo()
 	}
+	current := config.GetBaseVersion()
+	if _, ok := parseVersionParts(current); !ok {
+		// Fork version label (e.g. "1.0 (Based on 3X_UI 3.6.0)") is not
+		// comparable to upstream tags, so never claim an update is available.
+		return &PanelUpdateInfo{
+			Channel:         "stable",
+			CurrentVersion:  current,
+			UpdateAvailable: false,
+		}, nil
+	}
 	latest, err := fetchLatestPanelVersion()
 	if err != nil {
 		return nil, err
 	}
-	current := config.GetBaseVersion()
 	return &PanelUpdateInfo{
 		Channel:         "stable",
 		CurrentVersion:  current,
