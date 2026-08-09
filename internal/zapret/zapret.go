@@ -81,6 +81,9 @@ func installFromFS(src fs.FS, base, firewallType, ifaceWan, ifaceLan string) err
 	if err := os.RemoveAll(installDir); err != nil {
 		return err
 	}
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
+		return err
+	}
 	// Copy files/ tree.
 	if err := fs.WalkDir(src, base, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
