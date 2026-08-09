@@ -105,7 +105,7 @@ export default function ZapretPage() {
   };
 
   const runBackup = () => {
-    window.open('/panel/api/zapret/backup', '_blank');
+    window.location.href = (window.X_UI_BASE_PATH || '') + 'panel/api/zapret/backup';
   };
 
   const pageClass = useMemo(() => {
