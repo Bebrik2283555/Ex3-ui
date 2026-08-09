@@ -1601,6 +1601,19 @@ install_x-ui() {
     chmod +x x-ui
     chmod +x x-ui.sh
 
+    # Snapshot the system files the panel may overwrite (hosts / DNS), so
+    # `x-ui uninstall` can restore them. Kept once; later installs preserve
+    # the original.
+    mkdir -p /var/backups/x-ui
+    if [[ -f /etc/hosts && ! -f /var/backups/x-ui/etc-hosts ]]; then
+        cp -f /etc/hosts /var/backups/x-ui/etc-hosts
+        echo -e "${green}Saved original /etc/hosts to /var/backups/x-ui/etc-hosts${plain}"
+    fi
+    if [[ -f /etc/resolv.conf && ! -f /var/backups/x-ui/etc-resolv.conf ]]; then
+        cp -f /etc/resolv.conf /var/backups/x-ui/etc-resolv.conf
+        echo -e "${green}Saved original /etc/resolv.conf to /var/backups/x-ui/etc-resolv.conf${plain}"
+    fi
+
     # Check the system's architecture and rename the file accordingly.
     # The panel binary maps GOARCH=arm to "arm32" (internal/xray/process.go),
     # so the Xray binary must be named xray-linux-arm32; mtg keeps plain "arm".

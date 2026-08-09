@@ -273,6 +273,66 @@ uninstall() {
         return 0
     fi
 
+    # --- Back up zapret settings before anything is removed ---
+    local backup_dir="/var/backups/x-ui/zapret-$(date +%Y%m%d-%H%M%S)"
+    if [[ -d /opt/zapret ]]; then
+        mkdir -p "${backup_dir}"
+        # All editable domain lists plus the firewall/interface config.
+        cp -f /opt/zapret/autohosts.txt "${backup_dir}/" 2>/dev/null
+        cp -f /opt/zapret/ignore.txt "${backup_dir}/" 2>/dev/null
+        cp -f /opt/zapret/whitelist.txt "${backup_dir}/" 2>/dev/null
+        cp -f /opt/zapret/ipset.txt "${backup_dir}/" 2>/dev/null
+        cp -f /opt/zapret/youtube.txt "${backup_dir}/" 2>/dev/null
+        cp -f /opt/zapret/config.txt "${backup_dir}/" 2>/dev/null
+        cp -f /opt/zapret/system/FWTYPE "${backup_dir}/" 2>/dev/null
+        cp -f /opt/zapret/system/IFACE_WAN "${backup_dir}/" 2>/dev/null
+        cp -f /opt/zapret/system/IFACE_LAN "${backup_dir}/" 2>/dev/null
+        echo -e "${green}[INF] Zapret settings backed up to ${yellow}${backup_dir}${green}.${plain}"
+    fi
+
+    # --- Remove zapret (service + unit + /opt/zapret) ---
+    if command -v systemctl > /dev/null 2>&1; then
+        systemctl stop zapret 2>/dev/null
+        systemctl disable zapret 2>/dev/null
+        rm -f /etc/systemd/system/zapret.service
+        systemctl daemon-reload >/dev/null 2>&1
+    fi
+    if [[ -d /opt/zapret ]]; then
+        rm -rf /opt/zapret
+        echo -e "${green}[INF] Zapret removed.${plain}"
+    fi
+
+    # --- Restore the system hosts file ---
+    if [[ -f /var/backups/x-ui/etc-hosts ]]; then
+        cp -f /var/backups/x-ui/etc-hosts /etc/hosts
+        echo -e "${green}[INF] /etc/hosts restored from backup.${plain}"
+    else
+        # No backup: drop only the block the panel manages, keep the rest.
+        if grep -q "# Managed by x-ui panel" /etc/hosts 2>/dev/null; then
+            sed -i '/^# Managed by x-ui panel/,$d' /etc/hosts
+            echo -e "${yellow}[WRN] /etc/hosts had no backup; the panel-managed block was removed, other entries kept.${plain}"
+        fi
+    fi
+
+    # --- Undo the optimization tab (DNS / sysctl / swap) ---
+    if command -v chattr > /dev/null 2>&1; then
+        chattr -i /etc/resolv.conf 2>/dev/null
+    fi
+    if [[ -f /var/backups/x-ui/etc-resolv.conf ]]; then
+        cp -f /var/backups/x-ui/etc-resolv.conf /etc/resolv.conf
+        echo -e "${green}[INF] /etc/resolv.conf restored from backup.${plain}"
+    fi
+    rm -f /etc/sysctl.d/99-xui-bbr.conf /etc/sysctl.d/99-xui-tcp.conf
+    if command -v sysctl > /dev/null 2>&1; then
+        sysctl --system > /dev/null 2>&1
+    fi
+    swapoff /swapfile >/dev/null 2>&1
+    rm -f /swapfile
+    if [[ -f /etc/fstab ]]; then
+        # drop the panel's swap line if present
+        sed -i '\|^/swapfile |d' /etc/fstab
+    fi
+
     if [[ $release == "alpine" ]]; then
         rc-service x-ui stop
         rc-update del x-ui
