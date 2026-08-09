@@ -1652,6 +1652,35 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/zapret/config',
+        summary: 'The raw zapret strategy file (config.txt) as it sits in /opt/zapret.',
+        response: '{\n  "success": true,\n  "obj": { "name": "config.txt", "content": "# strategy\\n..." }\n}',
+      },
+      {
+        method: 'PUT',
+        path: '/panel/api/zapret/config',
+        summary: 'Replace config.txt verbatim and restart the service to apply the new strategy.',
+        body: '{\n  "name": "config.txt",\n  "content": "# strategy\\n..."\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/zapret/files',
+        summary: 'Raw contents of every editable zapret list (autohosts, ignore, whitelist, ipset, youtube, config).',
+        response: '{\n  "success": true,\n  "obj": { "whitelist.txt": "...", "ipset.txt": "..." }\n}',
+      },
+      {
+        method: 'PUT',
+        path: '/panel/api/zapret/file',
+        summary: 'Overwrite one zapret list file verbatim and restart the service to apply it.',
+        body: '{\n  "name": "whitelist.txt",\n  "content": "example.com\\n"\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/zapret/backup',
+        summary: 'Download a zip archive (zapret_backup.zip) of all editable zapret list files.',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/hostsfile',
         summary: 'Read the system hosts file (/etc/hosts) as raw text plus parsed entries.',
       },

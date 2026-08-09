@@ -1970,7 +1970,18 @@
       "downloadTitle": "Install from a remote ZIP",
       "downloadUrl": "Download from URL",
       "downloadBtn": "Download and install",
-      "downloadPlaceholder": "https://example.com/zapret-master.zip"
+      "downloadPlaceholder": "https://example.com/zapret-master.zip",
+      "strategyBtn": "Change strategy",
+      "strategyTitle": "Strategy (config.txt)",
+      "strategyHint": "Changes apply after the service restarts.",
+      "listBtn": "Other lists",
+      "listTitle": "Edit lists",
+      "listSelect": "Select a list",
+      "configSaved": "Strategy saved and applied. The service was restarted.",
+      "listSaved": "List saved and applied. The service was restarted.",
+      "fileFailed": "Failed to read or apply a zapret file.",
+      "backupBtn": "Back up lists",
+      "backupHint": "Downloads all editable lists as a zip archive."
     },
     "hostsfile": {
       "editorTitle": "/etc/hosts editor",

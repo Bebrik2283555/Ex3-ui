@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"bytes"
+
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/zapret"
 
@@ -23,6 +25,11 @@ type zapretDownloadForm struct {
 	IfaceLan string `json:"ifaceLan"`
 }
 
+type zapretFile struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
 // NewZapretController wires the zapret routes into /panel/api.
 func NewZapretController(g *gin.RouterGroup) *ZapretController {
 	a := &ZapretController{}
@@ -43,6 +50,11 @@ func (a *ZapretController) initRouter(g *gin.RouterGroup) {
 	g.GET("/hosts", a.getHosts)
 	g.PUT("/hosts", a.setHosts)
 	g.GET("/logs", a.getLogs)
+	g.GET("/config", a.getConfig)
+	g.PUT("/config", a.setConfig)
+	g.GET("/files", a.getFiles)
+	g.PUT("/file", a.setFile)
+	g.GET("/backup", a.backup)
 }
 
 func (a *ZapretController) getStatus(c *gin.Context) {
@@ -134,4 +146,57 @@ func (a *ZapretController) setHosts(c *gin.Context) {
 
 func (a *ZapretController) getLogs(c *gin.Context) {
 	jsonObj(c, zapret.Logs(200), nil)
+}
+
+func (a *ZapretController) getConfig(c *gin.Context) {
+	content, err := zapret.GetFile("config.txt")
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.zapret.fileFailed"), err)
+		return
+	}
+	jsonObj(c, zapretFile{Name: "config.txt", Content: content}, nil)
+}
+
+func (a *ZapretController) setConfig(c *gin.Context) {
+	form := &zapretFile{}
+	if !middleware.BindAndValidateInto(c, form) {
+		return
+	}
+	if err := zapret.SetFile("config.txt", form.Content); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.zapret.fileFailed"), err)
+		return
+	}
+	jsonMsg(c, I18nWeb(c, "pages.zapret.configSaved"), nil)
+}
+
+func (a *ZapretController) getFiles(c *gin.Context) {
+	files, err := zapret.GetAllFiles()
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.zapret.fileFailed"), err)
+		return
+	}
+	jsonObj(c, files, nil)
+}
+
+func (a *ZapretController) setFile(c *gin.Context) {
+	form := &zapretFile{}
+	if !middleware.BindAndValidateInto(c, form) {
+		return
+	}
+	if err := zapret.SetFile(form.Name, form.Content); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.zapret.fileFailed"), err)
+		return
+	}
+	jsonMsg(c, I18nWeb(c, "pages.zapret.listSaved"), nil)
+}
+
+func (a *ZapretController) backup(c *gin.Context) {
+	var buf bytes.Buffer
+	if err := zapret.BackupZip(&buf); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.zapret.fileFailed"), err)
+		return
+	}
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", "attachment; filename=zapret_backup.zip")
+	_, _ = c.Writer.Write(buf.Bytes())
 }

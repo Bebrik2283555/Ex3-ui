@@ -273,23 +273,6 @@ uninstall() {
         return 0
     fi
 
-    # --- Back up zapret settings before anything is removed ---
-    local backup_dir="/var/backups/x-ui/zapret-$(date +%Y%m%d-%H%M%S)"
-    if [[ -d /opt/zapret ]]; then
-        mkdir -p "${backup_dir}"
-        # All editable domain lists plus the firewall/interface config.
-        cp -f /opt/zapret/autohosts.txt "${backup_dir}/" 2>/dev/null
-        cp -f /opt/zapret/ignore.txt "${backup_dir}/" 2>/dev/null
-        cp -f /opt/zapret/whitelist.txt "${backup_dir}/" 2>/dev/null
-        cp -f /opt/zapret/ipset.txt "${backup_dir}/" 2>/dev/null
-        cp -f /opt/zapret/youtube.txt "${backup_dir}/" 2>/dev/null
-        cp -f /opt/zapret/config.txt "${backup_dir}/" 2>/dev/null
-        cp -f /opt/zapret/system/FWTYPE "${backup_dir}/" 2>/dev/null
-        cp -f /opt/zapret/system/IFACE_WAN "${backup_dir}/" 2>/dev/null
-        cp -f /opt/zapret/system/IFACE_LAN "${backup_dir}/" 2>/dev/null
-        echo -e "${green}[INF] Zapret settings backed up to ${yellow}${backup_dir}${green}.${plain}"
-    fi
-
     # --- Remove zapret (service + unit + /opt/zapret) ---
     if command -v systemctl > /dev/null 2>&1; then
         systemctl stop zapret 2>/dev/null

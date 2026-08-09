@@ -1952,7 +1952,7 @@
       "hostsTitle": "Списки доменов",
       "bypassLabel": "Домены для обхода (autohosts)",
       "ignoreLabel": "Игнорируемые домены",
-      "saveHosts": "Сохранить списки и перезапустить",
+      "saveHosts": "Сохранить и перезапустить",
       "notInstalled": "zapret ещё не установлен.",
       "installFailed": "Не удалось установить zapret",
       "installSuccess": "zapret установлен и запущен.",
@@ -1970,7 +1970,18 @@
       "downloadTitle": "Установка из удалённого ZIP",
       "downloadUrl": "Скачать по ссылке",
       "downloadBtn": "Скачать и установить",
-      "downloadPlaceholder": "https://example.com/zapret-master.zip"
+      "downloadPlaceholder": "https://example.com/zapret-master.zip",
+      "strategyBtn": "Изменение стратегии",
+      "strategyTitle": "Стратегия (config.txt)",
+      "strategyHint": "Изменения применяются после перезапуска службы.",
+      "listBtn": "Другие списки",
+      "listTitle": "Редактирование списков",
+      "listSelect": "Выберите список",
+      "configSaved": "Стратегия сохранена и применена. Служба перезапущена.",
+      "listSaved": "Список сохранён и применён. Служба перезапущена.",
+      "fileFailed": "Не удалось прочитать или применить файл zapret.",
+      "backupBtn": "Бэкап списков",
+      "backupHint": "Скачивает все списки одним zip-архивом."
     },
     "hostsfile": {
       "editorTitle": "Редактор /etc/hosts",

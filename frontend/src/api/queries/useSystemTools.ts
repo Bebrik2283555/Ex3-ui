@@ -217,6 +217,18 @@ export function useZapretHosts() {
   });
 }
 
+export function useZapretFiles() {
+  return useQuery({
+    queryKey: ['zapret', 'files'],
+    queryFn: async (): Promise<Record<string, string>> => {
+      const msg = await HttpUtil.get<Record<string, string>>('/panel/api/zapret/files', undefined, { silent: true });
+      if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch zapret files');
+      return msg.obj ?? {};
+    },
+    enabled: false,
+  });
+}
+
 export function useZapretMutations() {
   const queryClient = useQueryClient();
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['zapret'] });
@@ -242,6 +254,16 @@ export function useZapretMutations() {
     mutationFn: (hosts: ZapretHosts) => HttpUtil.put('/panel/api/zapret/hosts', hosts, JSON_HEADERS),
     onSuccess: () => invalidate(),
   });
+  const saveConfig = useMutation({
+    mutationFn: (content: string) =>
+      HttpUtil.put('/panel/api/zapret/config', { name: 'config.txt', content }, JSON_HEADERS),
+    onSuccess: () => invalidate(),
+  });
+  const saveListFile = useMutation({
+    mutationFn: ({ name, content }: { name: string; content: string }) =>
+      HttpUtil.put('/panel/api/zapret/file', { name, content }, JSON_HEADERS),
+    onSuccess: () => invalidate(),
+  });
 
   return {
     install: (cfg: { firewall: string; ifaceWan: string; ifaceLan: string }) => install.mutateAsync(cfg),
@@ -252,6 +274,8 @@ export function useZapretMutations() {
     stop: () => stop.mutateAsync(),
     restart: () => restart.mutateAsync(),
     saveHosts: (hosts: ZapretHosts) => saveHosts.mutateAsync(hosts),
+    saveConfig: (content: string) => saveConfig.mutateAsync(content),
+    saveListFile: (name: string, content: string) => saveListFile.mutateAsync({ name, content }),
   };
 }
 

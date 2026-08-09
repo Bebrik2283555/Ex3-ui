@@ -381,6 +381,98 @@ func Logs(lines int) []string {
 	return parts
 }
 
+// EditableFiles lists the files users may view/edit/back up from the panel.
+// The names are fixed so the controller can never address an arbitrary path.
+var EditableFiles = []string{"autohosts.txt", "ignore.txt", "whitelist.txt", "ipset.txt", "youtube.txt", "config.txt"}
+
+func editable(name string) bool {
+	for _, f := range EditableFiles {
+		if f == name {
+			return true
+		}
+	}
+	return false
+}
+
+func requireEditable(name string) error {
+	if !editable(name) {
+		return fmt.Errorf("not an editable zapret file: %s", name)
+	}
+	if !IsInstalled() {
+		return errors.New("zapret is not installed")
+	}
+	return nil
+}
+
+// GetFile returns the raw content of one editable zapret file.
+func GetFile(name string) (string, error) {
+	if err := requireLinux(); err != nil {
+		return "", err
+	}
+	if err := requireEditable(name); err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(filepath.Join(installDir, name))
+	return string(data), err
+}
+
+// GetAllFiles returns the raw content of every editable zapret file.
+func GetAllFiles() (map[string]string, error) {
+	if err := requireLinux(); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string)
+	for _, name := range EditableFiles {
+		data, err := os.ReadFile(filepath.Join(installDir, name))
+		if err != nil {
+			return nil, err
+		}
+		out[name] = string(data)
+	}
+	return out, nil
+}
+
+// SetFile writes the raw content of one editable zapret file verbatim (comments
+// and blank lines included) and restarts the service to apply the change.
+func SetFile(name, content string) error {
+	if err := requireLinux(); err != nil {
+		return err
+	}
+	if err := requireEditable(name); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(installDir, name), []byte(content), 0o644); err != nil {
+		return err
+	}
+	return Restart()
+}
+
+// BackupZip writes an archive with every editable zapret file into w, for the
+// in-panel backup button.
+func BackupZip(w io.Writer) error {
+	if err := requireLinux(); err != nil {
+		return err
+	}
+	if !IsInstalled() {
+		return errors.New("zapret is not installed")
+	}
+	zw := zip.NewWriter(w)
+	for _, name := range EditableFiles {
+		data, err := os.ReadFile(filepath.Join(installDir, name))
+		if err != nil {
+			return err
+		}
+		fw, err := zw.Create(name)
+		if err != nil {
+			return err
+		}
+		if _, err := fw.Write(data); err != nil {
+			return err
+		}
+	}
+	return zw.Close()
+}
+
 func readLines(path string) ([]string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
