@@ -14,10 +14,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
@@ -56,6 +59,19 @@ func (n Name) Valid() bool {
 	return n == WDTT || n == OLCRTC
 }
 
+// WDTTClient is one qwdtt client. Each client has its own subscription with
+// its own name and description. The wdtt-server binary stores passwords in
+// {ConfigDir}/passwords.json and re-reads it on SIGHUP.
+type WDTTClient struct {
+	Name                     string `json:"name"`
+	SubscriptionName         string `json:"subscriptionName"`
+	SubscriptionDescription  string `json:"subscriptionDescription"`
+	Password                 string `json:"password"`
+	VkHashes                 string `json:"vkHashes"`
+	Enabled                  bool   `json:"enabled"`
+	SubURI                   string `json:"subUri"`
+}
+
 // Config holds the runtime configuration of one extra core.
 type Config struct {
 	Enabled    bool   `json:"enabled"`
@@ -75,6 +91,17 @@ type Config struct {
 	SubToken string `json:"subToken"`
 	SubHost  string `json:"subHost"`
 	VkHashes string `json:"vkHashes"`
+
+	// qwdtt telegram bot (invites, usage reports); replaces the legacy
+	// -admin/-bot-token ExtraArgs flags
+	AdminID  string `json:"adminId"`
+	BotToken string `json:"botToken"`
+
+	// qwdtt per-client store (passthrough config field, synced to the server)
+	Clients []WDTTClient `json:"clients,omitempty"`
+	// qwdtt passwords the panel has ever managed, so a deleted client can be
+	// purged even from stores whose entries lack the panel source marker.
+	PanelPasswords []string `json:"panelPasswords,omitempty"`
 
 	// olcrtc
 	ConfigFile string `json:"configFile"`
@@ -173,14 +200,17 @@ func (c Config) BuildArgs(name Name) []string {
 		if c.Password != "" {
 			args = append(args, "-password", c.Password)
 		}
+		if c.AdminID != "" {
+			args = append(args, "-admin", c.AdminID)
+		}
+		if c.BotToken != "" {
+			args = append(args, "-bot-token", c.BotToken)
+		}
 		if c.DNS != "" {
 			args = append(args, "-dns", c.DNS)
 		}
 		if c.ListenRaw != "" {
 			args = append(args, "-listen-raw", c.ListenRaw)
-		}
-		if c.ExtraArgs != "" {
-			args = append(args, strings.Fields(c.ExtraArgs)...)
 		}
 		return args
 	case OLCRTC:
@@ -277,6 +307,30 @@ func validCryptoKey(s string) bool {
 		}
 	}
 	return true
+}
+
+// validateWDTTClients rejects client lists the wdtt-server store cannot
+// represent: empty names/passwords, a client reusing the server password or
+// two clients sharing one password.
+func validateWDTTClients(cfg Config) error {
+	seen := make(map[string]struct{}, len(cfg.Clients))
+	for _, cl := range cfg.Clients {
+		if strings.TrimSpace(cl.Name) == "" {
+			return fmt.Errorf("%s: client name is required", WDTT.DisplayName())
+		}
+		pass := strings.TrimSpace(cl.Password)
+		if pass == "" {
+			return fmt.Errorf("%s: client %q needs a password", WDTT.DisplayName(), cl.Name)
+		}
+		if pass == strings.TrimSpace(cfg.Password) {
+			return fmt.Errorf("%s: client %q cannot reuse the server password", WDTT.DisplayName(), cl.Name)
+		}
+		if _, dup := seen[pass]; dup {
+			return fmt.Errorf("%s: duplicate client password (all clients share one port, passwords must differ)", WDTT.DisplayName())
+		}
+		seen[pass] = struct{}{}
+	}
+	return nil
 }
 
 // randomCryptoKey returns 32 random bytes as a 64-char hex string.
@@ -497,6 +551,61 @@ func (m *Manager) SaveConfig(n Name, cfg Config) error {
 			cfg.SubHost = ip + ":" + strconv.Itoa(publicPort(cfg.ListenAddr))
 		}
 	}
+	if n == WDTT {
+		// Generate per-client subscription URIs for new clients.
+		for i := range cfg.Clients {
+			if strings.TrimSpace(cfg.Clients[i].SubURI) == "" {
+				cfg.Clients[i].SubURI = randomSubURI()
+			}
+		}
+		// The subscription endpoint is token-gated; a missing token would make
+		// every subscription URL a dead link, so generate one on first save.
+		if strings.TrimSpace(cfg.SubToken) == "" {
+			cfg.SubToken = randomAlnum(16)
+		}
+		// Lift the legacy -admin/-bot-token flags out of ExtraArgs into the
+		// explicit fields (older deployments stored them there). Unknown or
+		// malformed flags are dropped: they would fail startup anyway.
+		if (cfg.AdminID == "" || cfg.BotToken == "") && strings.TrimSpace(cfg.ExtraArgs) != "" {
+			f := strings.Fields(cfg.ExtraArgs)
+			for i := 0; i+1 < len(f); i += 2 {
+				switch f[i] {
+				case "-admin":
+					if cfg.AdminID == "" {
+						cfg.AdminID = strings.TrimSpace(f[i+1])
+					}
+				case "-bot-token":
+					if cfg.BotToken == "" {
+						cfg.BotToken = strings.TrimSpace(f[i+1])
+					}
+				}
+			}
+		}
+		cfg.ExtraArgs = ""
+		if err := validateWDTTClients(cfg); err != nil {
+			return err
+		}
+		// Remember every password the panel has managed so a deleted client
+		// can be purged even where its entry lacks the panel source marker.
+		// Seed from both the incoming config and the stored one: clients that
+		// never resend the field (older UI, other API consumers) must not
+		// drop the ledger.
+		prev, _ := m.LoadConfig(n)
+		known := make(map[string]bool, len(cfg.PanelPasswords)+len(prev.PanelPasswords))
+		for _, p := range append(append([]string{}, prev.PanelPasswords...), cfg.PanelPasswords...) {
+			known[strings.TrimSpace(p)] = true
+		}
+		for _, cl := range cfg.Clients {
+			if pass := strings.TrimSpace(cl.Password); pass != "" {
+				known[pass] = true
+			}
+		}
+		cfg.PanelPasswords = make([]string, 0, len(known))
+		for p := range known {
+			cfg.PanelPasswords = append(cfg.PanelPasswords, p)
+		}
+		sort.Strings(cfg.PanelPasswords)
+	}
 	old, _ := m.LoadConfig(n)
 	raw, err := json.Marshal(cfg)
 	if err != nil {
@@ -505,13 +614,27 @@ func (m *Manager) SaveConfig(n Name, cfg Config) error {
 	if err := m.store.SetString(m.settingKey(n), string(raw)); err != nil {
 		return err
 	}
+	if n == WDTT {
+		// Push the panel's clients into the server's password store and make
+		// the running process re-read it. A sync failure must not break the
+		// panel-side save.
+		if err := m.SyncPasswords(n, cfg); err != nil {
+			logger.Warningf("extra: %s password sync failed: %v", n.DisplayName(), err)
+		}
+	}
 	if n == OLCRTC {
 		if err := m.WriteYAML(n, cfg); err != nil {
 			return err
 		}
 	}
 	if old.Enabled && cfg.Enabled {
-		if old != cfg {
+		// The password ledger and sub-token are bookkeeping: they must not
+		// restart the core.
+		old.PanelPasswords = nil
+		cfg.PanelPasswords = nil
+		old.SubToken = ""
+		cfg.SubToken = ""
+		if !reflect.DeepEqual(old, cfg) {
 			return m.Restart(n)
 		}
 	}
@@ -700,19 +823,15 @@ type SubProfile struct {
 }
 
 // Subscription is the public JSON document the qwdtt Android client imports.
-// Shape follows https://github.com/SpaceNeuroX/proxy-turn-vk-android (subscriptions).
+// Each client has its own subscription with its own name and description.
 type Subscription struct {
 	SubscriptionName string       `json:"subscriptionName"`
 	Description      string       `json:"description,omitempty"`
-	Version          int          `json:"version"`
-	UpdatedAt        string       `json:"updatedAt"`
 	Profiles         []SubProfile `json:"profiles"`
 }
 
-// SubscriptionFor builds the qwdtt subscription document from the stored config.
-// It returns an error when the core is not qwdtt or the document cannot be built
-// (missing token, host or password).
-func (m *Manager) SubscriptionFor(n Name) (Subscription, error) {
+// ClientSubscription builds the qwdtt subscription document for a specific client.
+func (m *Manager) ClientSubscription(n Name, clientURI string) (Subscription, error) {
 	if n != WDTT {
 		return Subscription{}, fmt.Errorf("subscriptions are only supported for %s", WDTT.DisplayName())
 	}
@@ -720,13 +839,21 @@ func (m *Manager) SubscriptionFor(n Name) (Subscription, error) {
 	if err != nil {
 		return Subscription{}, err
 	}
-	if cfg.SubToken == "" {
-		return Subscription{}, fmt.Errorf("no subscription token configured for %s", n.DisplayName())
+	var client *WDTTClient
+	for i := range cfg.Clients {
+		if cfg.Clients[i].SubURI == clientURI {
+			client = &cfg.Clients[i]
+			break
+		}
+	}
+	if client == nil {
+		return Subscription{}, fmt.Errorf("client not found")
+	}
+	if !client.Enabled {
+		return Subscription{}, fmt.Errorf("client is disabled")
 	}
 	host := strings.TrimSpace(cfg.SubHost)
 	if host == "" {
-		// Config was saved before the IP could be detected (offline save) —
-		// retry now so the client link keeps working.
 		if ip := strings.TrimSpace(publicIPDetector()); ip != "" {
 			host = ip + ":" + strconv.Itoa(publicPort(cfg.ListenAddr))
 		}
@@ -734,32 +861,406 @@ func (m *Manager) SubscriptionFor(n Name) (Subscription, error) {
 	if host == "" {
 		return Subscription{}, fmt.Errorf("no public host configured for %s", n.DisplayName())
 	}
-	password := strings.TrimSpace(cfg.Password)
+	password := strings.TrimSpace(client.Password)
 	if password == "" {
-		return Subscription{}, fmt.Errorf("no password configured for %s", n.DisplayName())
+		return Subscription{}, fmt.Errorf("client has no password")
 	}
-	// Port is the client's local TUN port (on the phone), not a server port.
-	profiles := []SubProfile{{
-		Name:     n.DisplayName(),
+	profile := SubProfile{
+		Name:     strings.TrimSpace(client.Name),
 		Peer:     host,
-		Hashes:   strings.TrimSpace(cfg.VkHashes),
+		Hashes:   strings.TrimSpace(client.VkHashes),
 		Workers:  16,
 		Port:     9000,
 		Password: password,
-	}}
+	}
+	subName := strings.TrimSpace(client.SubscriptionName)
+	if subName == "" {
+		subName = strings.TrimSpace(client.Name)
+	}
 	return Subscription{
-		SubscriptionName: n.DisplayName(),
-		Description:      "qwdtt tunnel via " + host,
-		Version:          1,
-		UpdatedAt:        time.Now().Format("2006-01-02"),
-		Profiles:         profiles,
+		SubscriptionName: subName,
+		Description:      strings.TrimSpace(client.SubscriptionDescription),
+		Profiles:         []SubProfile{profile},
 	}, nil
+}
+
+// WDTTLink renders the qwdtt://config?name=...&peer=...&hashes=...&workers=...&port=...&pass=... quick link
+// for one client. Returns "" when the client has no password or no reachable
+// host can be derived (wildcard listen addresses fall back to the public IP).
+func (c Config) WDTTLink(cl WDTTClient) string {
+	if strings.TrimSpace(cl.Password) == "" {
+		return ""
+	}
+	host := strings.TrimSpace(c.SubHost)
+	if host == "" {
+		host = strings.TrimSpace(c.ListenAddr)
+	}
+	ip := host
+	if i := strings.LastIndex(host, ":"); i >= 0 && !strings.Contains(host[:i], ":") {
+		ip = host[:i]
+	}
+	if ip == "0.0.0.0" || ip == "::" || ip == "" {
+		if detected := strings.TrimSpace(publicIPDetector()); detected != "" {
+			ip = detected
+		} else {
+			return ""
+		}
+	}
+	name := strings.TrimSpace(cl.Name)
+	if name == "" {
+		name = "Client"
+	}
+	port := publicPort(c.ListenAddr)
+	if port == 0 {
+		port = 56000
+	}
+	return fmt.Sprintf("qwdtt://config?name=%s&peer=%s:%d&hashes=%s&workers=16&port=9000&pass=%s",
+		name, ip, port, strings.TrimSpace(cl.VkHashes), strings.TrimSpace(cl.Password))
+}
+
+// wdttPassEntry is the storage shape of one password in the server's
+// passwords.json. The map-based merge below keeps unknown fields (device
+// bindings created by the Telegram bot) intact.
+type wdttPassEntry map[string]any
+
+// SyncPasswords writes the panel's qwdtt clients into the server's password
+// stores and signals every running server process to re-read them. The store
+// location is discovered at runtime (existing copies plus /proc of running
+// processes), because the server may read its passwords.json from a directory
+// other than the panel's configured one — e.g. when it was started outside
+// the panel. Bot-created entries are merged and survive as long as they are
+// not panel-owned; entries of clients deleted or disabled in the panel are
+// removed together with their Telegram device bindings.
+func (m *Manager) SyncPasswords(n Name, cfg Config) error {
+	if n != WDTT || strings.TrimSpace(cfg.ConfigDir) == "" {
+		return nil
+	}
+	written := 0
+	for _, dbFile := range wdttPasswordDBs(cfg) {
+		if err := syncPasswordsFile(dbFile, cfg); err != nil {
+			logger.Warningf("extra: qwdtt password sync to %s failed: %v", dbFile, err)
+			continue
+		}
+		written++
+	}
+	if written == 0 {
+		return fmt.Errorf("no writable qwdtt password store")
+	}
+	if runtime.GOOS != "windows" {
+		// Reload every running server that owns one of the updated stores,
+		// whether or not the panel launched it. The managed process also gets
+		// its signal below; the duplicate is harmless.
+		for _, pid := range wdttProcesses() {
+			signalHUP(pid)
+		}
+	}
+	p := m.GetProc(n)
+	if p.IsRunning() && runtime.GOOS != "windows" {
+		if err := p.Signal(syscall.SIGHUP); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// syncPasswordsFile merges the panel's enabled clients into one password
+// store file and writes it back atomically.
+func syncPasswordsFile(dbFile string, cfg Config) error {
+	db := struct {
+		MainPassword string                     `json:"main_password"`
+		AdminID      json.RawMessage            `json:"admin_id,omitempty"`
+		BotToken     json.RawMessage            `json:"bot_token,omitempty"`
+		Passwords    map[string]json.RawMessage `json:"passwords"`
+		Devices      json.RawMessage            `json:"devices,omitempty"`
+	}{}
+	if data, err := os.ReadFile(dbFile); err == nil {
+		_ = json.Unmarshal(data, &db)
+	}
+	if db.Passwords == nil {
+		db.Passwords = make(map[string]json.RawMessage)
+	}
+	db.MainPassword = strings.TrimSpace(cfg.Password)
+	panelPasswords := make(map[string]bool)
+	for _, cl := range cfg.Clients {
+		if !cl.Enabled {
+			// Disabled clients must not stay usable: the wdtt-server accepts
+			// any password present in the file.
+			continue
+		}
+		pass := strings.TrimSpace(cl.Password)
+		if pass == "" {
+			continue
+		}
+		panelPasswords[pass] = true
+		entry := wdttPassEntry{}
+		if raw, ok := db.Passwords[pass]; ok {
+			_ = json.Unmarshal(raw, &entry)
+		}
+		entry["label"] = strings.TrimSpace(cl.Name)
+		if hashes := strings.TrimSpace(cl.VkHashes); hashes != "" {
+			entry["vk_hash"] = hashes
+		} else {
+			delete(entry, "vk_hash")
+		}
+		entry["source"] = "panel"
+		raw, err := json.Marshal(entry)
+		if err != nil {
+			return err
+		}
+		db.Passwords[pass] = raw
+	}
+	// Remove panel-sourced entries no longer in the enabled client list
+	// (deleted or disabled clients) and their Telegram device bindings. The
+	// password ledger covers entries the bot created before the panel took
+	// the client over: their entries carry no source marker.
+	panelKnown := make(map[string]bool, len(cfg.PanelPasswords))
+	for _, p := range cfg.PanelPasswords {
+		panelKnown[strings.TrimSpace(p)] = true
+	}
+	removed := make(map[string]bool)
+	for pass, raw := range db.Passwords {
+		if panelPasswords[pass] {
+			continue
+		}
+		var entry wdttPassEntry
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			continue
+		}
+		if src, _ := entry["source"].(string); src == "panel" || panelKnown[pass] {
+			delete(db.Passwords, pass)
+			removed[pass] = true
+		}
+	}
+	db.Devices = purgeDeviceBindings(db.Devices, removed)
+	if err := os.MkdirAll(filepath.Dir(dbFile), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(db, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dbFile, data, 0o600)
+}
+
+// wdttCommonDirs are the plausible locations of the wdtt-server data dir
+// besides the panel's configured one.
+var wdttCommonDirs = []string{
+	"/etc/wdtt",
+	"/usr/local/etc/wdtt",
+	"/var/lib/wdtt",
+	"/var/lib/qwdtt",
+	"/opt/wdtt",
+}
+
+// wdttPasswordDBs returns the passwords.json paths to keep in sync: every
+// existing copy found in the configured dir, the configured binary's dir, the
+// common locations, the user's home and the running processes' dirs. When no
+// copy exists yet, only the configured dir is returned so a fresh install
+// behaves exactly as before.
+func wdttPasswordDBs(cfg Config) []string {
+	seen := make(map[string]bool)
+	var paths []string
+	add := func(path string) {
+		if !seen[path] {
+			seen[path] = true
+			paths = append(paths, path)
+		}
+	}
+	add(filepath.Join(strings.TrimSpace(cfg.ConfigDir), "passwords.json"))
+	if bin := strings.TrimSpace(cfg.BinaryPath); bin != "" {
+		add(filepath.Join(filepath.Dir(bin), "passwords.json"))
+	}
+	for _, d := range wdttCommonDirs {
+		add(filepath.Join(d, "passwords.json"))
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		for _, d := range []string{home, filepath.Join(home, ".wdtt"), filepath.Join(home, ".config", "wdtt")} {
+			add(filepath.Join(d, "passwords.json"))
+		}
+	}
+	for _, d := range wdttProcessDirs() {
+		add(filepath.Join(d, "passwords.json"))
+	}
+	var existing []string
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			existing = append(existing, p)
+		}
+	}
+	if len(existing) == 0 {
+		return paths[:1]
+	}
+	return existing
+}
+
+// wdttProcessDirs scans /proc (Linux) for running wdtt server processes and
+// returns the directories that may hold their passwords.json: the working
+// dir, the executable's dir and every open handle named passwords.json.
+// Never matches on non-Linux. Package-level so tests can stub the tree.
+var wdttProcessDirs = func() []string {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	var out []string
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if _, err := strconv.Atoi(e.Name()); err != nil {
+			continue
+		}
+		cmdline, err := os.ReadFile("/proc/" + e.Name() + "/cmdline")
+		if err != nil || len(cmdline) == 0 {
+			continue
+		}
+		argv := strings.Split(strings.TrimRight(string(cmdline), "\x00"), "\x00")
+		base := strings.ToLower(filepath.Base(argv[0]))
+		if !strings.Contains(base, "wdtt") && !strings.Contains(base, "qwdtt") {
+			continue
+		}
+		addDir := func(d string) {
+			if d = strings.TrimSpace(d); d != "" {
+				out = append(out, d)
+			}
+		}
+		if cwd, err := os.Readlink("/proc/" + e.Name() + "/cwd"); err == nil {
+			addDir(cwd)
+		}
+		if exe, err := os.Readlink("/proc/" + e.Name() + "/exe"); err == nil {
+			addDir(filepath.Dir(exe))
+		}
+		for i := 0; i+1 < len(argv); i++ {
+			flag := strings.ToLower(argv[i])
+			if strings.HasPrefix(flag, "-config") && !strings.HasPrefix(argv[i+1], "-") {
+				addDir(argv[i+1])
+			}
+		}
+		fds, err := os.ReadDir("/proc/" + e.Name() + "/fd")
+		if err != nil {
+			continue
+		}
+		for _, fd := range fds {
+			if target, err := os.Readlink("/proc/" + e.Name() + "/fd/" + fd.Name()); err == nil && filepath.Base(target) == "passwords.json" {
+				addDir(filepath.Dir(target))
+			}
+		}
+	}
+	return out
+}
+
+// wdttProcesses returns the PIDs of running wdtt server processes (Linux
+// only), used to deliver SIGHUP regardless of how they were launched.
+func wdttProcesses() []int {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	var pids []int
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		cmdline, err := os.ReadFile("/proc/" + e.Name() + "/cmdline")
+		if err != nil || len(cmdline) == 0 {
+			continue
+		}
+		base := strings.ToLower(filepath.Base(strings.SplitN(string(cmdline), "\x00", 2)[0]))
+		if strings.Contains(base, "wdtt") || strings.Contains(base, "qwdtt") {
+			pids = append(pids, pid)
+		}
+	}
+	return pids
+}
+
+// purgeDeviceBindings drops Telegram device entries that reference any of the
+// removed passwords, so clients deleted or disabled in the panel also vanish
+// from the bot's device list. Best-effort: an opaque devices shape is returned
+// unchanged. The bot stores bindings as an object of device key → entry, where
+// the entry names the bound password either in "password" or "pass", or is the
+// password itself.
+func purgeDeviceBindings(devices json.RawMessage, removed map[string]bool) json.RawMessage {
+	if len(removed) == 0 || len(devices) == 0 || string(devices) == "null" {
+		return devices
+	}
+	var byKey map[string]map[string]any
+	if err := json.Unmarshal(devices, &byKey); err != nil {
+		var flat map[string]string
+		if err := json.Unmarshal(devices, &flat); err != nil {
+			return devices
+		}
+		changed := false
+		for key, pass := range flat {
+			if removed[pass] {
+				delete(flat, key)
+				changed = true
+			}
+		}
+		if !changed {
+			return devices
+		}
+		raw, err := json.Marshal(flat)
+		if err != nil {
+			return devices
+		}
+		return raw
+	}
+	changed := false
+	for key, entry := range byKey {
+		if entry == nil {
+			continue
+		}
+		pass, _ := entry["password"].(string)
+		if pass == "" {
+			pass, _ = entry["pass"].(string)
+		}
+		if removed[pass] {
+			delete(byKey, key)
+			changed = true
+		}
+	}
+	if !changed {
+		return devices
+	}
+	raw, err := json.Marshal(byKey)
+	if err != nil {
+		return devices
+	}
+	return raw
 }
 
 // SubscriptionToken matches the configured secret token against a caller.
 func (m *Manager) SubscriptionToken(n Name) string {
 	cfg, _ := m.LoadConfig(n)
 	return strings.TrimSpace(cfg.SubToken)
+}
+
+// randomAlnum returns n random lowercase alphanumeric characters.
+func randomAlnum(n int) string {
+	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		r := make([]byte, 1)
+		_, _ = rand.Read(r)
+		b[i] = chars[int(r[0])%len(chars)]
+	}
+	return string(b)
+}
+
+// randomSubURI returns a 7-character random alphanumeric string for
+// per-client subscription URIs.
+func randomSubURI() string {
+	return randomAlnum(7)
 }
 
 func fileExists(path string) bool {

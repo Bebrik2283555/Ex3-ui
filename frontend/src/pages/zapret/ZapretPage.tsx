@@ -15,11 +15,12 @@ import {
   Space,
   Spin,
   Tag,
-  Tooltip,
   Typography,
+  Upload,
   message,
 } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, DownloadOutlined, FileTextOutlined, PlayCircleOutlined, PoweroffOutlined, RedoOutlined, SaveOutlined, SettingOutlined } from '@ant-design/icons';
+import type { UploadProps } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, DownloadOutlined, FileTextOutlined, PlayCircleOutlined, PoweroffOutlined, RedoOutlined, SaveOutlined, SettingOutlined, UploadOutlined } from '@ant-design/icons';
 
 import { useTheme } from '@/hooks/useTheme';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -41,8 +42,7 @@ export default function ZapretPage() {
   const { data: status, isLoading, isError, refetch } = useZapretStatus();
   const { data: hosts, refetch: refetchHosts } = useZapretHosts();
   const { data: files, refetch: refetchFiles } = useZapretFiles();
-  const { install, downloadInstall, uninstall, start, stop, restart, saveHosts, saveConfig, saveListFile } = useZapretMutations();
-  const [form] = Form.useForm<{ firewall: string; ifaceWan: string; ifaceLan: string }>();
+  const { downloadInstall, uninstall, start, stop, restart, saveHosts, saveConfig, saveListFile, restoreZip } = useZapretMutations();
   const [dlForm] = Form.useForm<{ firewall: string; ifaceWan: string; ifaceLan: string }>();
   const [bypassText, setBypassText] = useState('');
   const [ignoreText, setIgnoreText] = useState('');
@@ -52,6 +52,7 @@ export default function ZapretPage() {
   const [listsOpen, setListsOpen] = useState(false);
   const [listName, setListName] = useState('');
   const [listText, setListText] = useState('');
+  const [backupOpen, setBackupOpen] = useState(false);
 
   useEffect(() => {
     if (hosts) {
@@ -62,7 +63,7 @@ export default function ZapretPage() {
 
   const editableLists = useMemo(() => {
     if (!files) return [];
-    return Object.keys(files).filter((name) => name !== 'autohosts.txt' && name !== 'ignore.txt');
+    return Object.keys(files).filter((name) => name !== 'config.txt' && name !== 'autohosts.txt' && name !== 'ignore.txt');
   }, [files]);
 
   const openConfig = async () => {
@@ -74,7 +75,7 @@ export default function ZapretPage() {
   const openLists = async () => {
     setListsOpen(true);
     const { data } = await refetchFiles();
-    const names = data ? Object.keys(data).filter((n) => n !== 'autohosts.txt' && n !== 'ignore.txt') : [];
+    const names = data ? Object.keys(data).filter((n) => n !== 'config.txt' && n !== 'autohosts.txt' && n !== 'ignore.txt') : [];
     setListName(names[0] ?? '');
     setListText(names[0] ? data?.[names[0]] ?? '' : '');
   };
@@ -108,6 +109,18 @@ export default function ZapretPage() {
     window.location.href = (window.X_UI_BASE_PATH || '') + 'panel/api/zapret/backup';
   };
 
+  const onRestore: UploadProps['customRequest'] = async (options) => {
+    const file = options.file as File;
+    try {
+      await restoreZip(file);
+      setBackupOpen(false);
+    } catch {
+      // message about the failed restore is shown by the mutation layer
+    } finally {
+      options.onSuccess?.(null);
+    }
+  };
+
   const pageClass = useMemo(() => {
     const c = ['zapret-page'];
     if (isDark) c.push('is-dark');
@@ -115,13 +128,10 @@ export default function ZapretPage() {
     return c.join(' ');
   }, [isDark, isUltra]);
 
-  const run = async (kind: 'install' | 'uninstall' | 'start' | 'stop' | 'restart') => {
+  const run = async (kind: 'uninstall' | 'start' | 'stop' | 'restart') => {
     setBusy(kind);
     try {
-      if (kind === 'install') {
-        const values = await form.validateFields();
-        await install(values);
-      } else if (kind === 'uninstall') await uninstall();
+      if (kind === 'uninstall') await uninstall();
       else if (kind === 'start') await start();
       else if (kind === 'stop') await stop();
       else await restart();
@@ -185,29 +195,6 @@ export default function ZapretPage() {
               </Card>
 
               {!status?.installed ? (
-                <>
-                  <Card title={t('pages.zapret.installTitle')} variant="borderless" style={{ marginBottom: 16 }}>
-                  <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>{t('pages.zapret.notInstalled')}</Text>
-                  <Form form={form} layout="vertical" initialValues={{ firewall: 'nftables' }} style={{ maxWidth: 480 }}>
-                    <Form.Item name="firewall" label={t('pages.zapret.firewallLabel')}>
-                      <Select
-                        options={[
-                          { value: 'nftables', label: 'nftables' },
-                          { value: 'iptables', label: 'iptables' },
-                        ]}
-                      />
-                    </Form.Item>
-                    <Form.Item name="ifaceWan" label={t('pages.zapret.ifaceWan')}>
-                      <Input placeholder="eth0" />
-                    </Form.Item>
-                    <Form.Item name="ifaceLan" label={t('pages.zapret.ifaceLan')}>
-                      <Input placeholder="" />
-                    </Form.Item>
-<Button type="primary" icon={<CheckCircleOutlined />} loading={busy === 'install'} onClick={() => void run('install')}>
-                      {t('pages.zapret.installBtn')}
-                    </Button>
-                  </Form>
-                </Card>
                 <Card title={t('pages.zapret.downloadTitle')} variant="borderless" style={{ marginBottom: 16 }}>
                   <Form form={dlForm} layout="vertical" initialValues={{ firewall: 'nftables' }}>
                     <Form.Item label={t('pages.zapret.downloadUrl')}>
@@ -232,7 +219,6 @@ export default function ZapretPage() {
                     </Button>
                   </Form>
                 </Card>
-                </>
               ) : (
                 <>
                   <Card
@@ -267,11 +253,9 @@ export default function ZapretPage() {
                       <Button icon={<FileTextOutlined />} loading={busy === 'list'} onClick={() => void openLists()}>
                         {t('pages.zapret.listBtn')}
                       </Button>
-                      <Tooltip title={t('pages.zapret.backupHint')}>
-                      <Button icon={<DownloadOutlined />} onClick={runBackup}>
+                      <Button icon={<DownloadOutlined />} onClick={() => setBackupOpen(true)}>
                         {t('pages.zapret.backupBtn')}
                       </Button>
-                    </Tooltip>
                     </Space>
                     <Modal
                       open={configOpen}
@@ -310,6 +294,19 @@ export default function ZapretPage() {
                   <Card title={t('pages.zapret.uninstallBtn')} variant="borderless">
                     <Button danger loading={busy === 'uninstall'} onClick={() => void run('uninstall')}>{t('pages.zapret.uninstallBtn')}</Button>
                   </Card>
+                  <Modal open={backupOpen} title={t('pages.zapret.backupBtn')} footer={null} onCancel={() => setBackupOpen(false)}>
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      <Button block icon={<DownloadOutlined />} onClick={runBackup}>
+                        {t('pages.zapret.backupDownload')}
+                      </Button>
+                      <Upload accept=".zip,application/zip" showUploadList={false} customRequest={onRestore}>
+                        <Button block icon={<UploadOutlined />}>
+                          {t('pages.zapret.restoreBtn')}
+                        </Button>
+                      </Upload>
+                      <Text type="secondary">{t('pages.zapret.restoreHint')}</Text>
+                    </Space>
+                  </Modal>
                 </>
               )}
             </Spin>

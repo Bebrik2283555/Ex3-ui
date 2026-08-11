@@ -486,12 +486,16 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 		status.Uptime = upTime
 	}
 
-	// Memory stats
+	// Memory stats. Match htop/free: used = total - MemAvailable (reclaimable
+	// page cache excluded); gopsutil's Used counts that cache as in-use.
 	memInfo, err := mem.VirtualMemory()
 	if err != nil {
 		logger.Warning("get virtual memory failed:", err)
 	} else {
 		status.Mem.Current = memInfo.Used
+		if memInfo.Available > 0 && memInfo.Total >= memInfo.Available {
+			status.Mem.Current = memInfo.Total - memInfo.Available
+		}
 		status.Mem.Total = memInfo.Total
 	}
 

@@ -11792,51 +11792,6 @@
         }
       }
     },
-    "/panel/api/zapret/install": {
-      "post": {
-        "tags": [
-          "System Tools"
-        ],
-        "summary": "Install zapret from the bundled assets to /opt/zapret, write the systemd unit and start it.",
-        "operationId": "post_panel_api_zapret_install",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              },
-              "example": {
-                "firewall": "nftables",
-                "ifaceWan": "eth0",
-                "ifaceLan": ""
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/panel/api/zapret/download": {
       "post": {
         "tags": [
@@ -12093,6 +12048,226 @@
         ],
         "summary": "Recent zapret service output from journald.",
         "operationId": "get_panel_api_zapret_logs",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/config": {
+      "get": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "The raw zapret strategy file (config.txt) as it sits in /opt/zapret.",
+        "operationId": "get_panel_api_zapret_config",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "name": "config.txt",
+                    "content": "# strategy\n..."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Replace config.txt verbatim and restart the service to apply the new strategy.",
+        "operationId": "put_panel_api_zapret_config",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "name": "config.txt",
+                "content": "# strategy\n..."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/files": {
+      "get": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Raw contents of every editable zapret list (autohosts, ignore, whitelist, ipset, youtube, config).",
+        "operationId": "get_panel_api_zapret_files",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "whitelist.txt": "...",
+                    "ipset.txt": "..."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/file": {
+      "put": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Overwrite one zapret list file verbatim and restart the service to apply it.",
+        "operationId": "put_panel_api_zapret_file",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "name": "whitelist.txt",
+                "content": "example.com\n"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/backup": {
+      "get": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Download a zip archive (zapret_backup.zip) of all editable zapret list files.",
+        "operationId": "get_panel_api_zapret_backup",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/zapret/restore": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Apply a backup zip (multipart \"file\", max 8 MiB) of the editable zapret lists and restart the service.",
+        "operationId": "post_panel_api_zapret_restore",
         "responses": {
           "200": {
             "description": "Successful response",

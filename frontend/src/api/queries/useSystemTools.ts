@@ -7,6 +7,16 @@ const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } };
 
 export type CoreName = 'qwdtt' | 'olcrtc';
 
+export interface WDTTClient {
+  name: string;
+  subscriptionName: string;
+  subscriptionDescription: string;
+  password: string;
+  vkHashes: string;
+  enabled: boolean;
+  subUri: string;
+}
+
 export interface ExtraConfig {
   enabled?: boolean;
   autoStart?: boolean;
@@ -20,6 +30,9 @@ export interface ExtraConfig {
   subToken?: string;
   subHost?: string;
   vkHashes?: string;
+  clients?: WDTTClient[];
+  adminId?: string;
+  botToken?: string;
   configFile?: string;
   dataDir?: string;
   provider?: string;
@@ -233,11 +246,6 @@ export function useZapretMutations() {
   const queryClient = useQueryClient();
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['zapret'] });
 
-  const install = useMutation({
-    mutationFn: (cfg: { firewall: string; ifaceWan: string; ifaceLan: string }) =>
-      HttpUtil.post('/panel/api/zapret/install', cfg, JSON_HEADERS),
-    onSuccess: () => invalidate(),
-  });
   const downloadInstall = useMutation({
     mutationFn: (cfg: { url: string; firewall: string; ifaceWan: string; ifaceLan: string }) =>
       HttpUtil.post('/panel/api/zapret/download', cfg, JSON_HEADERS),
@@ -264,9 +272,16 @@ export function useZapretMutations() {
       HttpUtil.put('/panel/api/zapret/file', { name, content }, JSON_HEADERS),
     onSuccess: () => invalidate(),
   });
+  const restoreZip = useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      return HttpUtil.post('/panel/api/zapret/restore', form);
+    },
+    onSuccess: () => invalidate(),
+  });
 
   return {
-    install: (cfg: { firewall: string; ifaceWan: string; ifaceLan: string }) => install.mutateAsync(cfg),
     downloadInstall: (cfg: { url: string; firewall: string; ifaceWan: string; ifaceLan: string }) =>
       downloadInstall.mutateAsync(cfg),
     uninstall: () => uninstall.mutateAsync(),
@@ -276,6 +291,7 @@ export function useZapretMutations() {
     saveHosts: (hosts: ZapretHosts) => saveHosts.mutateAsync(hosts),
     saveConfig: (content: string) => saveConfig.mutateAsync(content),
     saveListFile: (name: string, content: string) => saveListFile.mutateAsync({ name, content }),
+    restoreZip: (file: File) => restoreZip.mutateAsync(file),
   };
 }
 

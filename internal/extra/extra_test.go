@@ -65,16 +65,18 @@ func TestMergeOLCrtc(t *testing.T) {
 func TestBuildArgsWDTT(t *testing.T) {
 	cfg := DefaultConfig(WDTT)
 	cfg.Password = "hunter2"
-	cfg.ExtraArgs = "--foo bar"
+	cfg.AdminID = "123456789"
+	cfg.BotToken = "bot:token"
 	args := cfg.BuildArgs(WDTT)
 	want := []string{
 		"-listen", "0.0.0.0:56000",
 		"-wg-port", "56001",
 		"-config-dir", "/etc/wdtt",
 		"-password", "hunter2",
+		"-admin", "123456789",
+		"-bot-token", "bot:token",
 		"-dns", "8.8.8.8",
 		"-listen-raw", "0.0.0.0:56003",
-		"--foo", "bar",
 	}
 	if !reflect.DeepEqual(args, want) {
 		t.Errorf("BuildArgs(WDTT) = %v, want %v", args, want)
@@ -92,6 +94,37 @@ func TestBuildArgsWDTT(t *testing.T) {
 	off.ListenRaw = ""
 	if containsPair(off.BuildArgs(WDTT), "-listen-raw", "") {
 		t.Errorf("BuildArgs with raw disabled must not contain -listen-raw: %v", off.BuildArgs(WDTT))
+	}
+	// No extra args: only the flags above may appear (nothing from -foo bar).
+	off.ExtraArgs = "--foo bar"
+	if containsPair(off.BuildArgs(WDTT), "--foo", "bar") {
+		t.Errorf("BuildArgs must not forward ExtraArgs: %v", off.BuildArgs(WDTT))
+	}
+}
+
+// TestSaveConfigWDTTMigratesBotFlags lifts the legacy -admin/-bot-token
+// flags out of extraArgs so older deployments keep their bot after the
+// explicit AdminID/BotToken fields replaced the free-form text.
+func TestSaveConfigWDTTMigratesBotFlags(t *testing.T) {
+	isolateStoreDiscovery(t)
+
+	m := NewManager(memStore{})
+	cfg := DefaultConfig(WDTT)
+	cfg.Enabled = true
+	cfg.Password = "p"
+	cfg.ExtraArgs = "-admin 123456789 -bot-token abc:def"
+	if err := m.SaveConfig(WDTT, cfg); err != nil {
+		t.Fatalf("SaveConfig: %v", err)
+	}
+	got, err := m.LoadConfig(WDTT)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got.AdminID != "123456789" || got.BotToken != "abc:def" {
+		t.Errorf("bot flags not migrated: adminId=%q botToken=%q", got.AdminID, got.BotToken)
+	}
+	if got.ExtraArgs != "" {
+		t.Errorf("extraArgs = %q, want cleared after migration", got.ExtraArgs)
 	}
 }
 
@@ -294,6 +327,8 @@ func (s memStore) SetString(key, value string) error    { s[key] = value; return
 // exist" bug: the UI never sends binaryPath, so SaveConfig must check the
 // default binary location when the stored path is empty.
 func TestSaveConfigFallsBackToDefaultBinaryPath(t *testing.T) {
+	isolateStoreDiscovery(t)
+
 	dir := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", dir)
 	t.Setenv("PATH", dir) // no-op guard: config reads XUI_BIN_FOLDER only
@@ -317,55 +352,6 @@ func TestSaveConfigFallsBackToDefaultBinaryPath(t *testing.T) {
 m2 := NewManager(memStore{})
 	if err := m2.SaveConfig(n, Config{Enabled: true, AutoStart: true}); err != nil {
 		t.Fatalf("save with present default binary failed: %v", err)
-	}
-}
-
-// TestSubscriptionFor builds a qwdtt subscription from a stored config and
-// rejects malformed ones (missing token / host).
-func TestSubscriptionFor(t *testing.T) {
-	// Not qwdtt -> error.
-	m := NewManager(memStore{})
-	if _, err := m.SubscriptionFor(OLCRTC); err == nil {
-		t.Fatal("expected error for non-qwdtt core")
-	}
-
-	// Missing token -> error.
-	m2 := NewManager(memStore{})
-	cfg := Config{SubHost: "203.0.113.10:56000", Password: "secret"}
-	if _, err := m2.SubscriptionFor(WDTT); err == nil {
-		t.Fatal("expected error when no config stored")
-	}
-	_ = cfg
-
-	// Happy path: token present, host + password set.
-	store := memStore{}
-	m3 := NewManager(store)
-	good := Config{SubToken: "tok", SubHost: "203.0.113.10:56000", Password: "secret", VkHashes: "h1,h2"}
-	raw, err := json.Marshal(good.Merge(WDTT))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.SetString(WDTT.settingKey(), string(raw)); err != nil {
-		t.Fatal(err)
-	}
-	doc, err := m3.SubscriptionFor(WDTT)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if doc.SubscriptionName != "qWDTT" {
-		t.Errorf("name = %q", doc.SubscriptionName)
-	}
-	if len(doc.Profiles) != 1 {
-		t.Fatalf("profiles = %d, want 1", len(doc.Profiles))
-	}
-	if got := doc.Profiles[0].Hashes; got != "h1,h2" {
-		t.Errorf("hashes = %q", got)
-	}
-	if got := doc.Profiles[0].Peer; got != "203.0.113.10:56000" {
-		t.Errorf("peer = %q", got)
-	}
-	if got := doc.Profiles[0].Port; got != 9000 {
-		t.Errorf("port = %d, want 9000 (client's local TUN port)", got)
 	}
 }
 
@@ -465,6 +451,8 @@ func TestSaveConfigOLCRTCClampsVP8(t *testing.T) {
 }
 
 func TestSaveConfigWDTTDetectsPublicIP(t *testing.T) {
+	isolateStoreDiscovery(t)
+
 	oldDetector := publicIPDetector
 	t.Cleanup(func() { publicIPDetector = oldDetector })
 

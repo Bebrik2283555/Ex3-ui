@@ -2,6 +2,8 @@ package controller
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/zapret"
@@ -11,12 +13,6 @@ import (
 
 // ZapretController manages the transparent DPI-bypass service and its domain lists.
 type ZapretController struct{}
-
-type zapretInstallForm struct {
-	Firewall string `json:"firewall"`
-	IfaceWan string `json:"ifaceWan"`
-	IfaceLan string `json:"ifaceLan"`
-}
 
 type zapretDownloadForm struct {
 	URL      string `json:"url" binding:"required"`
@@ -41,7 +37,6 @@ func (a *ZapretController) initRouter(g *gin.RouterGroup) {
 	g = g.Group("/zapret")
 
 	g.GET("/status", a.getStatus)
-	g.POST("/install", a.install)
 	g.POST("/download", a.downloadInstall)
 	g.POST("/uninstall", a.uninstall)
 	g.POST("/start", a.start)
@@ -55,25 +50,11 @@ func (a *ZapretController) initRouter(g *gin.RouterGroup) {
 	g.GET("/files", a.getFiles)
 	g.PUT("/file", a.setFile)
 	g.GET("/backup", a.backup)
+	g.POST("/restore", a.restore)
 }
 
 func (a *ZapretController) getStatus(c *gin.Context) {
 	jsonObj(c, zapret.GetStatus(), nil)
-}
-
-func (a *ZapretController) install(c *gin.Context) {
-	form := &zapretInstallForm{}
-	if !middleware.BindAndValidateInto(c, form) {
-		return
-	}
-	if form.Firewall == "" {
-		form.Firewall = "nftables"
-	}
-	if err := zapret.Install(form.Firewall, form.IfaceWan, form.IfaceLan); err != nil {
-		jsonMsg(c, I18nWeb(c, "pages.zapret.installFailed"), err)
-		return
-	}
-	jsonMsg(c, I18nWeb(c, "pages.zapret.installSuccess"), nil)
 }
 
 func (a *ZapretController) downloadInstall(c *gin.Context) {
@@ -183,6 +164,10 @@ func (a *ZapretController) setFile(c *gin.Context) {
 	if !middleware.BindAndValidateInto(c, form) {
 		return
 	}
+	if form.Name == "config.txt" {
+		jsonMsg(c, I18nWeb(c, "pages.zapret.fileFailed"), fmt.Errorf("config.txt is managed by the strategy endpoint"))
+		return
+	}
 	if err := zapret.SetFile(form.Name, form.Content); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.zapret.fileFailed"), err)
 		return
@@ -199,4 +184,33 @@ func (a *ZapretController) backup(c *gin.Context) {
 	c.Header("Content-Type", "application/zip")
 	c.Header("Content-Disposition", "attachment; filename=zapret_backup.zip")
 	_, _ = c.Writer.Write(buf.Bytes())
+}
+
+// restore applies a backup zip uploaded as the multipart "file" field.
+func (a *ZapretController) restore(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.zapret.restoreFailed"), err)
+		return
+	}
+	if file.Size > 8<<20 {
+		jsonMsg(c, I18nWeb(c, "pages.zapret.restoreFailed"), fmt.Errorf("backup zip exceeds 8 MiB"))
+		return
+	}
+	rc, err := file.Open()
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.zapret.restoreFailed"), err)
+		return
+	}
+	defer rc.Close()
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.zapret.restoreFailed"), err)
+		return
+	}
+	if err := zapret.RestoreZip(data); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.zapret.restoreFailed"), err)
+		return
+	}
+	jsonMsg(c, I18nWeb(c, "pages.zapret.restoreSuccess"), nil)
 }

@@ -138,6 +138,23 @@ func (p *Proc) LastLine() string { return p.lines.last() }
 // Lines returns up to max recent captured log lines.
 func (p *Proc) Lines(max int) []string { return p.lines.all(max) }
 
+// Signal delivers a Unix signal to the running process.
+func (p *Proc) Signal(sig syscall.Signal) error {
+	p.mu.RLock()
+	cmd := p.cmd
+	p.mu.RUnlock()
+	if cmd == nil || cmd.Process == nil {
+		return errors.New("service is not running")
+	}
+	if err := cmd.Process.Signal(sig); err != nil {
+		if errors.Is(err, os.ErrProcessDone) {
+			return errors.New("service is not running")
+		}
+		return err
+	}
+	return nil
+}
+
 // Start launches the binary with the given arguments.
 func (p *Proc) Start(bin string, args []string) error {
 	if p.IsRunning() {

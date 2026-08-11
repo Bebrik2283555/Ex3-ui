@@ -1,26 +1,25 @@
 // Package zapret manages the transparent DPI-bypass tool: it installs the
-// bundled nfqws binary and config into /opt/zapret, creates the systemd
-// unit, and exposes the editable domain lists (autohosts/ignore).
+// nfqws binary and config from a downloaded release archive into /opt/zapret,
+// creates the systemd unit, and exposes the editable domain lists
+// (autohosts/ignore).
 package zapret
 
 import (
 	"archive/zip"
-	"embed"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/util"
 )
-
-//go:embed all:assets
-var assets embed.FS
 
 const (
 	installDir  = "/opt/zapret"
@@ -60,17 +59,9 @@ func IsInstalled() bool {
 	return err == nil
 }
 
-// Install copies the binaries bundled into the panel into /opt/zapret, selects
-// the nfqws binary for this architecture and writes a systemd unit.
-// firewallType is "iptables" or "nftables"; ifaceWan/ifaceLan are
-// space-separated interface lists (may be empty).
-func Install(firewallType, ifaceWan, ifaceLan string) error {
-	return installFromFS(assets, "assets", firewallType, ifaceWan, ifaceLan)
-}
-
-// installFromFS installs zapret from any file tree (the embedded assets or the
-// unwrapped contents of a downloaded zip archive) into /opt/zapret. base is the
-// directory inside src whose child bins/ and files/ layout is used.
+// installFromFS installs zapret from any file tree (the unwrapped contents of
+// a downloaded zip archive) into /opt/zapret. base is the directory inside
+// src whose child bins/ and files/ layout is used.
 func installFromFS(src fs.FS, base, firewallType, ifaceWan, ifaceLan string) error {
 	if err := requireLinux(); err != nil {
 		return err
@@ -84,47 +75,12 @@ func installFromFS(src fs.FS, base, firewallType, ifaceWan, ifaceLan string) err
 	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		return err
 	}
-	// Copy files/ tree.
-	if err := fs.WalkDir(src, base, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel := strings.TrimPrefix(path, base)
-		rel = strings.TrimPrefix(rel, "/")
-		if rel == "" {
-			return nil
-		}
-		if d.IsDir() {
-			return os.MkdirAll(filepath.Join(installDir, rel), 0o755)
-		}
-		data, err := fs.ReadFile(src, path)
-		if err != nil {
-			return err
-		}
-		dst := filepath.Join(installDir, rel)
-		mode := fs.FileMode(0o644)
-		if strings.HasSuffix(dst, ".sh") || strings.HasSuffix(dst, "nfqws") {
-			mode = 0o755
-		}
-		return os.WriteFile(dst, data, mode)
-	}); err != nil {
+	if err := installFiles(src, base, installDir); err != nil {
 		return err
 	}
-
-	arch := archDir()
-	if arch == "" {
-		return fmt.Errorf("unsupported architecture %s/%s", runtime.GOOS, runtime.GOARCH)
-	}
-	srcBin := filepath.Join(installDir, "bins", arch, "nfqws")
-	dstBin := filepath.Join(installDir, "system", "nfqws")
-	data, err := os.ReadFile(srcBin)
-	if err != nil {
+	if err := copyNFQWS(src, base, installDir); err != nil {
 		return err
 	}
-	if err := os.WriteFile(dstBin, data, 0o755); err != nil {
-		return err
-	}
-	_ = os.RemoveAll(filepath.Join(installDir, "bins"))
 
 	writeCfg := func(name, value string) error {
 		return os.WriteFile(filepath.Join(installDir, "system", name), []byte(value+"\n"), 0o644)
@@ -139,7 +95,7 @@ func installFromFS(src fs.FS, base, firewallType, ifaceWan, ifaceLan string) err
 		return err
 	}
 
-	unit, err := os.ReadFile(filepath.Join(installDir, "files", "system", serviceName))
+	unit, err := os.ReadFile(filepath.Join(installDir, "system", serviceName))
 	if err != nil {
 		return err
 	}
@@ -154,6 +110,60 @@ func installFromFS(src fs.FS, base, firewallType, ifaceWan, ifaceLan string) err
 		return err
 	}
 	return Start()
+}
+
+// installFiles copies the files/ tree of the archive into dest with the
+// files/ prefix stripped, so files/system/starter.sh lands in
+// dest/system/starter.sh and lists (autohosts.txt, config.txt, ...) land in
+// dest itself, matching the paths the unit file and starter.sh expect.
+func installFiles(src fs.FS, base, dest string) error {
+	return fs.WalkDir(src, base, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel := strings.TrimPrefix(path, base)
+		rel = strings.TrimPrefix(rel, "/")
+		if rel == "" {
+			return nil
+		}
+		if rel == "files" {
+			return os.MkdirAll(dest, 0o755)
+		}
+		if !strings.HasPrefix(rel, "files/") {
+			return nil
+		}
+		rel = strings.TrimPrefix(rel, "files/")
+		if d.IsDir() {
+			return os.MkdirAll(filepath.Join(dest, rel), 0o755)
+		}
+		data, err := fs.ReadFile(src, path)
+		if err != nil {
+			return err
+		}
+		dst := filepath.Join(dest, rel)
+		mode := fs.FileMode(0o644)
+		if strings.HasSuffix(dst, ".sh") {
+			mode = 0o755
+		}
+		return os.WriteFile(dst, data, mode)
+	})
+}
+
+// copyNFQWS copies the prebuilt nfqws for the current architecture from
+// bins/<arch>/ into dest/system/nfqws.
+func copyNFQWS(src fs.FS, base, dest string) error {
+	arch := archDir()
+	if arch == "" {
+		return fmt.Errorf("unsupported architecture %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+	data, err := fs.ReadFile(src, path.Join(base, "bins", arch, "nfqws"))
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(dest, "system"), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dest, "system", "nfqws"), data, 0o755)
 }
 
 // InstallFromZip downloads a zapret release zip from url, unpacks it and
@@ -474,6 +484,54 @@ func BackupZip(w io.Writer) error {
 		}
 	}
 	return zw.Close()
+}
+
+// RestoreZip applies a backup zip (as produced by BackupZip) to the installed
+// zapret lists and restarts the service. Entries that are not editable zapret
+// files are ignored, so foreign archives cannot overwrite anything.
+func RestoreZip(data []byte) error {
+	if err := requireLinux(); err != nil {
+		return err
+	}
+	if !IsInstalled() {
+		return errors.New("zapret is not installed")
+	}
+	if err := restoreZipFiles(data, installDir); err != nil {
+		return err
+	}
+	return Restart()
+}
+
+// restoreZipFiles writes every editable zapret list found in the archive into
+// dir. Path traversal and unknown entries are ignored.
+func restoreZipFiles(data []byte, dir string) error {
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return err
+	}
+	for _, f := range zr.File {
+		rel := filepath.Clean(filepath.FromSlash(f.Name))
+		if rel == "." || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			continue
+		}
+		name := filepath.Base(rel)
+		if !editable(name) {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+		content, err := io.ReadAll(io.LimitReader(rc, 4<<20))
+		rc.Close()
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), content, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func readLines(path string) ([]string, error) {

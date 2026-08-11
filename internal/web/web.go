@@ -269,14 +269,14 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	// Public qwdtt subscription file. The secret token in the path is the only
 	// gate (deliberately placed outside the authenticated /panel group so clients
 	// can fetch it without logging in), matching how the qWDTT Android app imports
-	// HTTPS JSON subscriptions.
-	engine.GET(basePath+"panel/qwdtt/sub/:token", func(c *gin.Context) {
+	// HTTPS JSON subscriptions. Each client has its own subscription.
+	engine.GET(basePath+"panel/qwdtt/sub/:token/:clientUri", func(c *gin.Context) {
 		mgr := extra.ManagerSingleton()
 		if mgr == nil || mgr.SubscriptionToken(extra.WDTT) != c.Param("token") {
 			c.AbortWithStatus(http.StatusNotFound)
 			return
 		}
-		doc, err := mgr.SubscriptionFor(extra.WDTT)
+		doc, err := mgr.ClientSubscription(extra.WDTT, c.Param("clientUri"))
 		if err != nil {
 			c.AbortWithStatus(http.StatusNotFound)
 			return

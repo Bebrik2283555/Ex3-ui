@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card, Checkbox, ConfigProvider, Divider, InputNumber, Layout, Result, Row, Col, Space, Spin, Typography, message } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
 
 import { useTheme } from '@/hooks/useTheme';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -84,9 +84,6 @@ export default function OptimizePage() {
                 title={<><ThunderboltOutlined /> {t('pages.optimize.applyTitle')}</>}
                 variant="borderless"
                 style={{ marginBottom: 16 }}
-                extra={
-                  <Button icon={<ReloadOutlined />} onClick={() => refetch()} aria-label={t('refresh')} />
-                }
               >
                 <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                   <Checkbox checked={dns} onChange={(e) => setDns(e.target.checked)}>{t('pages.optimize.dnsOption')}</Checkbox>

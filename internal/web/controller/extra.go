@@ -149,7 +149,12 @@ func (a *ExtraController) uploadBinary(c *gin.Context) {
 		return
 	}
 	dst := name.DefaultBinaryPath()
-	if err := c.SaveUploadedFile(file, dst); err != nil {
+	// A running core executes its binary in place; opening dst for write
+	// then fails with ETXTBSY ("text file busy"). Write to a temp file and
+	// rename it over dst: rename replaces the path atomically while the old
+	// inode keeps executing, and the new binary applies on the next restart.
+	tmp := dst + ".upload"
+	if err := c.SaveUploadedFile(file, tmp); err != nil {
 		logger.Warning("save uploaded binary failed:", err)
 		jsonMsg(c, I18nWeb(c, "pages.extras.uploadFailed"), err)
 		return
@@ -157,9 +162,15 @@ func (a *ExtraController) uploadBinary(c *gin.Context) {
 	// Uploaded cores must be executable on disk or exec fails with
 	// "permission denied". SaveUploadedFile writes with default (0644) perms.
 	if runtime.GOOS != "windows" {
-		if err := os.Chmod(dst, 0o755); err != nil {
+		if err := os.Chmod(tmp, 0o755); err != nil {
 			logger.Warning("chmod uploaded binary failed:", err)
 		}
+	}
+	if err := os.Rename(tmp, dst); err != nil {
+		_ = os.Remove(tmp)
+		logger.Warning("replace uploaded binary failed:", err)
+		jsonMsg(c, I18nWeb(c, "pages.extras.uploadFailed"), err)
+		return
 	}
 	jsonMsg(c, I18nWeb(c, "pages.extras.uploadSuccess"), nil)
 }

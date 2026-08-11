@@ -23,10 +23,6 @@ _openapi:
       title: Whether zapret is installed, running, enabled and which firewall it uses.
       url: '#whether-zapret-is-installed-running-enabled-and-which-firewall-it-uses'
     - depth: 2
-      title: Install zapret from the bundled assets to /opt/zapret, write the systemd
-        unit and start it.
-      url: '#install-zapret-from-the-bundled-assets-to-optzapret-write-the-systemd-unit-and-start-it'
-    - depth: 2
       title: Download a zapret release ZIP from a public URL, unpack it and install to
         /opt/zapret (same layout as install).
       url: '#download-a-zapret-release-zip-from-a-public-url-unpack-it-and-install-to-optzapret-same-layout-as-install'
@@ -53,6 +49,29 @@ _openapi:
       title: Recent zapret service output from journald.
       url: '#recent-zapret-service-output-from-journald'
     - depth: 2
+      title: The raw zapret strategy file (config.txt) as it sits in /opt/zapret.
+      url: '#the-raw-zapret-strategy-file-configtxt-as-it-sits-in-optzapret'
+    - depth: 2
+      title: Replace config.txt verbatim and restart the service to apply the new
+        strategy.
+      url: '#replace-configtxt-verbatim-and-restart-the-service-to-apply-the-new-strategy'
+    - depth: 2
+      title: Raw contents of every editable zapret list (autohosts, ignore, whitelist,
+        ipset, youtube, config).
+      url: '#raw-contents-of-every-editable-zapret-list-autohosts-ignore-whitelist-ipset-youtube-config'
+    - depth: 2
+      title: Overwrite one zapret list file verbatim and restart the service to apply
+        it.
+      url: '#overwrite-one-zapret-list-file-verbatim-and-restart-the-service-to-apply-it'
+    - depth: 2
+      title: Download a zip archive (zapret_backup.zip) of all editable zapret list
+        files.
+      url: '#download-a-zip-archive-zapret_backupzip-of-all-editable-zapret-list-files'
+    - depth: 2
+      title: Apply a backup zip (multipart "file", max 8 MiB) of the editable zapret
+        lists and restart the service.
+      url: '#apply-a-backup-zip-multipart-file-max-8-mib-of-the-editable-zapret-lists-and-restart-the-service'
+    - depth: 2
       title: Read the system hosts file (/etc/hosts) as raw text plus parsed entries.
       url: '#read-the-system-hosts-file-etchosts-as-raw-text-plus-parsed-entries'
     - depth: 2
@@ -74,9 +93,6 @@ _openapi:
       - content: Whether zapret is installed, running, enabled and which firewall it
           uses.
         id: whether-zapret-is-installed-running-enabled-and-which-firewall-it-uses
-      - content: Install zapret from the bundled assets to /opt/zapret, write the
-          systemd unit and start it.
-        id: install-zapret-from-the-bundled-assets-to-optzapret-write-the-systemd-unit-and-start-it
       - content: Download a zapret release ZIP from a public URL, unpack it and install
           to /opt/zapret (same layout as install).
         id: download-a-zapret-release-zip-from-a-public-url-unpack-it-and-install-to-optzapret-same-layout-as-install
@@ -95,6 +111,23 @@ _openapi:
         id: replace-the-zapret-domain-lists-and-restart-the-service-to-apply-them
       - content: Recent zapret service output from journald.
         id: recent-zapret-service-output-from-journald
+      - content: The raw zapret strategy file (config.txt) as it sits in /opt/zapret.
+        id: the-raw-zapret-strategy-file-configtxt-as-it-sits-in-optzapret
+      - content: Replace config.txt verbatim and restart the service to apply the new
+          strategy.
+        id: replace-configtxt-verbatim-and-restart-the-service-to-apply-the-new-strategy
+      - content: Raw contents of every editable zapret list (autohosts, ignore,
+          whitelist, ipset, youtube, config).
+        id: raw-contents-of-every-editable-zapret-list-autohosts-ignore-whitelist-ipset-youtube-config
+      - content: Overwrite one zapret list file verbatim and restart the service to
+          apply it.
+        id: overwrite-one-zapret-list-file-verbatim-and-restart-the-service-to-apply-it
+      - content: Download a zip archive (zapret_backup.zip) of all editable zapret list
+          files.
+        id: download-a-zip-archive-zapret_backupzip-of-all-editable-zapret-list-files
+      - content: Apply a backup zip (multipart "file", max 8 MiB) of the editable zapret
+          lists and restart the service.
+        id: apply-a-backup-zip-multipart-file-max-8-mib-of-the-editable-zapret-lists-and-restart-the-service
       - content: Read the system hosts file (/etc/hosts) as raw text plus parsed
           entries.
         id: read-the-system-hosts-file-etchosts-as-raw-text-plus-parsed-entries
@@ -116,7 +149,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <Comp document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/optimize/status","method":"get"},{"path":"/panel/api/optimize/apply","method":"post"},{"path":"/panel/api/optimize/revert","method":"post"},{"path":"/panel/api/zapret/status","method":"get"},{"path":"/panel/api/zapret/install","method":"post"},{"path":"/panel/api/zapret/download","method":"post"},{"path":"/panel/api/zapret/uninstall","method":"post"},{"path":"/panel/api/zapret/start","method":"post"},{"path":"/panel/api/zapret/stop","method":"post"},{"path":"/panel/api/zapret/restart","method":"post"},{"path":"/panel/api/zapret/hosts","method":"get"},{"path":"/panel/api/zapret/hosts","method":"put"},{"path":"/panel/api/zapret/logs","method":"get"},{"path":"/panel/api/hostsfile","method":"get"},{"path":"/panel/api/hostsfile","method":"put"},{"path":"/panel/api/hostsfile/download","method":"post"}]} showTitle />
+      <Comp document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/optimize/status","method":"get"},{"path":"/panel/api/optimize/apply","method":"post"},{"path":"/panel/api/optimize/revert","method":"post"},{"path":"/panel/api/zapret/status","method":"get"},{"path":"/panel/api/zapret/download","method":"post"},{"path":"/panel/api/zapret/uninstall","method":"post"},{"path":"/panel/api/zapret/start","method":"post"},{"path":"/panel/api/zapret/stop","method":"post"},{"path":"/panel/api/zapret/restart","method":"post"},{"path":"/panel/api/zapret/hosts","method":"get"},{"path":"/panel/api/zapret/hosts","method":"put"},{"path":"/panel/api/zapret/logs","method":"get"},{"path":"/panel/api/zapret/config","method":"get"},{"path":"/panel/api/zapret/config","method":"put"},{"path":"/panel/api/zapret/files","method":"get"},{"path":"/panel/api/zapret/file","method":"put"},{"path":"/panel/api/zapret/backup","method":"get"},{"path":"/panel/api/zapret/restore","method":"post"},{"path":"/panel/api/hostsfile","method":"get"},{"path":"/panel/api/hostsfile","method":"put"},{"path":"/panel/api/hostsfile/download","method":"post"}]} showTitle />
     </>
   );
 }

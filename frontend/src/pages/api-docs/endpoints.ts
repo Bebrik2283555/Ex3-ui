@@ -1603,12 +1603,6 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
-        path: '/panel/api/zapret/install',
-        summary: 'Install zapret from the bundled assets to /opt/zapret, write the systemd unit and start it.',
-        body: '{\n  "firewall": "nftables",\n  "ifaceWan": "eth0",\n  "ifaceLan": ""\n}',
-      },
-      {
-        method: 'POST',
         path: '/panel/api/zapret/download',
         summary: 'Download a zapret release ZIP from a public URL, unpack it and install to /opt/zapret (same layout as install).',
         body: '{\n  "url": "https://example.com/zapret-master.zip",\n  "firewall": "nftables",\n  "ifaceWan": "eth0",\n  "ifaceLan": ""\n}',
@@ -1678,6 +1672,11 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/zapret/backup',
         summary: 'Download a zip archive (zapret_backup.zip) of all editable zapret list files.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/restore',
+        summary: 'Apply a backup zip (multipart "file", max 8 MiB) of the editable zapret lists and restart the service.',
       },
       {
         method: 'GET',
