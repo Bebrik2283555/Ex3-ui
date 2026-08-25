@@ -113,7 +113,7 @@ func (a *IndexController) login(c *gin.Context) {
 	}
 
 	defaultLoginLimiter.registerSuccess(remoteIP, form.Username)
-	logger.Infof("%s logged in successfully, Ip Address: %s\n", safeUser, remoteIP)
+	logger.Infof("%q logged in successfully, Ip Address: %s", safeUser, remoteIP)
 	a.tgbot.UserLoginNotify(tgbot.LoginAttempt{
 		Username: safeUser,
 		IP:       remoteIP,
@@ -126,7 +126,7 @@ func (a *IndexController) login(c *gin.Context) {
 		return
 	}
 
-	logger.Infof("%s logged in successfully", safeUser)
+	logger.Infof("%q logged in successfully", safeUser)
 	jsonMsg(c, I18nWeb(c, "pages.login.toasts.successLogin"), nil)
 }
 

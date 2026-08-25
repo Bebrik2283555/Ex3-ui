@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
 )
 
 // maxDownloadBytes caps a remote file fetched by URL to keep a server-side
@@ -14,13 +16,34 @@ import (
 const maxDownloadBytes = 256 << 20 // 256 MiB
 
 // DownloadTo fetches url and writes it to dst with the given mode. The client
-// follows redirects (Google Drive / CDN links), rejects non-2xx responses and
-// enforces a size cap. The destination is written atomically via a temp file.
+// requires HTTPS (a plaintext download of an executable is trivially
+// intercepted), follows at most 10 redirects without allowing an https->http
+// downgrade, rejects non-2xx responses and enforces a size cap. The SSRF guard
+// refuses to connect to loopback/private addresses. The destination is written
+// atomically via a temp file.
 func DownloadTo(url, dst string, mode os.FileMode) error {
-	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		return fmt.Errorf("unsupported URL scheme: only http/https are allowed")
+	if !strings.HasPrefix(url, "https://") {
+		return fmt.Errorf("unsupported URL scheme: only https is allowed")
 	}
-	client := &http.Client{Timeout: 10 * time.Minute}
+	client := &http.Client{
+		Timeout: 10 * time.Minute,
+		Transport: &http.Transport{
+			DialContext:           netsafe.SSRFGuardedDialContext,
+			MaxIdleConns:          1,
+			IdleConnTimeout:       30 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: time.Second,
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			if req.URL.Scheme != "https" {
+				return fmt.Errorf("refusing https->http redirect to %s", req.URL.Host)
+			}
+			return nil
+		},
+	}
 	resp, err := client.Get(url)
 	if err != nil {
 		return err

@@ -53,6 +53,8 @@ export interface ExtraStatus {
   running: boolean;
   binaryExists: boolean;
   error?: string;
+  lastLog?: string;
+  logs?: string[];
   config?: ExtraConfig;
   connectUri?: string;
 }

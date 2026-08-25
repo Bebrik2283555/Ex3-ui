@@ -109,6 +109,13 @@ func IsSkipHSTS() bool {
 	return os.Getenv("XUI_SKIP_HSTS") == "true"
 }
 
+// IsCookieSecure returns true if the session cookie must carry the Secure flag
+// even without a panel-configured TLS certificate (XUI_COOKIE_SECURE=true,
+// e.g. when a reverse proxy terminates TLS in front of the panel).
+func IsCookieSecure() bool {
+	return os.Getenv("XUI_COOKIE_SECURE") == "true"
+}
+
 func GetPortOverride() (port int, configured bool, err error) {
 	value, ok := os.LookupEnv("XUI_PORT")
 	if !ok || strings.TrimSpace(value) == "" {
@@ -191,6 +198,27 @@ func GetDBKind() string {
 // GetDBDSN returns the PostgreSQL DSN from XUI_DB_DSN. Empty for sqlite.
 func GetDBDSN() string {
 	return strings.TrimSpace(os.Getenv("XUI_DB_DSN"))
+}
+
+// GetNodeTokenEncryptionMode returns off, migration, or required. Explicit
+// policy prevents a missing key from silently downgrading encrypted storage.
+func GetNodeTokenEncryptionMode() string {
+	return strings.TrimSpace(os.Getenv("NODE_TOKEN_ENCRYPTION"))
+}
+
+// GetNodeTokenKeyFile returns the mode-0600 keyring path, configurable through
+// XUI_NODE_TOKEN_KEY_FILE.
+func GetNodeTokenKeyFile() string {
+	if p := strings.TrimSpace(os.Getenv("XUI_NODE_TOKEN_KEY_FILE")); p != "" {
+		return p
+	}
+	return "/etc/x-ui/node_token_key.json"
+}
+
+// GetNodeTokenKeyEnv returns the name of the env var holding a single base64
+// 32-byte node-token key (secondary to the key file). Empty value => unused.
+func GetNodeTokenKeyEnv() string {
+	return "XUI_NODE_TOKEN_KEY"
 }
 
 // GetEnvFilePaths returns the candidate service environment file paths (the file

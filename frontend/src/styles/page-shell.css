@@ -111,6 +111,13 @@
   padding: 24px;
 }
 
+/* Wide inner content (tables, button rows) must never push these pages past
+   the viewport on mobile — clip instead, keeping the themed page background. */
+.extras-page,
+.zapret-page {
+  overflow-x: clip;
+}
+
 @media (max-width: 768px) {
   .clients-page .content-area,
   .inbounds-page .content-area,
@@ -136,13 +143,23 @@
   overflow-y: auto;
 }
 
-.ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(.ant-dropdown-menu-item-danger):hover,
-.ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(.ant-dropdown-menu-item-danger):hover .ant-dropdown-menu-title-content,
-.ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(.ant-dropdown-menu-item-danger):hover > .anticon {
+.ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(
+    .ant-dropdown-menu-item-danger
+  ):hover,
+.ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(
+    .ant-dropdown-menu-item-danger
+  ):hover
+  .ant-dropdown-menu-title-content,
+.ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(
+    .ant-dropdown-menu-item-danger
+  ):hover
+  > .anticon {
   color: var(--ant-color-primary) !important;
 }
 
-.ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(.ant-dropdown-menu-item-danger):hover {
+.ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(
+    .ant-dropdown-menu-item-danger
+  ):hover {
   background-color: color-mix(in srgb, var(--ant-color-primary) 14%, transparent) !important;
 }
 

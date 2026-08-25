@@ -24,6 +24,18 @@ _openapi:
         Fail2ban being installed.
       url: '#reports-whether-per-client-ip-limits-can-be-enforced-on-this-host-the-panel-uses-it-to-gate-the-ip-limit-field-since-enforcement-depends-on-fail2ban-being-installed'
     - depth: 2
+      title: Resolve a domain via the server's own DNS and report whether any of its
+        addresses equals the panel's public IP. Used by the inbound template
+        wizard before issuing a certificate. Only performs a DNS lookup, never
+        connects.
+      url: '#resolve-a-domain-via-the-servers-own-dns-and-report-whether-any-of-its-addresses-equals-the-panels-public-ip-used-by-the-inbound-template-wizard-before-issuing-a-certificate-only-performs-a-dns-lookup-never-connects'
+    - depth: 2
+      title: Returns certificate/key file paths an inbound template should embed.
+        Prefers the panel's webTLS pair, then /root/cert/<domain|IP>/ with an
+        existing fullchain.pem+privkey.pem pair, then any matching directory
+        under /root/cert/. Empty strings when nothing usable exists.
+      url: '#returns-certificatekey-file-paths-an-inbound-template-should-embed-prefers-the-panels-webtls-pair-then-rootcertdomainip-with-an-existing-fullchainpemprivkeypem-pair-then-any-matching-directory-under-rootcert-empty-strings-when-nothing-usable-exists'
+    - depth: 2
       title: 'Legacy: aggregated CPU history. Use /history/cpu/:bucket instead — same
         data with a uniform {t, v} shape.'
       url: '#legacy-aggregated-cpu-history-use-historycpubucket-instead--same-data-with-a-uniform-t-v-shape'
@@ -90,6 +102,13 @@ _openapi:
         restarted to pick up the new certificate.
       url: '#generate-a-10-year-self-signed-tls-certificate-for-the-given-host-name-or-ip-save-it-next-to-the-panel-database-and-point-the-panel-webtls-settings-at-it-useful-for-https-testing-when-lets-encrypt-issuance-is-rate-limited-or-the-host-has-no-public-domain-the-panel-must-be-restarted-to-pick-up-the-new-certificate'
     - depth: 2
+      title: Issue a Let's Encrypt certificate for a domain via acme.sh (installs it
+        when missing) using standalone HTTP-01 validation, then installs it into
+        /root/cert/<domain>/. Renewal is handled by acme.sh's own cron
+        (reloadcmd restarts the panel). Returns the cert paths to embed in an
+        inbound's tlsSettings. Port 80 must be free.
+      url: '#issue-a-lets-encrypt-certificate-for-a-domain-via-acmesh-installs-it-when-missing-using-standalone-http-01-validation-then-installs-it-into-rootcertdomain-renewal-is-handled-by-acmeshs-own-cron-reloadcmd-restarts-the-panel-returns-the-cert-paths-to-embed-in-an-inbounds-tlssettings-port-80-must-be-free'
+    - depth: 2
       title: Read-only summaries (guid, parentGuid, name, address, status, versions)
         of the nodes this panel manages. A parent panel calls it on a node (via
         the node API token) to surface transitive sub-nodes in a chained
@@ -143,6 +162,10 @@ _openapi:
       title: Return the last N lines of the Xray process log.
       url: '#return-the-last-n-lines-of-the-xray-process-log'
     - depth: 2
+      title: Return live AmneziaWG peer activity (handshake, endpoint, transfer) plus
+        the panel’s own AmneziaWG event lines.
+      url: '#return-live-amneziawg-peer-activity-handshake-endpoint-transfer-plus-the-panels-own-amneziawg-event-lines'
+    - depth: 2
       title: Restore the panel DB from an uploaded backup (multipart form, field name
         "db"). SQLite panels accept a SQLite database (.db) or a SQLite
         migration dump (.dump); PostgreSQL panels accept a pg_dump archive
@@ -165,8 +188,10 @@ _openapi:
     - depth: 2
       title: Run a live TLS 1.3 probe against a candidate REALITY target and return a
         feasibility verdict (TLS 1.3 + h2 + X25519 + trusted certificate) plus
-        the certificate SAN DNS names.
-      url: '#run-a-live-tls-13-probe-against-a-candidate-reality-target-and-return-a-feasibility-verdict-tls-13--h2--x25519--trusted-certificate-plus-the-certificate-san-dns-names'
+        the certificate SAN DNS names. A target on a private/loopback address is
+        reported with privateTarget=true and probed only when allowPrivate is
+        set.
+      url: '#run-a-live-tls-13-probe-against-a-candidate-reality-target-and-return-a-feasibility-verdict-tls-13--h2--x25519--trusted-certificate-plus-the-certificate-san-dns-names-a-target-on-a-privateloopback-address-is-reported-with-privatetargettrue-and-probed-only-when-allowprivate-is-set'
     - depth: 2
       title: Probe/discover REALITY targets and return each verdict ranked by
         feasibility then latency. Each comma-separated token may be a domain
@@ -197,6 +222,16 @@ _openapi:
           panel uses it to gate the "IP Limit" field, since enforcement depends
           on Fail2ban being installed.
         id: reports-whether-per-client-ip-limits-can-be-enforced-on-this-host-the-panel-uses-it-to-gate-the-ip-limit-field-since-enforcement-depends-on-fail2ban-being-installed
+      - content: Resolve a domain via the server's own DNS and report whether any of its
+          addresses equals the panel's public IP. Used by the inbound template
+          wizard before issuing a certificate. Only performs a DNS lookup, never
+          connects.
+        id: resolve-a-domain-via-the-servers-own-dns-and-report-whether-any-of-its-addresses-equals-the-panels-public-ip-used-by-the-inbound-template-wizard-before-issuing-a-certificate-only-performs-a-dns-lookup-never-connects
+      - content: Returns certificate/key file paths an inbound template should embed.
+          Prefers the panel's webTLS pair, then /root/cert/<domain|IP>/ with an
+          existing fullchain.pem+privkey.pem pair, then any matching directory
+          under /root/cert/. Empty strings when nothing usable exists.
+        id: returns-certificatekey-file-paths-an-inbound-template-should-embed-prefers-the-panels-webtls-pair-then-rootcertdomainip-with-an-existing-fullchainpemprivkeypem-pair-then-any-matching-directory-under-rootcert-empty-strings-when-nothing-usable-exists
       - content: 'Legacy: aggregated CPU history. Use /history/cpu/:bucket instead —
           same data with a uniform {t, v} shape.'
         id: legacy-aggregated-cpu-history-use-historycpubucket-instead--same-data-with-a-uniform-t-v-shape
@@ -248,6 +283,12 @@ _openapi:
           is rate-limited or the host has no public domain. The panel must be
           restarted to pick up the new certificate.
         id: generate-a-10-year-self-signed-tls-certificate-for-the-given-host-name-or-ip-save-it-next-to-the-panel-database-and-point-the-panel-webtls-settings-at-it-useful-for-https-testing-when-lets-encrypt-issuance-is-rate-limited-or-the-host-has-no-public-domain-the-panel-must-be-restarted-to-pick-up-the-new-certificate
+      - content: Issue a Let's Encrypt certificate for a domain via acme.sh (installs it
+          when missing) using standalone HTTP-01 validation, then installs it
+          into /root/cert/<domain>/. Renewal is handled by acme.sh's own cron
+          (reloadcmd restarts the panel). Returns the cert paths to embed in an
+          inbound's tlsSettings. Port 80 must be free.
+        id: issue-a-lets-encrypt-certificate-for-a-domain-via-acmesh-installs-it-when-missing-using-standalone-http-01-validation-then-installs-it-into-rootcertdomain-renewal-is-handled-by-acmeshs-own-cron-reloadcmd-restarts-the-panel-returns-the-cert-paths-to-embed-in-an-inbounds-tlssettings-port-80-must-be-free
       - content: Read-only summaries (guid, parentGuid, name, address, status, versions)
           of the nodes this panel manages. A parent panel calls it on a node
           (via the node API token) to surface transitive sub-nodes in a chained
@@ -287,6 +328,9 @@ _openapi:
         id: return-the-last-n-lines-of-the-panels-own-log
       - content: Return the last N lines of the Xray process log.
         id: return-the-last-n-lines-of-the-xray-process-log
+      - content: Return live AmneziaWG peer activity (handshake, endpoint, transfer)
+          plus the panel’s own AmneziaWG event lines.
+        id: return-live-amneziawg-peer-activity-handshake-endpoint-transfer-plus-the-panels-own-amneziawg-event-lines
       - content: Restore the panel DB from an uploaded backup (multipart form, field
           name "db"). SQLite panels accept a SQLite database (.db) or a SQLite
           migration dump (.dump); PostgreSQL panels accept a pg_dump archive
@@ -305,8 +349,10 @@ _openapi:
         id: run-xray-tls-ping-against-a-remote-server-and-return-its-live-leaf-certificate-sha-256-hashes-for-pinning-pinnedpeercertsha256
       - content: Run a live TLS 1.3 probe against a candidate REALITY target and return
           a feasibility verdict (TLS 1.3 + h2 + X25519 + trusted certificate)
-          plus the certificate SAN DNS names.
-        id: run-a-live-tls-13-probe-against-a-candidate-reality-target-and-return-a-feasibility-verdict-tls-13--h2--x25519--trusted-certificate-plus-the-certificate-san-dns-names
+          plus the certificate SAN DNS names. A target on a private/loopback
+          address is reported with privateTarget=true and probed only when
+          allowPrivate is set.
+        id: run-a-live-tls-13-probe-against-a-candidate-reality-target-and-return-a-feasibility-verdict-tls-13--h2--x25519--trusted-certificate-plus-the-certificate-san-dns-names-a-target-on-a-privateloopback-address-is-reported-with-privatetargettrue-and-probed-only-when-allowprivate-is-set
       - content: Probe/discover REALITY targets and return each verdict ranked by
           feasibility then latency. Each comma-separated token may be a domain
           (validated with SNI), a bare IP, or a CIDR range (discovered without
@@ -331,7 +377,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <Comp document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/openapi.json","method":"get"},{"path":"/panel/api/server/status","method":"get"},{"path":"/panel/api/server/fail2banStatus","method":"get"},{"path":"/panel/api/server/cpuHistory/{bucket}","method":"get"},{"path":"/panel/api/server/history/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayMetricsState","method":"get"},{"path":"/panel/api/server/xrayMetricsHistory/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayObservatory","method":"get"},{"path":"/panel/api/server/xrayObservatoryHistory/{tag}/{bucket}","method":"get"},{"path":"/panel/api/server/getXrayVersion","method":"get"},{"path":"/panel/api/server/getPanelUpdateInfo","method":"get"},{"path":"/panel/api/server/getUpdateStatus","method":"get"},{"path":"/panel/api/server/getConfigJson","method":"get"},{"path":"/panel/api/server/getDb","method":"get"},{"path":"/panel/api/server/getMigration","method":"get"},{"path":"/panel/api/server/getNewUUID","method":"get"},{"path":"/panel/api/server/getWebCertFiles","method":"get"},{"path":"/panel/api/server/selfsignedCert","method":"post"},{"path":"/panel/api/server/descendants","method":"get"},{"path":"/panel/api/server/getNewX25519Cert","method":"get"},{"path":"/panel/api/server/getNewmldsa65","method":"get"},{"path":"/panel/api/server/getNewmlkem768","method":"get"},{"path":"/panel/api/server/getNewVlessEnc","method":"get"},{"path":"/panel/api/server/stopXrayService","method":"post"},{"path":"/panel/api/server/restartXrayService","method":"post"},{"path":"/panel/api/server/installXray/{version}","method":"post"},{"path":"/panel/api/server/updatePanel","method":"post"},{"path":"/panel/api/server/setUpdateChannel","method":"post"},{"path":"/panel/api/server/updateGeofile","method":"post"},{"path":"/panel/api/server/updateGeofile/{fileName}","method":"post"},{"path":"/panel/api/server/logs/{count}","method":"post"},{"path":"/panel/api/server/xraylogs/{count}","method":"post"},{"path":"/panel/api/server/importDB","method":"post"},{"path":"/panel/api/server/getNewEchCert","method":"post"},{"path":"/panel/api/server/getCertHash","method":"post"},{"path":"/panel/api/server/getRemoteCertHash","method":"post"},{"path":"/panel/api/server/scanRealityTarget","method":"post"},{"path":"/panel/api/server/scanRealityTargets","method":"post"},{"path":"/panel/api/server/clientIps","method":"get"},{"path":"/panel/api/server/clientIps","method":"post"}]} showTitle />
+      <Comp document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/openapi.json","method":"get"},{"path":"/panel/api/server/status","method":"get"},{"path":"/panel/api/server/fail2banStatus","method":"get"},{"path":"/panel/api/server/resolveDomain","method":"get"},{"path":"/panel/api/server/certPaths","method":"get"},{"path":"/panel/api/server/cpuHistory/{bucket}","method":"get"},{"path":"/panel/api/server/history/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayMetricsState","method":"get"},{"path":"/panel/api/server/xrayMetricsHistory/{metric}/{bucket}","method":"get"},{"path":"/panel/api/server/xrayObservatory","method":"get"},{"path":"/panel/api/server/xrayObservatoryHistory/{tag}/{bucket}","method":"get"},{"path":"/panel/api/server/getXrayVersion","method":"get"},{"path":"/panel/api/server/getPanelUpdateInfo","method":"get"},{"path":"/panel/api/server/getUpdateStatus","method":"get"},{"path":"/panel/api/server/getConfigJson","method":"get"},{"path":"/panel/api/server/getDb","method":"get"},{"path":"/panel/api/server/getMigration","method":"get"},{"path":"/panel/api/server/getNewUUID","method":"get"},{"path":"/panel/api/server/getWebCertFiles","method":"get"},{"path":"/panel/api/server/selfsignedCert","method":"post"},{"path":"/panel/api/server/issueCertificate","method":"post"},{"path":"/panel/api/server/descendants","method":"get"},{"path":"/panel/api/server/getNewX25519Cert","method":"get"},{"path":"/panel/api/server/getNewmldsa65","method":"get"},{"path":"/panel/api/server/getNewmlkem768","method":"get"},{"path":"/panel/api/server/getNewVlessEnc","method":"get"},{"path":"/panel/api/server/stopXrayService","method":"post"},{"path":"/panel/api/server/restartXrayService","method":"post"},{"path":"/panel/api/server/installXray/{version}","method":"post"},{"path":"/panel/api/server/updatePanel","method":"post"},{"path":"/panel/api/server/setUpdateChannel","method":"post"},{"path":"/panel/api/server/updateGeofile","method":"post"},{"path":"/panel/api/server/updateGeofile/{fileName}","method":"post"},{"path":"/panel/api/server/logs/{count}","method":"post"},{"path":"/panel/api/server/xraylogs/{count}","method":"post"},{"path":"/panel/api/server/amneziawglogs/{count}","method":"post"},{"path":"/panel/api/server/importDB","method":"post"},{"path":"/panel/api/server/getNewEchCert","method":"post"},{"path":"/panel/api/server/getCertHash","method":"post"},{"path":"/panel/api/server/getRemoteCertHash","method":"post"},{"path":"/panel/api/server/scanRealityTarget","method":"post"},{"path":"/panel/api/server/scanRealityTargets","method":"post"},{"path":"/panel/api/server/clientIps","method":"get"},{"path":"/panel/api/server/clientIps","method":"post"}]} showTitle />
     </>
   );
 }

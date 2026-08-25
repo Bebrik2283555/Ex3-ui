@@ -102,7 +102,13 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
 
   const onSave = async () => {
     const values = await form.validateFields();
-    await saveConfig(name, { ...service?.config, ...values });
+    // The edit modal only edits shared settings. Drop clients/panelPasswords
+    // the form merely echoes — resending the stale snapshot would silently
+    // revert client edits made since the modal opened (last-write-wins).
+    const rest = Object.fromEntries(
+      Object.entries(values).filter(([key]) => key !== 'clients' && key !== 'panelPasswords'),
+    ) as ExtraConfig;
+    await saveConfig(name, { ...service?.config, ...rest });
     setEditOpen(false);
   };
 
@@ -301,6 +307,33 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
             <Col span={10}><Text type="secondary">{t('pages.extras.binary')}</Text></Col>
             <Col span={14}><Tag color={service.binaryExists ? 'green' : 'orange'}>{service.binaryExists ? t('pages.extras.present') : t('pages.extras.missing')}</Tag></Col>
           </Row>
+          {service.config?.debug && (service.logs?.length ?? 0) > 0 && (
+            <Collapse
+              size="small"
+              items={[
+                {
+                  key: 'core-logs',
+                  label: t('logs'),
+                  children: (
+                    <pre
+                      style={{
+                        margin: 0,
+                        maxHeight: 260,
+                        overflow: 'auto',
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-all',
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      {service.logs!.join('\n')}
+                    </pre>
+                  ),
+                },
+              ]}
+            />
+          )}
           {name === 'olcrtc' && service?.connectUri && (
             <div>
               <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>{t('pages.extras.connectUri')}</Text>
@@ -328,7 +361,8 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
                   {t('pages.extras.clientAdd')}
                 </Button>
               </Space>
-              <Table<WDTTClient>
+              <div style={{ overflowX: 'auto' }}>
+                <Table<WDTTClient>
                 rowKey={(_, i) => String(i)}
                 size="small"
                 dataSource={clients}
@@ -358,7 +392,11 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
                         onClick={() => {
                           setVisiblePasswords(prev => {
                             const next = new Set(prev);
-                            next.has(i) ? next.delete(i) : next.add(i);
+                            if (next.has(i)) {
+                              next.delete(i);
+                            } else {
+                              next.add(i);
+                            }
                             return next;
                           });
                         }}
@@ -388,7 +426,8 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
                     ),
                   },
                 ]}
-              />
+                />
+              </div>
             </div>
           )}
         </Space>
@@ -411,6 +450,7 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
                 <Form.Item name="subToken" label={t('pages.extras.subToken')}>
                   <Input placeholder="secret-token" style={{ fontFamily: 'monospace' }} />
                 </Form.Item>
+                <Form.Item name="debug" label={t('pages.extras.olcrtcDebug')} valuePropName="checked"><Switch /></Form.Item>
               </>
             )}
             {name === 'olcrtc' && (
@@ -454,12 +494,11 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
                     </Form.Item>
                   </>
                 )}
-                <Form.Item name="debug" label={t('pages.extras.olcrtcDebug')} valuePropName="checked"><Switch /></Form.Item>
                 <Form.Item name="configFile" label={t('pages.extras.configFile')}><Input placeholder="/etc/olcrtc/server.yaml" /></Form.Item>
                 <Form.Item name="dataDir" label={t('pages.extras.dataDir')}><Input placeholder="/etc/olcrtc/data" /></Form.Item>
+                <Form.Item name="debug" label={t('pages.extras.olcrtcDebug')} valuePropName="checked"><Switch /></Form.Item>
               </>
-            )}
-          </Form>
+            )}</Form>
         </Modal>
       </LazyMount>
 

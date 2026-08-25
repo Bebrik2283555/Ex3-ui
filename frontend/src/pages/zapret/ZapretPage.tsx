@@ -53,13 +53,12 @@ export default function ZapretPage() {
   const [listName, setListName] = useState('');
   const [listText, setListText] = useState('');
   const [backupOpen, setBackupOpen] = useState(false);
-
-  useEffect(() => {
-    if (hosts) {
-      setBypassText(hosts.bypass.join('\n'));
-      setIgnoreText(hosts.ignore.join('\n'));
-    }
-  }, [hosts]);
+  const [hostsSynced, setHostsSynced] = useState<typeof hosts>(undefined);
+  if (hosts && hostsSynced !== hosts) {
+    setHostsSynced(hosts);
+    setBypassText(hosts.bypass.join('\n'));
+    setIgnoreText(hosts.ignore.join('\n'));
+  }
 
   const editableLists = useMemo(() => {
     if (!files) return [];
@@ -225,14 +224,12 @@ export default function ZapretPage() {
                     title={t('pages.zapret.hostsTitle')}
                     variant="borderless"
                     style={{ marginBottom: 16 }}
-                    extra={
-                      <Space>
-                        <Button icon={<RedoOutlined />} loading={busy === 'restart'} onClick={() => void run('restart')}>{t('pages.zapret.restartBtn')}</Button>
-                        <Button danger icon={<PoweroffOutlined />} loading={busy === 'stop'} onClick={() => void run('stop')}>{t('pages.zapret.stopBtn')}</Button>
-                        <Button icon={<PlayCircleOutlined />} loading={busy === 'start'} onClick={() => void run('start')}>{t('pages.zapret.startBtn')}</Button>
-                      </Space>
-                    }
                   >
+                    <Space wrap style={{ marginBottom: 16 }}>
+                      <Button icon={<RedoOutlined />} loading={busy === 'restart'} onClick={() => void run('restart')}>{t('pages.zapret.restartBtn')}</Button>
+                      <Button danger icon={<PoweroffOutlined />} loading={busy === 'stop'} onClick={() => void run('stop')}>{t('pages.zapret.stopBtn')}</Button>
+                      <Button icon={<PlayCircleOutlined />} loading={busy === 'start'} onClick={() => void run('start')}>{t('pages.zapret.startBtn')}</Button>
+                    </Space>
                     <Row gutter={16}>
                       <Col xs={24} md={12}>
                         <Text strong>{t('pages.zapret.bypassLabel')}</Text>

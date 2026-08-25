@@ -560,7 +560,7 @@ func buildUserAccount(protocolName string, user map[string]any) (*serial.TypedMe
 			if testseedArr, ok := testseedVal.([]any); ok && len(testseedArr) >= 4 {
 				testseed := make([]uint32, len(testseedArr))
 				for i, v := range testseedArr {
-					if num, ok := v.(float64); ok {
+					if num, ok := v.(float64); ok && num >= 0 && num <= math.MaxUint32 {
 						testseed[i] = uint32(num)
 					}
 				}
@@ -570,7 +570,7 @@ func buildUserAccount(protocolName string, user map[string]any) (*serial.TypedMe
 			}
 		}
 		if testpreVal, ok := user["testpre"]; ok {
-			if testpre, ok := testpreVal.(float64); ok && testpre > 0 {
+			if testpre, ok := testpreVal.(float64); ok && testpre > 0 && testpre <= math.MaxUint32 {
 				vlessAccount.Testpre = uint32(testpre)
 			} else if testpre, ok := testpreVal.(uint32); ok && testpre > 0 {
 				vlessAccount.Testpre = testpre

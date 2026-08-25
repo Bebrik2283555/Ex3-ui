@@ -439,16 +439,7 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 						if len(dataArray) == 4 {
 							num, err := strconv.Atoi(dataArray[3])
 							if err == nil {
-								switch num {
-								case -2:
-									inputNumber = 0
-								case -1:
-									if inputNumber > 0 {
-										inputNumber = (inputNumber / 10)
-									}
-								default:
-									inputNumber = (inputNumber * 10) + num
-								}
+								inputNumber = updateNumericInput(inputNumber, num)
 							}
 							if inputNumber == oldInputNumber {
 								t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.answers.successfulOperation"))
@@ -509,16 +500,7 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 						if len(dataArray) == 3 {
 							num, err := strconv.Atoi(dataArray[2])
 							if err == nil {
-								switch num {
-								case -2:
-									inputNumber = 0
-								case -1:
-									if inputNumber > 0 {
-										inputNumber = (inputNumber / 10)
-									}
-								default:
-									inputNumber = (inputNumber * 10) + num
-								}
+								inputNumber = updateNumericInput(inputNumber, num)
 							}
 							if inputNumber == oldInputNumber {
 								t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.answers.successfulOperation"))
@@ -639,16 +621,7 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 						if len(dataArray) == 4 {
 							num, err := strconv.Atoi(dataArray[3])
 							if err == nil {
-								switch num {
-								case -2:
-									inputNumber = 0
-								case -1:
-									if inputNumber > 0 {
-										inputNumber = (inputNumber / 10)
-									}
-								default:
-									inputNumber = (inputNumber * 10) + num
-								}
+								inputNumber = updateNumericInput(inputNumber, num)
 							}
 							if inputNumber == oldInputNumber {
 								t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.answers.successfulOperation"))
@@ -721,16 +694,7 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 						if len(dataArray) == 3 {
 							num, err := strconv.Atoi(dataArray[2])
 							if err == nil {
-								switch num {
-								case -2:
-									inputNumber = 0
-								case -1:
-									if inputNumber > 0 {
-										inputNumber = (inputNumber / 10)
-									}
-								default:
-									inputNumber = (inputNumber * 10) + num
-								}
+								inputNumber = updateNumericInput(inputNumber, num)
 							}
 							if inputNumber == oldInputNumber {
 								t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.answers.successfulOperation"))
@@ -827,16 +791,7 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 						if len(dataArray) == 4 {
 							num, err := strconv.Atoi(dataArray[3])
 							if err == nil {
-								switch num {
-								case -2:
-									inputNumber = 0
-								case -1:
-									if inputNumber > 0 {
-										inputNumber = (inputNumber / 10)
-									}
-								default:
-									inputNumber = (inputNumber * 10) + num
-								}
+								inputNumber = updateNumericInput(inputNumber, num)
 							}
 							if inputNumber == oldInputNumber {
 								t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.answers.successfulOperation"))
@@ -900,16 +855,7 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 						if len(dataArray) == 3 {
 							num, err := strconv.Atoi(dataArray[2])
 							if err == nil {
-								switch num {
-								case -2:
-									inputNumber = 0
-								case -1:
-									if inputNumber > 0 {
-										inputNumber = (inputNumber / 10)
-									}
-								default:
-									inputNumber = (inputNumber * 10) + num
-								}
+								inputNumber = updateNumericInput(inputNumber, num)
 							}
 							if inputNumber == oldInputNumber {
 								t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.answers.successfulOperation"))
@@ -1509,18 +1455,24 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 		}
 	default:
 		if after, ok := strings.CutPrefix(callbackQuery.Data, "client_sub_links "); ok {
-			email := after
-			t.sendClientSubLinks(chatId, email)
+			if !isAdmin && !t.clientOwnedBy(callbackQuery.From.ID, after) {
+				return
+			}
+			t.sendClientSubLinks(chatId, after)
 			return
 		}
 		if after, ok := strings.CutPrefix(callbackQuery.Data, "client_individual_links "); ok {
-			email := after
-			t.sendClientIndividualLinks(chatId, email)
+			if !isAdmin && !t.clientOwnedBy(callbackQuery.From.ID, after) {
+				return
+			}
+			t.sendClientIndividualLinks(chatId, after)
 			return
 		}
 		if after, ok := strings.CutPrefix(callbackQuery.Data, "client_qr_links "); ok {
-			email := after
-			t.sendClientQRLinks(chatId, email)
+			if !isAdmin && !t.clientOwnedBy(callbackQuery.From.ID, after) {
+				return
+			}
+			t.sendClientQRLinks(chatId, after)
 			return
 		}
 	}
@@ -1543,4 +1495,20 @@ func isClientSelfCallback(data string) bool {
 	return strings.HasPrefix(data, "client_sub_links ") ||
 		strings.HasPrefix(data, "client_individual_links ") ||
 		strings.HasPrefix(data, "client_qr_links ")
+}
+
+// clientOwnedBy reports whether the client with the given email belongs to the
+// Telegram user (matches one of their TgID-bound clients). Non-admin callbacks
+// that name an email must pass this check before any link is served.
+func (t *Tgbot) clientOwnedBy(tgUserID int64, email string) bool {
+	traffics, err := t.inboundService.GetClientTrafficTgBot(tgUserID)
+	if err != nil {
+		return false
+	}
+	for _, tr := range traffics {
+		if strings.EqualFold(strings.TrimSpace(tr.Email), strings.TrimSpace(email)) {
+			return true
+		}
+	}
+	return false
 }

@@ -24,10 +24,11 @@ export default function HostsFilePage() {
   const [content, setContent] = useState('');
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (data) setContent(data.raw);
-  }, [data]);
+  const [syncedFrom, setSyncedFrom] = useState<typeof data>(undefined);
+  if (data && syncedFrom !== data) {
+    setSyncedFrom(data);
+    setContent(data.raw);
+  }
 
   const pageClass = useMemo(() => {
     const c = ['hostsfile-page'];

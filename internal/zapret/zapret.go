@@ -222,13 +222,18 @@ func hasZapretLayout(dir string) bool {
 	return true
 }
 
-// unzip extracts the zip archive into dst, guarding against path traversal.
+// unzip extracts the zip archive into dst, guarding against path traversal
+// and zip bombs (per-file and total decompressed size caps, entry count cap).
 func unzip(zipPath, dst string) error {
 	zr, err := zip.OpenReader(zipPath)
 	if err != nil {
 		return err
 	}
 	defer zr.Close()
+	if len(zr.File) > 2000 {
+		return fmt.Errorf("archive has too many entries (%d)", len(zr.File))
+	}
+	var total int64
 	for _, f := range zr.File {
 		rel := filepath.Clean(filepath.FromSlash(f.Name))
 		if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || filepath.IsAbs(rel) {
@@ -248,10 +253,17 @@ func unzip(zipPath, dst string) error {
 		if err != nil {
 			return err
 		}
-		data, err := io.ReadAll(rc)
+		data, err := io.ReadAll(io.LimitReader(rc, 64<<20+1))
 		rc.Close()
 		if err != nil {
 			return err
+		}
+		if int64(len(data)) > 64<<20 {
+			return fmt.Errorf("archive member %q exceeds the 64 MiB cap", f.Name)
+		}
+		total += int64(len(data))
+		if total > 512<<20 {
+			return fmt.Errorf("archive expands beyond the 512 MiB cap")
 		}
 		if err := os.WriteFile(target, data, 0o644); err != nil {
 			return err

@@ -2,6 +2,8 @@ package panel
 
 import (
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/xlzd/gotp"
 	"gorm.io/gorm"
@@ -97,7 +99,7 @@ func (s *UserService) CheckUser(username string, password string, twoFactorCode 
 			return nil, err
 		}
 
-		if gotp.NewDefaultTOTP(twoFactorToken).Now() != twoFactorCode {
+		if !gotp.NewDefaultTOTP(twoFactorToken).Verify(strings.TrimSpace(twoFactorCode), time.Now().Unix()) {
 			return nil, errors.New("invalid 2fa code")
 		}
 	}

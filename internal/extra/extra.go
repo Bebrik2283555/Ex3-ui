@@ -5,6 +5,7 @@
 package extra
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -263,9 +264,9 @@ func (c Config) ServerYAML() string {
 	b.WriteString("  interval: 10s\n")
 	b.WriteString("  timeout: 5s\n")
 	b.WriteString("  failures: 3\n")
-	if c.DataDir != "" {
-		b.WriteString("data: " + yamlString(c.DataDir) + "\n")
-	}
+	// The bundled olcrtc build has no embedded display-name dictionaries,
+	// so its data: field is mandatory (dir with names/surnames files).
+	b.WriteString("data: " + yamlString(c.DataDir) + "\n")
 	b.WriteString("debug: " + strconv.FormatBool(c.Debug) + "\n")
 	return b.String()
 }
@@ -294,6 +295,115 @@ func yamlString(s string) string {
 	s = strings.ReplaceAll(s, "\"", "\\\"")
 	s = strings.ReplaceAll(s, "\n", "\\n")
 	return "\"" + s + "\""
+}
+
+// Default display-name dictionaries: the bundled olcrtc build ships none
+// embedded and refuses to start without the data:/names+surnames files.
+const (
+	defaultNames = `Alexander
+Alexey
+Anatoly
+Andrey
+Anton
+Artyom
+Boris
+Denis
+Dmitry
+Egor
+Evgeny
+Ivan
+Igor
+Ilya
+Kirill
+Leonid
+Maxim
+Mikhail
+Nikita
+Nikolay
+Oleg
+Pavel
+Roman
+Sergei
+Stepan
+Timofey
+Viktor
+Vladimir
+Anna
+Anastasia
+Daria
+Ekaterina
+Elena
+Irina
+Ksenia
+Maria
+Natalia
+Olga
+Polina
+Svetlana
+Tatiana
+Vera
+Victoria
+Yulia`
+	defaultSurnames = `Antonov
+Belov
+Volkov
+Gavrilov
+Danilov
+Egorov
+Efimov
+Zhukov
+Zaitsev
+Ivanov
+Ilyin
+Kozlov
+Kuznetsov
+Lebedev
+Makarov
+Melnikov
+Morozov
+Nikolaev
+Novikov
+Orlov
+Pavlov
+Petrov
+Popov
+Romanov
+Savin
+Smirnov
+Sokolov
+Stepanov
+Tarasov
+Titov
+Fedorov
+Filatov
+Gusev
+Tsvetkov
+Chernov
+Shevtsov
+Shcherbakov
+Yuriev
+Yakovlev`
+)
+
+// ensureNameDictionaries creates dir and seeds any missing dictionary file;
+// operator-provided files are never overwritten.
+func ensureNameDictionaries(dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	for _, pair := range [...]struct{ name, dict string }{
+		{"names", defaultNames},
+		{"surnames", defaultSurnames},
+	} {
+		path := filepath.Join(dir, pair.name)
+		if fileExists(path) {
+			continue
+		}
+		if err := os.WriteFile(path, []byte(pair.dict), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // validCryptoKey reports whether s is a 64-char hex string (32 bytes).
@@ -488,7 +598,7 @@ func (m *Manager) LoadConfig(n Name) (Config, error) {
 		if strings.Contains(err.Error(), "not in defaultValueMap") || strings.Contains(err.Error(), "record not found") {
 			return cfg, nil
 		}
-		return cfg, nil
+		return cfg, err
 	}
 	if strings.TrimSpace(raw) == "" {
 		return cfg, nil
@@ -504,6 +614,17 @@ func (m *Manager) LoadConfig(n Name) (Config, error) {
 // running process (restarting it when its settings changed).
 func (m *Manager) SaveConfig(n Name, cfg Config) error {
 	cfg = cfg.Merge(n)
+	// The binary must exist before anything is persisted: a save with a
+	// missing binary would otherwise commit config that can never start.
+	if cfg.Enabled && cfg.AutoStart {
+		bin := cfg.BinaryPath
+		if bin == "" {
+			bin = n.DefaultBinaryPath()
+		}
+		if !fileExists(bin) {
+			return fmt.Errorf("binary %q does not exist", bin)
+		}
+	}
 	if n == OLCRTC {
 		if strings.TrimSpace(cfg.RoomID) == "" {
 			return fmt.Errorf("%s: room id is required", n.DisplayName())
@@ -638,15 +759,6 @@ func (m *Manager) SaveConfig(n Name, cfg Config) error {
 			return m.Restart(n)
 		}
 	}
-	if cfg.Enabled && cfg.AutoStart {
-		bin := cfg.BinaryPath
-		if bin == "" {
-			bin = n.DefaultBinaryPath()
-		}
-		if !fileExists(bin) {
-			return fmt.Errorf("binary %q does not exist", bin)
-		}
-	}
 	return nil
 }
 
@@ -655,6 +767,11 @@ func (m *Manager) SaveConfig(n Name, cfg Config) error {
 func (m *Manager) WriteYAML(n Name, cfg Config) error {
 	if n != OLCRTC || cfg.ConfigFile == "" {
 		return nil
+	}
+	if cfg.DataDir != "" {
+		if err := ensureNameDictionaries(cfg.DataDir); err != nil {
+			return fmt.Errorf("%s: seed data dir: %w", n.DisplayName(), err)
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(cfg.ConfigFile), 0o755); err != nil {
 		return fmt.Errorf("%s: create config dir: %w", n.DisplayName(), err)
@@ -722,6 +839,14 @@ func (m *Manager) Start(n Name) error {
 func (m *Manager) Stop(n Name) error {
 	p := m.GetProc(n)
 	return p.Stop()
+}
+
+// StopAll terminates every managed core process. Called on panel shutdown so
+// the sidecars die with the panel instead of lingering on their ports.
+func (m *Manager) StopAll() {
+	for _, n := range All() {
+		_ = m.Stop(n)
+	}
 }
 
 // Restart stops and starts the service.
@@ -1056,7 +1181,10 @@ var wdttCommonDirs = []string{
 // existing copy found in the configured dir, the configured binary's dir, the
 // common locations, the user's home and the running processes' dirs. When no
 // copy exists yet, only the configured dir is returned so a fresh install
-// behaves exactly as before.
+// behaves exactly as before. Files outside the panel's own zones (configured
+// dir, binary dir, common locations) are only touched when their content looks
+// like a real wdtt store, so a foreign passwords.json (e.g. in a home dir) is
+// never overwritten with panel data.
 func wdttPasswordDBs(cfg Config) []string {
 	seen := make(map[string]bool)
 	var paths []string
@@ -1081,9 +1209,28 @@ func wdttPasswordDBs(cfg Config) []string {
 	for _, d := range wdttProcessDirs() {
 		add(filepath.Join(d, "passwords.json"))
 	}
+	trustedZone := func(p string) bool {
+		dir := filepath.Dir(p)
+		if strings.TrimSpace(cfg.ConfigDir) != "" && dir == strings.TrimSpace(cfg.ConfigDir) {
+			return true
+		}
+		if bin := strings.TrimSpace(cfg.BinaryPath); bin != "" && dir == filepath.Dir(bin) {
+			return true
+		}
+		for _, d := range wdttCommonDirs {
+			if dir == d {
+				return true
+			}
+		}
+		return false
+	}
 	var existing []string
 	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		if trustedZone(p) || bytes.Contains(data, []byte(`"passwords"`)) {
 			existing = append(existing, p)
 		}
 	}
@@ -1245,14 +1392,25 @@ func (m *Manager) SubscriptionToken(n Name) string {
 	return strings.TrimSpace(cfg.SubToken)
 }
 
-// randomAlnum returns n random lowercase alphanumeric characters.
+// randomAlnum returns n random lowercase alphanumeric characters. Rejection
+// sampling avoids the modulo bias of the naive `% len(chars)` mapping.
 func randomAlnum(n int) string {
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+	// Largest multiple of len(chars) that fits in a byte; reject the rest.
+	const limit = 256 - (256 % len(chars))
 	b := make([]byte, n)
+	var buf [1]byte
 	for i := range b {
-		r := make([]byte, 1)
-		_, _ = rand.Read(r)
-		b[i] = chars[int(r[0])%len(chars)]
+		for {
+			if _, err := rand.Read(buf[:]); err != nil {
+				// crypto/rand only fails if the OS entropy source is gone.
+				return strings.Repeat("0", n)
+			}
+			if int(buf[0]) < limit {
+				break
+			}
+		}
+		b[i] = chars[int(buf[0])%len(chars)]
 	}
 	return string(b)
 }

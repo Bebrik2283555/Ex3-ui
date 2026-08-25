@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -162,12 +163,23 @@ func TestServerYAMLRendersUpstreamSchema(t *testing.T) {
 		"  transport: \"datachannel\"\n",
 		"  dns: \"8.8.8.8:53\"\n",
 		"  interval: 10s\n",
-		"data: \"/etc/olcrtc/data\"\n",
 		"debug: true\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("ServerYAML() missing %q in:\n%s", want, got)
 		}
+	}
+}
+
+// The bundled olcrtc build has no embedded dictionaries and requires data:
+// unconditionally, so the panel must always emit it.
+func TestServerYAMLAlwaysEmitsDataDir(t *testing.T) {
+	cfg := DefaultConfig(OLCRTC)
+	cfg.RoomID = "room"
+
+	got := cfg.ServerYAML()
+	if !strings.Contains(got, "data: \"/etc/olcrtc/data\"\n") {
+		t.Errorf("ServerYAML() missing mandatory data: in:\n%s", got)
 	}
 }
 
@@ -230,6 +242,7 @@ func TestSaveConfigOLCRTCWritesYAML(t *testing.T) {
 	m := NewManager(store)
 	cfg := DefaultConfig(OLCRTC)
 	cfg.ConfigFile = dir + "/server.yaml"
+	cfg.DataDir = dir + "/data"
 	cfg.RoomID = "https://meet.example.org/room"
 	if err := m.SaveConfig(OLCRTC, cfg); err != nil {
 		t.Fatalf("SaveConfig: %v", err)
@@ -256,6 +269,39 @@ func TestSaveConfigOLCRTCWritesYAML(t *testing.T) {
 	}
 	if !strings.Contains(body, "key: \""+stored.CryptoKey+"\"") {
 		t.Errorf("yaml missing generated key:\n%s", body)
+	}
+}
+
+// WriteYAML must create the data dir and seed missing name dictionaries:
+// the bundled olcrtc build has none embedded and exits without them.
+func TestWriteYAMLSeedsNameDictionaries(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(memStore{})
+	cfg := DefaultConfig(OLCRTC)
+	cfg.ConfigFile = filepath.Join(dir, "server.yaml")
+	cfg.DataDir = filepath.Join(dir, "data")
+	if err := m.WriteYAML(OLCRTC, cfg); err != nil {
+		t.Fatalf("WriteYAML: %v", err)
+	}
+	for _, name := range []string{"names", "surnames"} {
+		raw, err := os.ReadFile(filepath.Join(cfg.DataDir, name))
+		if err != nil {
+			t.Fatalf("dictionary %s not seeded: %v", name, err)
+		}
+		if strings.TrimSpace(string(raw)) == "" {
+			t.Errorf("dictionary %s is empty", name)
+		}
+	}
+	// An operator-provided dictionary must survive a rewrite.
+	if err := os.WriteFile(filepath.Join(cfg.DataDir, "names"), []byte("Custom\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.WriteYAML(OLCRTC, cfg); err != nil {
+		t.Fatalf("second WriteYAML: %v", err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(cfg.DataDir, "names"))
+	if string(raw) != "Custom\n" {
+		t.Errorf("custom names dict overwritten with %q", raw)
 	}
 }
 

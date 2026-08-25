@@ -59,9 +59,11 @@ func (r *ring) all(max int) []string {
 	return out
 }
 
-// logWriter funnels the child's stdout/stderr into the ring buffer.
+// logWriter funnels the child's stdout/stderr into the ring buffer and the
+// panel logger.
 type logWriter struct {
 	ring *ring
+	name string
 	buf  string
 	mu   sync.Mutex
 }
@@ -75,17 +77,31 @@ func (w *logWriter) Write(p []byte) (int, error) {
 		if i < 0 {
 			break
 		}
-		w.ring.push(strings.TrimRight(strings.TrimSpace(w.buf[:i]), "\r"))
+		w.push(strings.TrimRight(strings.TrimSpace(w.buf[:i]), "\r"))
 		w.buf = w.buf[i+1:]
 	}
 	return len(p), nil
+}
+
+func (w *logWriter) push(line string) {
+	w.ring.push(line)
+	w.forward(line)
+}
+
+// forward mirrors a core line into the panel logger, skipping per-packet
+// trace/debug spam so journalctl stays readable.
+func (w *logWriter) forward(line string) {
+	if line == "" || strings.Contains(line, "] TRACE:") || strings.Contains(line, "] DEBUG:") {
+		return
+	}
+	logger.Infof("extra[%s]: %s", w.name, line)
 }
 
 func (w *logWriter) flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if trimmed := strings.TrimSpace(w.buf); trimmed != "" {
-		w.ring.push(trimmed)
+		w.push(trimmed)
 		w.buf = ""
 	}
 }
@@ -94,11 +110,12 @@ func (w *logWriter) flush() {
 type Proc struct {
 	name Name
 
-	mu    sync.RWMutex
-	cmd   *exec.Cmd
-	done  chan struct{}
-	log   *logWriter
-	lines *ring
+	startMu sync.Mutex
+	mu      sync.RWMutex
+	cmd     *exec.Cmd
+	done    chan struct{}
+	log     *logWriter
+	lines   *ring
 
 	exitErr         error
 	intentionalStop atomic.Bool
@@ -109,7 +126,7 @@ func NewProc(name Name) *Proc {
 	lines := &ring{}
 	return &Proc{
 		name:  name,
-		log:   &logWriter{ring: lines},
+		log:   &logWriter{ring: lines, name: string(name)},
 		lines: lines,
 	}
 }
@@ -155,8 +172,11 @@ func (p *Proc) Signal(sig syscall.Signal) error {
 	return nil
 }
 
-// Start launches the binary with the given arguments.
+// Start launches the binary with the given arguments. Serialized so concurrent
+// callers (restart + reconcile + manual start) cannot double-launch.
 func (p *Proc) Start(bin string, args []string) error {
+	p.startMu.Lock()
+	defer p.startMu.Unlock()
 	if p.IsRunning() {
 		return errors.New("service is already running")
 	}

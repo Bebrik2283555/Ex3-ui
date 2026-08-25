@@ -57,36 +57,41 @@ func (j *ClearLogsJob) Run() {
 		}
 	}
 
-	// Clear log files and copy to previous logs
+	// Clear log files and copy to previous logs. Each current log is opened
+	// once and truncated through that same fd — reopening the path between
+	// copy and truncate would hit whatever file sits there by then (TOCTOU).
 	for i := range len(logFiles) {
+		logFile, err := os.OpenFile(logFiles[i], os.O_RDWR, 0o644)
+		if err != nil {
+			logger.Warning("Failed to open current log file:", logFiles[i], "-", err)
+			continue
+		}
+
 		if i > 0 {
 			// Copy to previous logs
 			logFilePrev, err := os.OpenFile(logFilesPrev[i-1], os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 			if err != nil {
 				logger.Warning("Failed to open previous log file for writing:", logFilesPrev[i-1], "-", err)
+				logFile.Close()
 				continue
 			}
 
-			logFile, err := os.OpenFile(logFiles[i], os.O_RDONLY, 0o644)
-			if err != nil {
-				logger.Warning("Failed to open current log file for reading:", logFiles[i], "-", err)
-				logFilePrev.Close()
-				continue
+			if _, err := logFile.Seek(0, io.SeekStart); err != nil {
+				logger.Warning("Failed to seek log file:", logFiles[i], "-", err)
+			} else {
+				_, err = io.Copy(logFilePrev, logFile)
+				if err != nil {
+					logger.Warning("Failed to copy log file:", logFiles[i], "to", logFilesPrev[i-1], "-", err)
+				}
 			}
 
-			_, err = io.Copy(logFilePrev, logFile)
-			if err != nil {
-				logger.Warning("Failed to copy log file:", logFiles[i], "to", logFilesPrev[i-1], "-", err)
-			}
-
-			logFile.Close()
 			logFilePrev.Close()
 		}
 
-		err := os.Truncate(logFiles[i], 0)
-		if err != nil {
+		if err := logFile.Truncate(0); err != nil {
 			logger.Warning("Failed to truncate log file:", logFiles[i], "-", err)
 		}
+		logFile.Close()
 	}
 
 	wipeXrayLogs()

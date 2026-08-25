@@ -4,6 +4,7 @@ package web
 
 import (
 	"context"
+	"crypto/subtle"
 	"crypto/tls"
 	"embed"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/eventbus"
 	"github.com/mhsanaei/3x-ui/v3/internal/extra"
@@ -202,7 +204,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	sessionOptions := sessions.Options{
 		Path:     basePath,
 		HttpOnly: true,
-		Secure:   directHTTPS,
+		Secure:   directHTTPS || config.IsCookieSecure(),
 		SameSite: http.SameSiteLaxMode,
 	}
 	if sessionMaxAge, err := s.settingService.GetSessionMaxAge(); err == nil && sessionMaxAge > 0 {
@@ -246,6 +248,10 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	controller.SetDistFS(distFS)
 
 	g := engine.Group(basePath)
+	g.GET("/manifest.webmanifest", controller.ServePWAManifest)
+	g.GET("/pwa-register.js", controller.ServePWARegister)
+	g.GET("/service-worker.js", controller.ServePWAServiceWorker)
+	g.GET("/icons/:name", controller.ServePWAIcon)
 
 	s.index = controller.NewIndexController(g)
 	s.panel = controller.NewXUIController(g)
@@ -272,7 +278,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	// HTTPS JSON subscriptions. Each client has its own subscription.
 	engine.GET(basePath+"panel/qwdtt/sub/:token/:clientUri", func(c *gin.Context) {
 		mgr := extra.ManagerSingleton()
-		if mgr == nil || mgr.SubscriptionToken(extra.WDTT) != c.Param("token") {
+		if mgr == nil || subtle.ConstantTimeCompare([]byte(mgr.SubscriptionToken(extra.WDTT)), []byte(c.Param("token"))) != 1 {
 			c.AbortWithStatus(http.StatusNotFound)
 			return
 		}
@@ -307,12 +313,14 @@ const (
 	cadenceXrayRestart    = "@every 30s"
 	cadenceXrayTraffic    = "@every 5s"
 	cadenceMtproto        = "@every 10s"
+	cadenceAmneziaWG      = "@every 10s"
 	cadenceExtraReconcile = "@every 10s"
 	cadenceClientIPScan   = "@every 10s"
 	cadenceNodeHeartbeat  = "@every 5s"
 	cadenceNodeTraffic    = "@every 5s"
 	cadenceOutboundSub    = "@every 5m"
 	cadenceReapOrphans    = "@every 5m"
+	cadenceRemoteRouting  = "@every 5m"
 	cadenceXrayLogPrune   = "@every 10m"
 	cadenceCheckHash      = "@every 2m"
 	// cpu.Percent samples over a full minute (blocking), so a finer cadence just
@@ -348,6 +356,11 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	_, _ = s.cron.AddJob(cadenceMtproto, mtJob)
 	go mtJob.Run()
 
+	// Reconcile embedded AmneziaWG interfaces; traffic rides Xray's own stats
+	awgJob := job.NewAmneziaWGJob()
+	_, _ = s.cron.AddJob(cadenceAmneziaWG, awgJob)
+	go awgJob.Run()
+
 	// Reconcile the extra cores (qwdtt/olcRTC): auto-start enabled ones whose
 	// binary exists and are not running yet.
 	_, _ = s.cron.AddFunc(cadenceExtraReconcile, func() {
@@ -367,6 +380,12 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	_, _ = s.cron.AddJob(cadenceOutboundSub, job.NewOutboundSubscriptionJob())
 
 	_, _ = s.cron.AddJob(cadenceReapOrphans, job.NewReapSyncOrphansJob())
+
+	// Warm permanent routing URLs immediately and refresh them outside the
+	// latency-sensitive subscription request path.
+	remoteRoutingJob := job.NewRemoteRoutingJob()
+	_, _ = s.cron.AddJob(cadenceRemoteRouting, remoteRoutingJob)
+	common.GoRecover("remote-routing-warm", remoteRoutingJob.Run)
 
 	// check client ips from log file every day
 	_, _ = s.cron.AddJob("@daily", job.NewClearLogsJob())
@@ -396,7 +415,7 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 
 	// Telegram-bot–dependent jobs: periodic stats report + callback-hash cleanup.
 	isTgbotenabled, err := s.settingService.GetTgbotEnabled()
-	if (err == nil) && (isTgbotenabled) {
+	if (err == nil) && isTgbotenabled {
 		runtime, err := s.settingService.GetTgbotRuntime()
 		if err != nil {
 			logger.Warningf("Add NewStatsNotifyJob: failed to load runtime: %v; using default @daily", err)
@@ -620,9 +639,7 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	go func() {
-		_ = s.httpServer.Serve(listener)
-	}()
+	go network.ServeHTTP(s.httpServer, listener, "Web server")
 
 	// Create event bus before startTask so jobs can use it
 	s.bus = eventbus.New(eventbus.DefaultBufferSize)
@@ -686,7 +703,7 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 
 	if startTgBot {
 		isTgbotenabled, err := s.settingService.GetTgbotEnabled()
-		if (err == nil) && (isTgbotenabled) {
+		if (err == nil) && isTgbotenabled {
 			tgBot := s.tgbotService.NewTgbot()
 			_ = tgBot.Start(i18nFS)
 			// Subscribe Telegram notifications for event bus
@@ -711,6 +728,10 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	if stopXray {
 		_ = s.xrayService.StopXray()
 		mtproto.GetManager().StopAll()
+		amneziawgnet.GetManager().StopAll()
+		if mgr := extra.ManagerSingleton(); mgr != nil {
+			mgr.StopAll()
+		}
 	}
 	if s.cron != nil {
 		s.cron.Stop()

@@ -148,6 +148,10 @@ func (a *ExtraController) uploadBinary(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.extras.uploadFailed"), err)
 		return
 	}
+	if file.Size > 256<<20 {
+		jsonMsg(c, I18nWeb(c, "pages.extras.uploadFailed"), errors.New("upload exceeds the 256 MiB cap"))
+		return
+	}
 	dst := name.DefaultBinaryPath()
 	// A running core executes its binary in place; opening dst for write
 	// then fails with ETXTBSY ("text file busy"). Write to a temp file and

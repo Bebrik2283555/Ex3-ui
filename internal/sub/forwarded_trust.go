@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 )
 
 var warnSuppressedForwardedOnce sync.Once
@@ -31,8 +30,10 @@ func (s *SubService) forwardedHeadersTrusted(c *gin.Context) (trusted bool) {
 		return true
 	}
 	configured = strings.TrimSpace(configured)
-	if configured == "" || configured == service.DefaultTrustedProxyCIDRs {
-		return true
+	if configured == "" {
+		// An empty setting must not mean "trust every header": treat it as
+		// no trusted proxy rather than the historical allow-all default.
+		return false
 	}
 	return remoteAddrInCIDRs(c.Request.RemoteAddr, configured)
 }
