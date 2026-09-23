@@ -1,0 +1,16 @@
+{
+  "title": "Configuration",
+  "icon": "Settings",
+  "pages": [
+    "panel",
+    "ssl-certificates",
+    "inbounds",
+    "reality",
+    "amneziawg",
+    "tuic",
+    "transports",
+    "clients",
+    "subscription",
+    "share-links"
+  ]
+}

@@ -1,0 +1,27 @@
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+# Force any vulnerable transitive postcss (pulled in by next) up to a patched
+# release — fixes GHSA-qx2v-qp2m-jg93 / CVE-2026-41305 (vulnerable < 8.5.10).
+overrides:
+  'postcss@<8.5.10': '^8.5.15'
+  'sharp@<0.35.0': '^0.35.3'
+minimumReleaseAgeExclude:
+  - '@mermaid-js/parser@1.2.1'
+  - mermaid@11.17.0
+  - lucide-react@1.33.0
+  - postcss@8.5.26
+  - fumadocs-mdx@15.3.0 || 15.4.1
+  - '@fumadocs/api-docs@0.2.7 || 0.2.9'
+  - '@types/node@26.4.1'
+  - fumadocs-core@16.15.5 || 16.15.11
+  - fumadocs-openapi@11.4.0 || 11.4.3
+  - fumadocs-ui@16.15.5 || 16.15.11
+  - '@fumadocs/tailwind@0.1.2'
+  - '@fumari/image-size@0.1.1'
+  - '@fumari/stf@1.1.1'
+  - '@vitest/mocker@5.0.1'
+  - '@vitest/spy@5.0.1'
+  - fumadocs-docgen@3.1.1
+  - vitest@5.0.1

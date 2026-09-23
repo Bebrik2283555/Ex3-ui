@@ -1,0 +1,6 @@
+*.sh text eol=lf
+frontend/src/generated/** text eol=lf
+frontend/public/openapi.json text eol=lf
+frontend/src/test/__snapshots__/** text eol=lf
+*.go text eol=lf
+deploy/**/*.yaml text eol=lf

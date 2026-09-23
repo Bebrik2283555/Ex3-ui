@@ -1,0 +1,15 @@
+{
+  "title": "Конфигурация",
+  "icon": "Settings",
+  "pages": [
+    "panel",
+    "ssl-certificates",
+    "inbounds",
+    "reality",
+    "tuic",
+    "transports",
+    "clients",
+    "subscription",
+    "share-links"
+  ]
+}
