@@ -16,7 +16,6 @@
 
 ## Что внутри
 
-- **Изменённый стиль UI**
 - **Поддержка ядер для обхода блокировок через звонки российских сервисов из белого списка:**
   - [qWDTT](https://github.com/SpaceNeuroX/proxy-turn-vk-android) — форк [WDTT](https://github.com/amurcanov/proxy-turn-vk-android)
   - [olcRTC](https://github.com/openlibrecommunity/olcrtc)
