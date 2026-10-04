@@ -221,7 +221,9 @@ func TestSaveConfigWDTTWritesServerPasswords(t *testing.T) {
 // the server's config dir is not configured (fresh install case).
 func TestSyncPasswordsNoopWithoutConfigDir(t *testing.T) {
 	m := NewManager(memStore{})
-	if err := m.SyncPasswords(WDTT, DefaultConfig(WDTT)); err != nil {
+	cfg := DefaultConfig(WDTT)
+	cfg.ConfigDir = ""
+	if err := m.SyncPasswords(WDTT, cfg); err != nil {
 		t.Fatalf("SyncPasswords without config dir: %v", err)
 	}
 	if err := m.SyncPasswords(OLCRTC, DefaultConfig(OLCRTC)); err != nil {
