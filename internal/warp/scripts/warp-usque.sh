@@ -11,16 +11,13 @@ TABLE=10000
 # Telegram DC / MTProto ranges (IPv4)
 TG_NETS="91.108.0.0/16 149.154.160.0/20 95.161.64.0/20 185.76.151.0/24 185.64.92.0/22 91.105.192.0/23 194.169.233.0/24 194.102.202.0/24"
 
-echo "[1/6] Инструменты..."
 apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y curl unzip iproute2 iptables ca-certificates
 
-echo "[2/6] Старый WireGuard-WARP убираем (на этом хостере его payload режется DPI)..."
 wg-quick down warp 2>/dev/null || true
 systemctl disable --now wg-quick@warp 2>/dev/null || true
 ip rule del to 91.108.0.0/16 table $TABLE priority 100 2>/dev/null || true
 
-echo "[3/6] usque (WARP через MASQUE/QUIC)..."
 if [ ! -x "$USQUE_BIN" ]; then
   TMP_DIR=$(mktemp -d)
   curl -fsSL -o "$TMP_DIR/usque.zip" \
@@ -40,9 +37,7 @@ if [ ! -x "$USQUE_BIN" ]; then
 fi
 $USQUE_BIN version 2>/dev/null || true
 
-echo "[4/6] Регистрация WARP (IPv4-фикс для API)..."
 mkdir -p "$USQUE_DIR"
-# Очищаем битые или склеенные записи api.cloudflareclient.com
 sed -i 's/ff02::2 ip6-allrouters.*/ff02::2 ip6-allrouters/' /etc/hosts 2>/dev/null || true
 sed -i '/api\.cloudflareclient\.com/d' /etc/hosts 2>/dev/null || true
 [ -n "$(tail -c1 /etc/hosts 2>/dev/null)" ] && echo "" >> /etc/hosts
@@ -56,12 +51,11 @@ if [ ! -f "$USQUE_CONF" ]; then
   for i in 1 2 3 4 5; do
     out=$($USQUE_BIN register -a -c "$USQUE_CONF" 2>&1 || true)
     if [ -f "$USQUE_CONF" ]; then ok=1; break; fi
-    echo "  register: попытка $i не удалась, повтор через 3с... ($out)"; sleep 3
+    sleep 2
   done
   [ "$ok" = 1 ] && [ -f "$USQUE_CONF" ] || { echo "usque register FAILED"; exit 1; }
 fi
 
-echo "[5/6] Маршруты, служба, ротация и сторож..."
 
 # Хуки + systemd-юнит. Вызывается и при первом запуске, и после очистки каталога.
 setup_routes_and_service() {
@@ -129,7 +123,7 @@ USQUE_DIR=/etc/usque
 USQUE_CONF=/etc/usque/config.json
 IFACE=warp
 LOG=/var/log/warp-watch.log
-MAX_TRY="${MAX_TRY:-8}"
+MAX_TRY="${MAX_TRY:-20}"
 # Максимальная допустимая задержка до api.telegram.org через туннель (сек).
 # Всё медленнее считается "плохим IP" и ротируется, даже если код 2xx/3xx.
 MAX_LATENCY="${MAX_LATENCY:-5}"
@@ -138,7 +132,7 @@ log() { echo "$(date '+%F %T') [rotate] $*" >> "$LOG"; }
 # Печатает "<http_code> <time_total>" (time_total в секундах, с точкой).
 probe() {
   curl --interface "$IFACE" -4 -sS -o /dev/null \
-    -w '%{http_code} %{time_total}' --max-time 20 https://api.telegram.org/ 2>/dev/null \
+    -w '%{http_code} %{time_total}' --max-time 6 https://api.telegram.org/ 2>/dev/null \
     || echo "000 999"
 }
 # $1=code $2=time_total
@@ -168,16 +162,16 @@ while [ "$attempt" -lt "$MAX_TRY" ]; do
   rm -f "$USQUE_DIR"/config.json* 2>/dev/null || true
   mkdir -p "$USQUE_DIR"
   ok=0
-  for i in 1 2 3 4 5; do
+  for i in 1 2 3; do
     out=$($USQUE_BIN register -a -c "$USQUE_CONF" 2>&1 || true)
     if [ -f "$USQUE_CONF" ]; then ok=1; break; fi
-    log "register: попытка $i не удалась ($out)"; sleep 3
+    log "register: попытка $i не удалась ($out)"; sleep 1
   done
   if [ "$ok" != 1 ] || [ ! -f "$USQUE_CONF" ]; then log "register FAILED"; continue; fi
   systemctl start usque
-  for j in $(seq 1 25); do
-    if [ -e /sys/class/net/"$IFACE" ] && ping -I "$IFACE" -c 1 -W 2 1.1.1.1 >/dev/null 2>&1; then break; fi
-    sleep 2
+  for j in $(seq 1 10); do
+    if [ -e /sys/class/net/"$IFACE" ] && ping -I "$IFACE" -c 1 -W 1 1.1.1.1 >/dev/null 2>&1; then break; fi
+    sleep 1
   done
   read -r code t < <(probe)
   if good "$code" "$t"; then
@@ -219,7 +213,7 @@ get_code() {
 }
 probe_tg() {
   curl --interface "$IFACE" -4 -sS -o /dev/null -w '%{http_code} %{time_total}' \
-    --max-time 20 "$TG" 2>/dev/null || echo "000 999"
+    --max-time 6 "$TG" 2>/dev/null || echo "000 999"
 }
 is_ok() { case "$1" in 2??|3??|401|403) return 0;; *) return 1;; esac; }
 is_fast() { awk -v t="$1" -v m="$MAX_LATENCY" 'BEGIN{exit !(t <= m)}'; }
@@ -260,7 +254,7 @@ fi
 if [ "$fails_tunnel" -ge 2 ]; then
   log "туннель мёртв ($fails_tunnel), перезапускаю usque"
   systemctl restart usque
-  sleep 20
+  sleep 10
   neutral=$(get_code "$NEUTRAL"); read -r tg t < <(probe_tg)
   if is_ok "$neutral" && is_ok "$tg" && is_fast "$t"; then
     log "после рестарта OK (tunnel=$neutral tg=$tg ${t}s)"
@@ -296,15 +290,14 @@ install_rotate_script
 install_watch_cron
 
 systemctl enable --now usque
-sleep 8
+sleep 5
 
-echo "[6/6] Первичный подбор незаблокированного WARP-IP..."
 MAX_LATENCY="${MAX_LATENCY:-5}" bash /usr/local/bin/warp-rotate.sh || true
 
 WARP_IP="$(curl --interface "$IFACE" -4 -s --max-time 5 https://api.ipify.org 2>/dev/null || echo 'не удалось определить')"
 if ! [[ "$WARP_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then WARP_IP="не удалось определить"; fi
 echo "  WARP IP: $WARP_IP"
-read -r CODE t < <(curl --interface "$IFACE" -4 -sS -o /dev/null -w '%{http_code} %{time_total}' --max-time 20 https://api.telegram.org/ 2>/dev/null || echo "000 999")
+read -r CODE t < <(curl --interface "$IFACE" -4 -sS -o /dev/null -w '%{http_code} %{time_total}' --max-time 6 https://api.telegram.org/ 2>/dev/null || echo "000 999")
 echo "  api.telegram.org через $IFACE -> HTTP $CODE (${t}s, лимит ${MAX_LATENCY}s)"
 CODE_P=$(curl -4 -sS -o /dev/null -w '%{http_code}' --max-time 12 https://api.telegram.org/ || true)
 echo "  api.telegram.org policy-route -> HTTP $CODE_P"
