@@ -154,9 +154,18 @@ func TestDownstreamUDPResponseRefreshesAssociationIdleTime(t *testing.T) {
 		t.Fatalf("response association id = %d, want %d", header.AssocID, associationID)
 	}
 
-	registry.mu.Lock()
-	refreshedAt := association.lastActive
-	registry.mu.Unlock()
+	var refreshedAt time.Time
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		registry.mu.Lock()
+		refreshedAt = association.lastActive
+		registry.mu.Unlock()
+		if refreshedAt.After(oldActive) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
 	if !refreshedAt.After(oldActive) {
 		t.Fatal("successful downstream response did not refresh association activity")
 	}

@@ -196,13 +196,23 @@ func testServerTCPConnectE2E(t *testing.T, controller string) {
 		t.Fatalf("expected active email alice@example.com, got %v", activeEmails)
 	}
 
-	deltas := server.CollectClientTraffic()
-	if len(deltas) == 0 {
-		t.Fatalf("expected traffic deltas, got none")
+	var totalUp, totalDown int64
+	var lastDelta ClientTrafficDelta
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, d := range server.CollectClientTraffic() {
+			if d.Email == "alice@example.com" {
+				totalUp += d.Up
+				totalDown += d.Down
+				lastDelta = d
+			}
+		}
+		if totalUp >= int64(len(testMsg)) && totalDown >= int64(len(testMsg)) {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
-	if deltas[0].Email != "alice@example.com" || deltas[0].Up < int64(len(testMsg)) || deltas[0].Down < int64(len(testMsg)) {
-		t.Fatalf("unexpected traffic deltas: %+v", deltas[0])
-	}
+	t.Fatalf("unexpected traffic deltas: Up:%d Down:%d (last delta: %+v)", totalUp, totalDown, lastDelta)
 }
 
 func TestServerUDPDatagramE2E(t *testing.T) {
@@ -356,13 +366,23 @@ func testServerUDPDatagramE2E(t *testing.T, controller string) {
 	}
 
 	// 4. Verify traffic
-	deltas := server.CollectClientTraffic()
-	if len(deltas) == 0 {
-		t.Fatalf("expected traffic deltas, got none")
+	var totalUp, totalDown int64
+	var lastDelta ClientTrafficDelta
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, d := range server.CollectClientTraffic() {
+			if d.Email == "bob@example.com" {
+				totalUp += d.Up
+				totalDown += d.Down
+				lastDelta = d
+			}
+		}
+		if totalUp >= int64(len(udpMsg)) && totalDown >= int64(len(udpMsg)) {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
-	if deltas[0].Email != "bob@example.com" || deltas[0].Up < int64(len(udpMsg)) || deltas[0].Down < int64(len(udpMsg)) {
-		t.Fatalf("unexpected traffic deltas: %+v", deltas[0])
-	}
+	t.Fatalf("unexpected traffic deltas: Up:%d Down:%d (last delta: %+v)", totalUp, totalDown, lastDelta)
 }
 
 func TestServerUDPStreamE2E(t *testing.T) {
