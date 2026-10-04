@@ -280,9 +280,8 @@ func Uninstall() error {
 	_ = run("systemctl", "stop", serviceName)
 	_ = run("systemctl", "disable", serviceName)
 	_ = os.Remove("/etc/systemd/system/" + serviceName)
-	if err := run("systemctl", "daemon-reload"); err != nil {
-		// A missing unit still lets us continue cleanup.
-	}
+	_ = run("systemctl", "daemon-reload")
+	// A missing unit still lets us continue cleanup.
 	if _, err := os.Stat(installDir); err == nil {
 		if err := os.RemoveAll(installDir); err != nil {
 			return err
@@ -575,7 +574,7 @@ func writeLines(path string, lines []string) error {
 }
 
 func run(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(context.Background(), name, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s %s: %w (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
@@ -584,7 +583,7 @@ func run(name string, args ...string) error {
 }
 
 func runOutput(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(context.Background(), name, args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

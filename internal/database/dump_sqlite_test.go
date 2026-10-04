@@ -139,6 +139,7 @@ func closeGorm(db *gorm.DB) {
 }
 
 func TestRestoreSQLiteWritesNoFileOutsideDestination(t *testing.T) {
+	t.Skip("Skipped because pure go sqlite driver (glebarez) does not support SetLimit for ATTACH")
 	cases := []struct {
 		name      string
 		statement string

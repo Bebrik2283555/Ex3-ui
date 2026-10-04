@@ -145,7 +145,7 @@ func ensureAcmeSh() (string, error) {
 	if info, err := os.Stat(acmeBin); err == nil && !info.IsDir() {
 		return acmeBin, nil
 	}
-	installCmd := exec.Command("sh", "-c", "curl -s https://get.acme.sh | sh")
+	installCmd := exec.CommandContext(context.Background(), "sh", "-c", "curl -s https://get.acme.sh | sh")
 	installCmd.Env = acmeEnv(home)
 	out, err := installCmd.CombinedOutput()
 	if err != nil {

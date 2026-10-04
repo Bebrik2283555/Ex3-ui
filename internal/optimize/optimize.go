@@ -141,9 +141,8 @@ func Apply(opts Options) ([]string, error) {
 }
 
 func applyDNS() error {
-	if err := run("chattr", "-i", "/etc/resolv.conf"); err != nil {
-		// chattr may be unavailable or the file not immutable — continue.
-	}
+	_ = run("chattr", "-i", "/etc/resolv.conf")
+	// chattr may be unavailable or the file not immutable — continue.
 	content := "nameserver 1.1.1.1\nnameserver 8.8.8.8\n"
 	if err := os.WriteFile("/etc/resolv.conf", []byte(content), 0o644); err != nil {
 		return err

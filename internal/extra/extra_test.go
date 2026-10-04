@@ -141,7 +141,7 @@ func TestBuildArgsOLCrtc(t *testing.T) {
 	if args[0] != "/custom.yaml" {
 		t.Errorf("BuildArgs(olcrtc) = %v, want custom file first", args)
 	}
-	// Upstream takes exactly one argument — extra args must be dropped.
+	// Upstream takes exactly one argument вЂ” extra args must be dropped.
 	cfg.ExtraArgs = "--foo bar"
 	args = cfg.BuildArgs(OLCRTC)
 	if len(args) != 1 {
@@ -310,6 +310,7 @@ func TestSaveConfigOLCRTCValidation(t *testing.T) {
 	// Missing room id.
 	cfg := DefaultConfig(OLCRTC)
 	cfg.ConfigFile = t.TempDir() + "/server.yaml"
+	cfg.DataDir = t.TempDir() + "/data"
 	if err := m.SaveConfig(OLCRTC, cfg); err == nil {
 		t.Fatal("expected error for empty room id")
 	}
@@ -431,6 +432,7 @@ func TestSaveConfigOLCRTCTransportRules(t *testing.T) {
 	newCfg := func() Config {
 		c := DefaultConfig(OLCRTC)
 		c.ConfigFile = t.TempDir() + "/server.yaml"
+		c.DataDir = t.TempDir() + "/data"
 		c.RoomID = "https://meet.example.org/room"
 		return c
 	}
@@ -473,6 +475,7 @@ func TestSaveConfigOLCRTCClampsVP8(t *testing.T) {
 	m := NewManager(memStore{})
 	cfg := DefaultConfig(OLCRTC)
 	cfg.ConfigFile = t.TempDir() + "/server.yaml"
+	cfg.DataDir = t.TempDir() + "/data"
 	cfg.RoomID = "room"
 	cfg.Transport = "vp8channel"
 	cfg.VP8Fps = 999
@@ -520,6 +523,7 @@ func TestSaveConfigWDTTDetectsPublicIP(t *testing.T) {
 
 	// A custom listen port must be reflected in the auto-filled host.
 	cfg2 := DefaultConfig(WDTT)
+	cfg2.ConfigDir = t.TempDir() + "/wdtt"
 	cfg2.ListenAddr = "0.0.0.0:56123"
 	if err := m.SaveConfig(WDTT, cfg2); err != nil {
 		t.Fatalf("SaveConfig: %v", err)
@@ -534,6 +538,7 @@ func TestSaveConfigWDTTDetectsPublicIP(t *testing.T) {
 	m2 := NewManager(store2)
 	publicIPDetector = func() string { return "" }
 	cfg3 := DefaultConfig(WDTT)
+	cfg3.ConfigDir = t.TempDir() + "/wdtt"
 	if err := m2.SaveConfig(WDTT, cfg3); err != nil {
 		t.Fatalf("SaveConfig with failed detection: %v", err)
 	}

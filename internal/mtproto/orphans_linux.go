@@ -62,10 +62,7 @@ func killStrayMtgProcesses(binaryPath string) int {
 func isStrayMtg(pid int, fullPath, baseName string) bool {
 	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
 	if err == nil {
-		if filepath.Clean(exe) == fullPath {
-			return true
-		}
-		return false
+		return filepath.Clean(exe) == fullPath
 	}
 	return cmdlineArgv0Base(pid) == baseName
 }
