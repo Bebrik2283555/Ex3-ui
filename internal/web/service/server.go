@@ -518,6 +518,8 @@ func (s *ServerService) publicIPs() (ipv4 string, ipv6 string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.cachedIPv4, s.cachedIPv6
+}
+
 // ResolveDomain resolves a hostname through the server's own DNS and compares
 // every address against the panel's public IPs so the inbound dialog can warn
 // before an ACME HTTP-01 attempt would fail.
@@ -2874,9 +2876,6 @@ func (s *ServerService) GetRemoteCertHash(server string, allowPrivate bool) ([]s
 	ctx, cancel := context.WithTimeout(netsafe.ContextWithAllowPrivate(context.Background(), allowPrivate), 10*time.Second)
 	defer cancel()
 	tcpConn, err := netsafe.SSRFGuardedDialContext(ctx, "tcp", stdnet.JoinHostPort(host, port))
-	// The SSRF guard refuses loopback/private destinations so a stolen admin
-	// session cannot use this endpoint to probe the panel's local network.
-	tcpConn, err := netsafe.SSRFGuardedDialContext(context.Background(), "tcp", stdnet.JoinHostPort(host, port))
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial %s: %w", stdnet.JoinHostPort(host, port), err)
 	}
