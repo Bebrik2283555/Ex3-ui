@@ -158,6 +158,8 @@ func Uninstall() error {
 	_ = os.Remove(rotateBin)
 	_ = os.Remove(watchBin)
 	_ = os.Remove("/run/warp-watch.state")
+	_ = os.Remove(watchLog)
+	_ = os.Remove(installLog)
 	removeCronEntry("warp-watch.sh")
 	cleanHostsFile()
 	return nil

@@ -54,8 +54,9 @@ echo "$IP4 api.cloudflareclient.com" >> /etc/hosts
 if [ ! -f "$USQUE_CONF" ]; then
   ok=0
   for i in 1 2 3 4 5; do
-    if $USQUE_BIN register -a -c "$USQUE_CONF"; then ok=1; break; fi
-    echo "  register: попытка $i не удалась, повтор через 3с..."; sleep 3
+    out=$($USQUE_BIN register -a -c "$USQUE_CONF" 2>&1 || true)
+    if [ -f "$USQUE_CONF" ]; then ok=1; break; fi
+    echo "  register: попытка $i не удалась, повтор через 3с... ($out)"; sleep 3
   done
   [ "$ok" = 1 ] && [ -f "$USQUE_CONF" ] || { echo "usque register FAILED"; exit 1; }
 fi
@@ -168,8 +169,9 @@ while [ "$attempt" -lt "$MAX_TRY" ]; do
   mkdir -p "$USQUE_DIR"
   ok=0
   for i in 1 2 3 4 5; do
-    if $USQUE_BIN register -a -c "$USQUE_CONF" >>"$LOG" 2>&1; then ok=1; break; fi
-    log "register: попытка $i не удалась"; sleep 3
+    out=$($USQUE_BIN register -a -c "$USQUE_CONF" 2>&1 || true)
+    if [ -f "$USQUE_CONF" ]; then ok=1; break; fi
+    log "register: попытка $i не удалась ($out)"; sleep 3
   done
   if [ "$ok" != 1 ] || [ ! -f "$USQUE_CONF" ]; then log "register FAILED"; continue; fi
   systemctl start usque
