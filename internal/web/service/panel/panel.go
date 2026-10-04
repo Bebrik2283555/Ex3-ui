@@ -134,7 +134,7 @@ func (s *PanelService) GetUpdateInfo() (*PanelUpdateInfo, error) {
 		return getDevUpdateInfo()
 	}
 	current := config.GetBaseVersion()
-	if _, ok := parseVersionParts(current); !ok {
+	if _, ok := version.Compare(current, "0.0.0"); !ok {
 		// Fork version label (e.g. "1.0 (Based on 3X_UI 3.6.0)") is not
 		// comparable to upstream tags, so never claim an update is available.
 		return &PanelUpdateInfo{

@@ -26,24 +26,53 @@ import {
   message,
 } from 'antd';
 import type { UploadProps } from 'antd';
-import { PlusOutlined, PoweroffOutlined, QrcodeOutlined, RedoOutlined, RobotOutlined, SettingOutlined, UploadOutlined, DeleteOutlined, CopyOutlined, InfoCircleOutlined, EditOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  PoweroffOutlined,
+  QrcodeOutlined,
+  RedoOutlined,
+  RobotOutlined,
+  SettingOutlined,
+  UploadOutlined,
+  DeleteOutlined,
+  CopyOutlined,
+  InfoCircleOutlined,
+  EditOutlined,
+} from '@ant-design/icons';
 
 import { useTheme } from '@/hooks/useTheme';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { setMessageInstance } from '@/utils/messageBus';
 import AppSidebar from '@/layouts/AppSidebar';
 import { LazyMount } from '@/components/utility';
-import { useExtrasStatus, useExtrasMutations, type CoreName, type ExtraConfig, type WDTTClient } from '@/api/queries/useSystemTools';
+import {
+  useExtrasStatus,
+  useExtrasMutations,
+  type CoreName,
+  type ExtraConfig,
+  type WDTTClient,
+} from '@/api/queries/useSystemTools';
 
 const { Text, Title } = Typography;
 
-function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; displayName: string; isDark: boolean; isUltra: boolean }) {
+function ServiceCard({
+  name,
+  displayName,
+  isDark,
+  isUltra,
+}: {
+  name: CoreName;
+  displayName: string;
+  isDark: boolean;
+  isUltra: boolean;
+}) {
   const { t } = useTranslation();
   const { modal } = App.useApp();
   const { data: services, isLoading, isError, error } = useExtrasStatus();
   const { start, stop, restart, saveConfig, uploadBinary, deleteBinary } = useExtrasMutations();
   const [editOpen, setEditOpen] = useState(false);
   const [form] = Form.useForm<ExtraConfig>();
+  const ofTransport = Form.useWatch('ofTransport', form);
   const [busy, setBusy] = useState<string | null>(null);
 
   const provider = Form.useWatch('provider', form);
@@ -65,16 +94,19 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
       `${window.location.origin}${base}/panel/qwdtt/sub/${encodeURIComponent(token)}/${encodeURIComponent(subUri)}`;
   }, [name, service?.config?.subToken]);
 
-  const doAction = useCallback(async (kind: 'start' | 'stop' | 'restart') => {
-    setBusy(kind);
-    try {
-      if (kind === 'start') await start(name);
-      else if (kind === 'stop') await stop(name);
-      else await restart(name);
-    } finally {
-      setBusy(null);
-    }
-  }, [name, start, stop, restart]);
+  const doAction = useCallback(
+    async (kind: 'start' | 'stop' | 'restart') => {
+      setBusy(kind);
+      try {
+        if (kind === 'start') await start(name);
+        else if (kind === 'stop') await stop(name);
+        else await restart(name);
+      } finally {
+        setBusy(null);
+      }
+    },
+    [name, start, stop, restart],
+  );
 
   const openEdit = () => {
     form.setFieldsValue(service?.config ?? {});
@@ -122,7 +154,10 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
   const generateKey = () => {
     const bytes = new Uint8Array(32);
     crypto.getRandomValues(bytes);
-    form.setFieldValue('cryptoKey', Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''));
+    form.setFieldValue(
+      'cryptoKey',
+      Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''),
+    );
   };
 
   const [clientOpen, setClientOpen] = useState(false);
@@ -148,22 +183,29 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
   const onTgSave = async () => {
     const values = await tgForm.validateFields();
     const currentConfig = service?.config ?? {};
-    await saveConfig(name, { ...currentConfig, adminId: values.adminId, botToken: values.botToken });
+    await saveConfig(name, {
+      ...currentConfig,
+      adminId: values.adminId,
+      botToken: values.botToken,
+    });
     setTgOpen(false);
   };
 
-  const wdttLink = useCallback((cl: WDTTClient): string | null => {
-    if (!cl.password) return null;
-    const host = service?.config?.subHost || service?.config?.listenAddr || '';
-    let ip = host.includes(':') ? host.slice(0, host.lastIndexOf(':')) : host;
-    if (!ip || ip === '0.0.0.0' || ip === '::') {
-      ip = window.location.hostname || '';
-    }
-    if (!ip) return null;
-    const dtls = service?.config?.listenAddr?.split(':').pop() ?? '56000';
-    const name = cl.name || 'Client';
-    return `qwdtt://config?name=${encodeURIComponent(name)}&peer=${ip}:${dtls}&hashes=${cl.vkHashes || ''}&workers=16&port=9000&pass=${cl.password}`;
-  }, [service?.config?.subHost, service?.config?.listenAddr]);
+  const wdttLink = useCallback(
+    (cl: WDTTClient): string | null => {
+      if (!cl.password) return null;
+      const host = service?.config?.subHost || service?.config?.listenAddr || '';
+      let ip = host.includes(':') ? host.slice(0, host.lastIndexOf(':')) : host;
+      if (!ip || ip === '0.0.0.0' || ip === '::') {
+        ip = window.location.hostname || '';
+      }
+      if (!ip) return null;
+      const dtls = service?.config?.listenAddr?.split(':').pop() ?? '56000';
+      const name = cl.name || 'Client';
+      return `qwdtt://config?name=${encodeURIComponent(name)}&peer=${ip}:${dtls}&hashes=${cl.vkHashes || ''}&workers=16&port=9000&pass=${cl.password}`;
+    },
+    [service?.config?.subHost, service?.config?.listenAddr],
+  );
 
   // The qWDTT app's QR scanner only accepts a subscription JSON document or a
   // qwdtt://config URI — a bare URL is rejected as "wrong format". Build the
@@ -245,7 +287,10 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
   const generateClientPassword = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     const bytes = crypto.getRandomValues(new Uint8Array(16));
-    clientForm.setFieldValue('password', Array.from(bytes, (b) => chars[b % chars.length]).join(''));
+    clientForm.setFieldValue(
+      'password',
+      Array.from(bytes, (b) => chars[b % chars.length]).join(''),
+    );
   };
 
   if (isError) {
@@ -260,13 +305,22 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
     return <Card title={displayName} loading />;
   }
   if (!service) {
-    return <Card title={displayName}><Result status="warning" title={t('pages.extras.noData')} /></Card>;
+    return (
+      <Card title={displayName}>
+        <Result status="warning" title={t('pages.extras.noData')} />
+      </Card>
+    );
   }
 
-  const cardClass = ['service-card', isDark ? 'is-dark' : '', isUltra ? 'is-ultra' : ''].join(' ').trim();
+  const cardClass = ['service-card', isDark ? 'is-dark' : '', isUltra ? 'is-ultra' : '']
+    .join(' ')
+    .trim();
   const runningNow = service.running;
   const actions = [
-    <Tooltip key="startstop" title={runningNow ? t('pages.extras.actions.stop') : t('pages.extras.actions.start')}>
+    <Tooltip
+      key="startstop"
+      title={runningNow ? t('pages.extras.actions.stop') : t('pages.extras.actions.start')}
+    >
       <Button
         size="large"
         icon={<PoweroffOutlined />}
@@ -278,7 +332,13 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
       </Button>
     </Tooltip>,
     <Tooltip key="restart" title={t('pages.extras.actions.restart')}>
-      <Button size="large" icon={<RedoOutlined />} loading={busy === 'restart'} onClick={() => doAction('restart')} aria-label="restart">
+      <Button
+        size="large"
+        icon={<RedoOutlined />}
+        loading={busy === 'restart'}
+        onClick={() => doAction('restart')}
+        aria-label="restart"
+      >
         {t('pages.extras.actions.restart')}
       </Button>
     </Tooltip>,
@@ -288,7 +348,14 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
       </Button>
     </Tooltip>,
     <Tooltip key="delete" title={t('pages.extras.actions.delete')}>
-      <Button size="large" danger icon={<DeleteOutlined />} loading={busy === 'delete'} onClick={onDelete} aria-label="delete">
+      <Button
+        size="large"
+        danger
+        icon={<DeleteOutlined />}
+        loading={busy === 'delete'}
+        onClick={onDelete}
+        aria-label="delete"
+      >
         {t('pages.extras.actions.delete')}
       </Button>
     </Tooltip>,
@@ -297,13 +364,16 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
   const coreStatus = (
     <Space size={4} wrap>
       <Tag color={service.enabled ? 'green' : 'default'}>
-        {t('pages.extras.enabled')}: {service.enabled ? t('pages.extras.yes') : t('pages.extras.no')}
+        {t('pages.extras.enabled')}:{' '}
+        {service.enabled ? t('pages.extras.yes') : t('pages.extras.no')}
       </Tag>
       <Tag color={service.running ? 'green' : 'red'}>
-        {t('pages.extras.running')}: {service.running ? t('pages.extras.yes') : t('pages.extras.no')}
+        {t('pages.extras.running')}:{' '}
+        {service.running ? t('pages.extras.yes') : t('pages.extras.no')}
       </Tag>
       <Tag color={service.binaryExists ? 'green' : 'orange'}>
-        {t('pages.extras.binary')}: {service.binaryExists ? t('pages.extras.present') : t('pages.extras.missing')}
+        {t('pages.extras.binary')}:{' '}
+        {service.binaryExists ? t('pages.extras.present') : t('pages.extras.missing')}
       </Tag>
     </Space>
   );
@@ -367,14 +437,21 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
           )}
           {name === 'olcrtc' && service?.connectUri && (
             <div className="extras-core-block">
-              <Text strong style={{ display: 'block', marginBottom: 8 }}>{t('pages.extras.connectUri')}</Text>
+              <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                {t('pages.extras.connectUri')}
+              </Text>
               <div className="extras-connect">
                 <div className="extras-qr">
                   <QRCode value={service.connectUri} size={250} color="#000000" bgColor="#ffffff" />
                 </div>
                 <div className="extras-link">
-                  <Typography.Paragraph copyable={{ text: service.connectUri }} style={{ marginBottom: 8 }}>
-                    <Typography.Text style={{ wordBreak: 'break-all' }}>{service.connectUri}</Typography.Text>
+                  <Typography.Paragraph
+                    copyable={{ text: service.connectUri }}
+                    style={{ marginBottom: 8 }}
+                  >
+                    <Typography.Text style={{ wordBreak: 'break-all' }}>
+                      {service.connectUri}
+                    </Typography.Text>
                   </Typography.Paragraph>
                   <Text type="secondary" style={{ display: 'block' }}>
                     {t('pages.extras.olcrtcProvider')}: {service.config?.provider} ·{' '}
@@ -387,14 +464,21 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
           )}
           {name === 'openflux' && service?.connectUri && (
             <div className="extras-core-block">
-              <Text strong style={{ display: 'block', marginBottom: 8 }}>{t('pages.extras.ofConnectUri')}</Text>
+              <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                {t('pages.extras.ofConnectUri')}
+              </Text>
               <div className="extras-connect">
                 <div className="extras-qr">
                   <QRCode value={service.connectUri} size={250} color="#000000" bgColor="#ffffff" />
                 </div>
                 <div className="extras-link">
-                  <Typography.Paragraph copyable={{ text: service.connectUri }} style={{ marginBottom: 8 }}>
-                    <Typography.Text style={{ wordBreak: 'break-all' }}>{service.connectUri}</Typography.Text>
+                  <Typography.Paragraph
+                    copyable={{ text: service.connectUri }}
+                    style={{ marginBottom: 8 }}
+                  >
+                    <Typography.Text style={{ wordBreak: 'break-all' }}>
+                      {service.connectUri}
+                    </Typography.Text>
                   </Typography.Paragraph>
                   <Text type="secondary" style={{ display: 'block' }}>
                     {t('pages.extras.ofTransportLabel')}: {service.config?.ofTransport} ·{' '}
@@ -414,69 +498,94 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
               </Space>
               <div style={{ overflowX: 'auto' }}>
                 <Table<WDTTClient>
-                rowKey={(_, i) => String(i)}
-                size="small"
-                dataSource={clients}
-                pagination={false}
-                locale={{ emptyText: t('pages.extras.clientNoClients') }}
-                columns={[
-                  {
-                    title: t('pages.extras.clientName'),
-                    dataIndex: 'name',
-                    ellipsis: true,
-                    width: 140,
-                  },
-                  {
-                    title: t('pages.extras.clientSubscriptionName'),
-                    dataIndex: 'subscriptionName',
-                    ellipsis: true,
-                    width: 140,
-                  },
-                  {
-                    title: t('pages.extras.clientPassword'),
-                    dataIndex: 'password',
-                    width: 110,
-                    render: (v: string, _: WDTTClient, i: number) => (
-                      <Text
-                        code
-                        style={{ cursor: 'pointer', fontSize: 12, userSelect: 'none' }}
-                        onClick={() => {
-                          setVisiblePasswords(prev => {
-                            const next = new Set(prev);
-                            if (next.has(i)) {
-                              next.delete(i);
-                            } else {
-                              next.add(i);
-                            }
-                            return next;
-                          });
-                        }}
-                      >
-                        {visiblePasswords.has(i) ? v : '\u2022'.repeat(8)}
-                      </Text>
-                    ),
-                  },
-                  {
-                    title: t('pages.extras.enabled'),
-                    dataIndex: 'enabled',
-                    width: 70,
-                    render: (v: boolean, _: WDTTClient, i: number) => (
-                      <Switch size="small" checked={v} onChange={(checked) => onClientToggle(i, checked)} />
-                    ),
-                  },
-                  {
-                    title: t('pages.extras.actions.label'),
-                    width: 128,
-                    render: (_: WDTTClient, cl: WDTTClient, i: number) => (
-                      <Space size={0}>
-                        <Button size="small" type="text" icon={<InfoCircleOutlined />} onClick={() => setInfoClient(cl)} />
-                        <Button size="small" type="text" icon={<QrcodeOutlined />} onClick={() => setQrClient({ client: cl, index: i })} />
-                        <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openClient(i)} />
-                        <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => onClientDelete(i)} />
-                      </Space>
-                    ),
-                  },
-                ]}
+                  rowKey={(_, i) => String(i)}
+                  size="small"
+                  dataSource={clients}
+                  pagination={false}
+                  locale={{ emptyText: t('pages.extras.clientNoClients') }}
+                  columns={[
+                    {
+                      title: t('pages.extras.clientName'),
+                      dataIndex: 'name',
+                      ellipsis: true,
+                      width: 140,
+                    },
+                    {
+                      title: t('pages.extras.clientSubscriptionName'),
+                      dataIndex: 'subscriptionName',
+                      ellipsis: true,
+                      width: 140,
+                    },
+                    {
+                      title: t('pages.extras.clientPassword'),
+                      dataIndex: 'password',
+                      width: 110,
+                      render: (v: string, _: WDTTClient, i: number) => (
+                        <Text
+                          code
+                          style={{ cursor: 'pointer', fontSize: 12, userSelect: 'none' }}
+                          onClick={() => {
+                            setVisiblePasswords((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(i)) {
+                                next.delete(i);
+                              } else {
+                                next.add(i);
+                              }
+                              return next;
+                            });
+                          }}
+                        >
+                          {visiblePasswords.has(i) ? v : '\u2022'.repeat(8)}
+                        </Text>
+                      ),
+                    },
+                    {
+                      title: t('pages.extras.enabled'),
+                      dataIndex: 'enabled',
+                      width: 70,
+                      render: (v: boolean, _: WDTTClient, i: number) => (
+                        <Switch
+                          size="small"
+                          checked={v}
+                          onChange={(checked) => onClientToggle(i, checked)}
+                        />
+                      ),
+                    },
+                    {
+                      title: t('pages.extras.actions.label'),
+                      width: 128,
+                      render: (_: WDTTClient, cl: WDTTClient, i: number) => (
+                        <Space size={0}>
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={<InfoCircleOutlined />}
+                            onClick={() => setInfoClient(cl)}
+                          />
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={<QrcodeOutlined />}
+                            onClick={() => setQrClient({ client: cl, index: i })}
+                          />
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={<EditOutlined />}
+                            onClick={() => openClient(i)}
+                          />
+                          <Button
+                            size="small"
+                            type="text"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={() => onClientDelete(i)}
+                          />
+                        </Space>
+                      ),
+                    },
+                  ]}
                 />
               </div>
             </div>
@@ -485,23 +594,52 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
       </Card>
 
       <LazyMount when={editOpen}>
-        <Modal open={editOpen} title={t('pages.extras.editTitle')} onOk={onSave} onCancel={() => setEditOpen(false)} okText={t('save')} cancelText={t('cancel')}>
+        <Modal
+          open={editOpen}
+          title={t('pages.extras.editTitle')}
+          onOk={onSave}
+          onCancel={() => setEditOpen(false)}
+          okText={t('save')}
+          cancelText={t('cancel')}
+        >
           <Form form={form} layout="vertical">
-            <Form.Item name="enabled" label={t('pages.extras.enabled')} valuePropName="checked"><Switch /></Form.Item>
-            <Form.Item name="autoStart" label={t('pages.extras.autoStart')} valuePropName="checked"><Switch /></Form.Item>
+            <Form.Item name="enabled" label={t('pages.extras.enabled')} valuePropName="checked">
+              <Switch />
+            </Form.Item>
+            <Form.Item name="autoStart" label={t('pages.extras.autoStart')} valuePropName="checked">
+              <Switch />
+            </Form.Item>
             {name === 'qwdtt' && (
               <>
-                <Form.Item name="listenAddr" label={t('pages.extras.listenAddr')}><Input placeholder="0.0.0.0:56000" /></Form.Item>
-                <Form.Item name="wgPort" label={t('pages.extras.wgPort')}><InputNumber min={1} max={65535} style={{ width: '100%' }} /></Form.Item>
-                <Form.Item name="dns" label={t('pages.extras.dns')}><Input placeholder="8.8.8.8" /></Form.Item>
-                <Form.Item name="listenRaw" label={t('pages.extras.listenRaw')} tooltip={t('pages.extras.listenRawDesc')}>
+                <Form.Item name="listenAddr" label={t('pages.extras.listenAddr')}>
+                  <Input placeholder="0.0.0.0:56000" />
+                </Form.Item>
+                <Form.Item name="wgPort" label={t('pages.extras.wgPort')}>
+                  <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item name="dns" label={t('pages.extras.dns')}>
+                  <Input placeholder="8.8.8.8" />
+                </Form.Item>
+                <Form.Item
+                  name="listenRaw"
+                  label={t('pages.extras.listenRaw')}
+                  tooltip={t('pages.extras.listenRawDesc')}
+                >
                   <Input placeholder="0.0.0.0:56003" />
                 </Form.Item>
-                <Form.Item name="configDir" label={t('pages.extras.configDir')}><Input placeholder="/etc/wdtt" /></Form.Item>
+                <Form.Item name="configDir" label={t('pages.extras.configDir')}>
+                  <Input placeholder="/etc/wdtt" />
+                </Form.Item>
                 <Form.Item name="subToken" label={t('pages.extras.subToken')}>
                   <Input placeholder="secret-token" style={{ fontFamily: 'monospace' }} />
                 </Form.Item>
-                <Form.Item name="debug" label={t('pages.extras.olcrtcDebug')} valuePropName="checked"><Switch /></Form.Item>
+                <Form.Item
+                  name="debug"
+                  label={t('pages.extras.olcrtcDebug')}
+                  valuePropName="checked"
+                >
+                  <Switch />
+                </Form.Item>
               </>
             )}
             {name === 'olcrtc' && (
@@ -515,14 +653,20 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
                     ]}
                   />
                 </Form.Item>
-                <Form.Item name="roomId" label={t('pages.extras.olcrtcRoom')} rules={[{ required: true }]}>
+                <Form.Item
+                  name="roomId"
+                  label={t('pages.extras.olcrtcRoom')}
+                  rules={[{ required: true }]}
+                >
                   <Input placeholder="https://meet.example.org/room" />
                 </Form.Item>
                 <Form.Item name="cryptoKey" label={t('pages.extras.olcrtcKey')}>
                   <Input.Password
                     placeholder="64 hex chars"
                     style={{ fontFamily: 'monospace' }}
-                    addonAfter={<Button onClick={generateKey}>{t('pages.extras.olcrtcKeyGenerate')}</Button>}
+                    addonAfter={
+                      <Button onClick={generateKey}>{t('pages.extras.olcrtcKeyGenerate')}</Button>
+                    }
                   />
                 </Form.Item>
                 <Form.Item name="transport" label={t('pages.extras.olcrtcTransport')}>
@@ -534,20 +678,40 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
                     disabled={provider === 'telemost'}
                   />
                 </Form.Item>
-                <Form.Item name="olcrtcDns" label={t('pages.extras.olcrtcDns')}><Input placeholder="8.8.8.8:53" /></Form.Item>
+                <Form.Item name="olcrtcDns" label={t('pages.extras.olcrtcDns')}>
+                  <Input placeholder="8.8.8.8:53" />
+                </Form.Item>
                 {transport === 'vp8channel' && (
                   <>
-                    <Form.Item name="vp8Fps" label={t('pages.extras.olcrtcVp8Fps')} tooltip={t('pages.extras.olcrtcVp8FpsDesc')}>
+                    <Form.Item
+                      name="vp8Fps"
+                      label={t('pages.extras.olcrtcVp8Fps')}
+                      tooltip={t('pages.extras.olcrtcVp8FpsDesc')}
+                    >
                       <InputNumber min={1} max={120} style={{ width: '100%' }} />
                     </Form.Item>
-                    <Form.Item name="vp8Batch" label={t('pages.extras.olcrtcVp8Batch')} tooltip={t('pages.extras.olcrtcVp8BatchDesc')}>
+                    <Form.Item
+                      name="vp8Batch"
+                      label={t('pages.extras.olcrtcVp8Batch')}
+                      tooltip={t('pages.extras.olcrtcVp8BatchDesc')}
+                    >
                       <InputNumber min={1} max={64} style={{ width: '100%' }} />
                     </Form.Item>
                   </>
                 )}
-                <Form.Item name="configFile" label={t('pages.extras.configFile')}><Input placeholder="/etc/olcrtc/server.yaml" /></Form.Item>
-                <Form.Item name="dataDir" label={t('pages.extras.dataDir')}><Input placeholder="/etc/olcrtc/data" /></Form.Item>
-                <Form.Item name="debug" label={t('pages.extras.olcrtcDebug')} valuePropName="checked"><Switch /></Form.Item>
+                <Form.Item name="configFile" label={t('pages.extras.configFile')}>
+                  <Input placeholder="/etc/olcrtc/server.yaml" />
+                </Form.Item>
+                <Form.Item name="dataDir" label={t('pages.extras.dataDir')}>
+                  <Input placeholder="/etc/olcrtc/data" />
+                </Form.Item>
+                <Form.Item
+                  name="debug"
+                  label={t('pages.extras.olcrtcDebug')}
+                  valuePropName="checked"
+                >
+                  <Switch />
+                </Form.Item>
               </>
             )}
             {name === 'openflux' && (
@@ -572,21 +736,41 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
                     ]}
                   />
                 </Form.Item>
-                <Form.Item name="ofUrl" label={t('pages.extras.ofUrlLabel')} tooltip={t('pages.extras.ofUrlDesc')}>
-                  <Input placeholder="https://disk.yandex.ru/i/..." />
+                <Form.Item
+                  name="ofEncryptionKey"
+                  label={t('pages.extras.ofEncryptionKey')}
+                  tooltip={t('pages.extras.ofEncryptionKeyDesc')}
+                >
+                  <Input.Password
+                    placeholder={t('pages.extras.ofEncryptionKeyPlaceholder')}
+                    style={{ fontFamily: 'monospace' }}
+                  />
                 </Form.Item>
-                <Form.Item name="ofEncryptionKey" label={t('pages.extras.ofEncryptionKey')} tooltip={t('pages.extras.ofEncryptionKeyDesc')}>
-                  <Input.Password placeholder={t('pages.extras.ofEncryptionKeyPlaceholder')} style={{ fontFamily: 'monospace' }} />
-                </Form.Item>
-                <Form.Item name="ofNegotiate" label={t('pages.extras.ofNegotiate')} valuePropName="checked">
+                <Form.Item
+                  name="ofNegotiate"
+                  label={t('pages.extras.ofNegotiate')}
+                  valuePropName="checked"
+                >
                   <Switch />
                 </Form.Item>
-                <Form.Item name="ofDirectListen" label={t('pages.extras.ofDirectListen')} tooltip={t('pages.extras.ofDirectListenDesc')}>
-                  <Input placeholder="0.0.0.0:8443" />
-                </Form.Item>
-                <Form.Item name="ofShareHost" label={t('pages.extras.ofShareHost')} tooltip={t('pages.extras.ofShareHostDesc')}>
-                  <Input placeholder={t('pages.extras.ofShareHostPlaceholder')} />
-                </Form.Item>
+                {ofTransport === 'direct' && (
+                  <>
+                    <Form.Item
+                      name="ofDirectListen"
+                      label={t('pages.extras.ofDirectListen')}
+                      tooltip={t('pages.extras.ofDirectListenDesc')}
+                    >
+                      <Input placeholder="0.0.0.0:8443" />
+                    </Form.Item>
+                    <Form.Item
+                      name="ofShareHost"
+                      label={t('pages.extras.ofShareHost')}
+                      tooltip={t('pages.extras.ofShareHostDesc')}
+                    >
+                      <Input placeholder={t('pages.extras.ofShareHostPlaceholder')} />
+                    </Form.Item>
+                  </>
+                )}
                 <Form.Item name="ofCodec" label={t('pages.extras.ofCodec')}>
                   <Select
                     options={[
@@ -595,33 +779,59 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
                     ]}
                   />
                 </Form.Item>
-                <Form.Item name="ofTransports" label={t('pages.extras.ofTransports')} tooltip={t('pages.extras.ofTransportsDesc')}>
+                <Form.Item
+                  name="ofTransports"
+                  label={t('pages.extras.ofTransports')}
+                  tooltip={t('pages.extras.ofTransportsDesc')}
+                >
                   <Input placeholder="direct:100,yandex:50" />
                 </Form.Item>
-                <Form.Item name="ofMaxToken" label={t('pages.extras.ofMaxToken')}>
-                  <Input.Password placeholder="MAX Web token" style={{ fontFamily: 'monospace' }} />
-                </Form.Item>
-                <Form.Item name="ofMaxUid" label={t('pages.extras.ofMaxUid')}>
-                  <Input placeholder="MAX user id" />
-                </Form.Item>
-                <Form.Item name="ofYandexUrl" label={t('pages.extras.ofYandexUrl')}>
-                  <Input placeholder="https://disk.yandex.ru/i/..." />
-                </Form.Item>
-                <Form.Item name="ofVyandexUrl" label={t('pages.extras.ofVyandexUrl')}>
-                  <Input placeholder="https://docs.yandex.ru/..." />
-                </Form.Item>
-                <Form.Item name="ofMailruUrl" label={t('pages.extras.ofMailruUrl')}>
-                  <Input placeholder="https://cloud.mail.ru/..." />
-                </Form.Item>
-                <Form.Item name="ofCupsonlineUrl" label={t('pages.extras.ofCupsonlineUrl')}>
-                  <Input placeholder="https://cups.online/..." />
-                </Form.Item>
+                {ofTransport === 'oneme' && (
+                  <>
+                    <Form.Item name="ofMaxToken" label={t('pages.extras.ofMaxToken')}>
+                      <Input.Password
+                        placeholder="MAX Web token"
+                        style={{ fontFamily: 'monospace' }}
+                      />
+                    </Form.Item>
+                    <Form.Item name="ofMaxUid" label={t('pages.extras.ofMaxUid')}>
+                      <Input placeholder="MAX user id" />
+                    </Form.Item>
+                  </>
+                )}
+                {ofTransport === 'yandex' && (
+                  <Form.Item name="ofYandexUrl" label={t('pages.extras.ofYandexUrl')}>
+                    <Input placeholder="https://disk.yandex.ru/i/..." />
+                  </Form.Item>
+                )}
+                {ofTransport === 'vyandex' && (
+                  <Form.Item name="ofVyandexUrl" label={t('pages.extras.ofVyandexUrl')}>
+                    <Input placeholder="https://docs.yandex.ru/..." />
+                  </Form.Item>
+                )}
+                {ofTransport === 'mailru' && (
+                  <Form.Item name="ofMailruUrl" label={t('pages.extras.ofMailruUrl')}>
+                    <Input placeholder="https://cloud.mail.ru/..." />
+                  </Form.Item>
+                )}
+                {ofTransport === 'cupsonline' && (
+                  <Form.Item name="ofCupsonlineUrl" label={t('pages.extras.ofCupsonlineUrl')}>
+                    <Input placeholder="https://cups.online/..." />
+                  </Form.Item>
+                )}
                 <Form.Item name="ofConfigFile" label={t('pages.extras.ofConfigFile')}>
                   <Input placeholder="/etc/openflux/server.conf" />
                 </Form.Item>
-                <Form.Item name="debug" label={t('pages.extras.olcrtcDebug')} valuePropName="checked"><Switch /></Form.Item>
+                <Form.Item
+                  name="debug"
+                  label={t('pages.extras.olcrtcDebug')}
+                  valuePropName="checked"
+                >
+                  <Switch />
+                </Form.Item>
               </>
-            )}</Form>
+            )}
+          </Form>
         </Modal>
       </LazyMount>
 
@@ -635,25 +845,49 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
           cancelText={t('cancel')}
         >
           <Form form={clientForm} layout="vertical">
-            <Form.Item name="name" label={t('pages.extras.clientName')} rules={[{ required: true }]}>
+            <Form.Item
+              name="name"
+              label={t('pages.extras.clientName')}
+              rules={[{ required: true }]}
+            >
               <Input />
             </Form.Item>
-            <Form.Item name="subscriptionName" label={t('pages.extras.clientSubscriptionName')} rules={[{ required: true }]}>
+            <Form.Item
+              name="subscriptionName"
+              label={t('pages.extras.clientSubscriptionName')}
+              rules={[{ required: true }]}
+            >
               <Input />
             </Form.Item>
-            <Form.Item name="subscriptionDescription" label={t('pages.extras.clientSubscriptionDescription')}>
+            <Form.Item
+              name="subscriptionDescription"
+              label={t('pages.extras.clientSubscriptionDescription')}
+            >
               <Input.TextArea rows={2} />
             </Form.Item>
-            <Form.Item name="password" label={t('pages.extras.clientPassword')} rules={[{ required: true }]}>
+            <Form.Item
+              name="password"
+              label={t('pages.extras.clientPassword')}
+              rules={[{ required: true }]}
+            >
               <Input
                 style={{ fontFamily: 'monospace' }}
-                addonAfter={<Button size="small" onClick={generateClientPassword}>{t('pages.extras.clientPasswordGenerate')}</Button>}
+                addonAfter={
+                  <Button size="small" onClick={generateClientPassword}>
+                    {t('pages.extras.clientPasswordGenerate')}
+                  </Button>
+                }
               />
             </Form.Item>
             <Form.Item name="vkHashes" label={t('pages.extras.clientVkHashes')}>
               <Input.TextArea rows={2} placeholder="hash1,hash2" />
             </Form.Item>
-            <Form.Item name="enabled" label={t('pages.extras.clientEnable')} valuePropName="checked" initialValue={true}>
+            <Form.Item
+              name="enabled"
+              label={t('pages.extras.clientEnable')}
+              valuePropName="checked"
+              initialValue={true}
+            >
               <Switch />
             </Form.Item>
           </Form>
@@ -706,7 +940,10 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
                     )}
                     {qrClient && subLink && qrClient.client.subUri ? (
                       <>
-                        <Text copyable={{ text: subLink(qrClient.client.subUri) }} style={{ display: 'block', marginBottom: 8, wordBreak: 'break-all' }}>
+                        <Text
+                          copyable={{ text: subLink(qrClient.client.subUri) }}
+                          style={{ display: 'block', marginBottom: 8, wordBreak: 'break-all' }}
+                        >
                           {subLink(qrClient.client.subUri)}
                         </Text>
                         <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
@@ -714,7 +951,13 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
                         </Text>
                         <div style={{ display: 'flex', justifyContent: 'center' }}>
                           {qrClient && subDoc(qrClient.client) ? (
-                            <QRCode value={subDoc(qrClient.client) as string} size={240} bordered={false} color="#000000" bgColor="#ffffff" />
+                            <QRCode
+                              value={subDoc(qrClient.client) as string}
+                              size={240}
+                              bordered={false}
+                              color="#000000"
+                              bgColor="#ffffff"
+                            />
                           ) : (
                             <Text type="secondary">—</Text>
                           )}
@@ -749,13 +992,17 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
                           />
                         </Text>
                         <div style={{ display: 'flex', justifyContent: 'center' }}>
-                          <QRCode value={wdttLink(qrClient.client) ?? ''} size={240} bordered={false} color="#000000" bgColor="#ffffff" />
+                          <QRCode
+                            value={wdttLink(qrClient.client) ?? ''}
+                            size={240}
+                            bordered={false}
+                            color="#000000"
+                            bgColor="#ffffff"
+                          />
                         </div>
                       </>
                     )}
-                    {qrClient && !wdttLink(qrClient.client) && (
-                      <Text type="secondary">—</Text>
-                    )}
+                    {qrClient && !wdttLink(qrClient.client) && <Text type="secondary">—</Text>}
                   </div>
                 ),
               },
@@ -765,14 +1012,26 @@ function ServiceCard({ name, displayName, isDark, isUltra }: { name: CoreName; d
       </LazyMount>
 
       <LazyMount when={tgOpen}>
-        <Modal open={tgOpen} title={t('pages.extras.tgButton')} onOk={() => void onTgSave()} onCancel={() => setTgOpen(false)} okText={t('save')} cancelText={t('cancel')}>
+        <Modal
+          open={tgOpen}
+          title={t('pages.extras.tgButton')}
+          onOk={() => void onTgSave()}
+          onCancel={() => setTgOpen(false)}
+          okText={t('save')}
+          cancelText={t('cancel')}
+        >
           <Form form={tgForm} layout="vertical">
-            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>{t('pages.extras.tgDesc')}</Text>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+              {t('pages.extras.tgDesc')}
+            </Text>
             <Form.Item name="adminId" label={t('pages.extras.tgAdminId')}>
               <Input placeholder="123456789" />
             </Form.Item>
             <Form.Item name="botToken" label={t('pages.extras.tgBotToken')}>
-              <Input.Password placeholder="1234567890:AA...-token" style={{ fontFamily: 'monospace' }} />
+              <Input.Password
+                placeholder="1234567890:AA...-token"
+                style={{ fontFamily: 'monospace' }}
+              />
             </Form.Item>
           </Form>
         </Modal>
@@ -785,7 +1044,9 @@ export default function ExtrasPage() {
   const { t } = useTranslation();
   const { isDark, isUltra, antdThemeConfig } = useTheme();
   const [messageApi, messageContextHolder] = message.useMessage();
-  useEffect(() => { setMessageInstance(messageApi); }, [messageApi]);
+  useEffect(() => {
+    setMessageInstance(messageApi);
+  }, [messageApi]);
   usePageTitle();
 
   const pageClass = useMemo(() => {
@@ -809,31 +1070,33 @@ export default function ExtrasPage() {
   return (
     <ConfigProvider theme={antdThemeConfig}>
       <App>
-      {messageContextHolder}
-      <Layout className={pageClass}>
-        <AppSidebar />
-        <Layout className="content-shell">
-          <Layout.Content id="content-layout" className="content-area">
-            <Spin spinning={false}>
-              <Title level={3}>{t('menu.extras')}</Title>
-              <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>{t('pages.extras.desc')}</Text>
-              <Tabs
-                activeKey={activeCore}
-                onChange={(k) => setActiveCore(k as CoreName)}
-                items={cores.map((c) => ({ key: c.name, label: c.displayName }))}
-              />
-              <div key={current.name} className="extras-core-anim">
-                <ServiceCard
-                  name={current.name}
-                  displayName={current.displayName}
-                  isDark={isDark}
-                  isUltra={isUltra}
+        {messageContextHolder}
+        <Layout className={pageClass}>
+          <AppSidebar />
+          <Layout className="content-shell">
+            <Layout.Content id="content-layout" className="content-area">
+              <Spin spinning={false}>
+                <Title level={3}>{t('menu.extras')}</Title>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+                  {t('pages.extras.desc')}
+                </Text>
+                <Tabs
+                  activeKey={activeCore}
+                  onChange={(k) => setActiveCore(k as CoreName)}
+                  items={cores.map((c) => ({ key: c.name, label: c.displayName }))}
                 />
-              </div>
-            </Spin>
-          </Layout.Content>
+                <div key={current.name} className="extras-core-anim">
+                  <ServiceCard
+                    name={current.name}
+                    displayName={current.displayName}
+                    isDark={isDark}
+                    isUltra={isUltra}
+                  />
+                </div>
+              </Spin>
+            </Layout.Content>
+          </Layout>
         </Layout>
-      </Layout>
       </App>
     </ConfigProvider>
   );
