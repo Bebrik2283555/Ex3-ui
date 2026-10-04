@@ -31,7 +31,6 @@ import {
   PoweroffOutlined,
   QrcodeOutlined,
   RedoOutlined,
-  SyncOutlined,
   RobotOutlined,
   SettingOutlined,
   UploadOutlined,
@@ -44,7 +43,6 @@ import {
 import { useTheme } from '@/hooks/useTheme';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { setMessageInstance } from '@/utils/messageBus';
-import { RandomUtil } from '@/utils';
 import AppSidebar from '@/layouts/AppSidebar';
 import { LazyMount } from '@/components/utility';
 import {
@@ -74,7 +72,7 @@ function ServiceCard({
   const { start, stop, restart, saveConfig, uploadBinary, deleteBinary } = useExtrasMutations();
   const [editOpen, setEditOpen] = useState(false);
   const [form] = Form.useForm<ExtraConfig>();
-  const ofTransport = Form.useWatch('ofTransport', form);
+
   const [busy, setBusy] = useState<string | null>(null);
 
   const provider = Form.useWatch('provider', form);
@@ -464,32 +462,7 @@ function ServiceCard({
               </div>
             </div>
           )}
-          {name === 'openflux' && service?.connectUri && (
-            <div className="extras-core-block">
-              <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                {t('pages.extras.ofConnectUri')}
-              </Text>
-              <div className="extras-connect">
-                <div className="extras-qr">
-                  <QRCode value={service.connectUri} size={250} color="#000000" bgColor="#ffffff" />
-                </div>
-                <div className="extras-link">
-                  <Typography.Paragraph
-                    copyable={{ text: service.connectUri }}
-                    style={{ marginBottom: 8 }}
-                  >
-                    <Typography.Text style={{ wordBreak: 'break-all' }}>
-                      {service.connectUri}
-                    </Typography.Text>
-                  </Typography.Paragraph>
-                  <Text type="secondary" style={{ display: 'block' }}>
-                    {t('pages.extras.ofTransportLabel')}: {service.config?.ofTransport} ·{' '}
-                    {t('pages.extras.ofModeLabel')}: {service.config?.ofMode}
-                  </Text>
-                </div>
-              </div>
-            </div>
-          )}
+
           {name === 'qwdtt' && (
             <div className="extras-core-block">
               <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -706,131 +679,6 @@ function ServiceCard({
                 </Form.Item>
                 <Form.Item name="dataDir" label={t('pages.extras.dataDir')}>
                   <Input placeholder="/etc/olcrtc/data" />
-                </Form.Item>
-                <Form.Item
-                  name="debug"
-                  label={t('pages.extras.olcrtcDebug')}
-                  valuePropName="checked"
-                >
-                  <Switch />
-                </Form.Item>
-              </>
-            )}
-            {name === 'openflux' && (
-              <>
-                <Form.Item name="ofTransport" label={t('pages.extras.ofTransportLabel')}>
-                  <Select
-                    options={[
-                      { value: 'yandex', label: 'Yandex.Docs' },
-                      { value: 'vyandex', label: 'Yandex Volga' },
-                      { value: 'oneme', label: 'MAX / OneMe' },
-                      { value: 'cupsonline', label: 'Cups.online' },
-                      { value: 'mailru', label: 'Mail.ru Docs' },
-                      { value: 'direct', label: 'Direct TCP' },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item name="ofMode" label={t('pages.extras.ofModeLabel')}>
-                  <Select
-                    options={[
-                      { value: 'l3', label: 'L3 — SNAT/DNAT (Linux, root)' },
-                      { value: 'l4', label: 'L4 — gVisor proxy (anywhere)' },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item
-                  name="ofEncryptionKey"
-                  label={t('pages.extras.ofEncryptionKey')}
-                  tooltip={t('pages.extras.ofEncryptionKeyDesc')}
-                >
-                  <Space.Compact style={{ width: '100%' }}>
-                    <Input.Password
-                      placeholder={t('pages.extras.ofEncryptionKeyPlaceholder')}
-                      style={{ fontFamily: 'monospace' }}
-                    />
-                    <Button
-                      onClick={() =>
-                        form.setFieldValue('ofEncryptionKey', RandomUtil.randomSeq(32))
-                      }
-                      icon={<SyncOutlined />}
-                    />
-                  </Space.Compact>
-                </Form.Item>
-                <Form.Item
-                  name="ofNegotiate"
-                  label={t('pages.extras.ofNegotiate')}
-                  valuePropName="checked"
-                >
-                  <Switch />
-                </Form.Item>
-                {ofTransport === 'direct' && (
-                  <>
-                    <Form.Item
-                      name="ofDirectListen"
-                      label={t('pages.extras.ofDirectListen')}
-                      tooltip={t('pages.extras.ofDirectListenDesc')}
-                    >
-                      <Input placeholder="0.0.0.0:8443" />
-                    </Form.Item>
-                    <Form.Item
-                      name="ofShareHost"
-                      label={t('pages.extras.ofShareHost')}
-                      tooltip={t('pages.extras.ofShareHostDesc')}
-                    >
-                      <Input placeholder={t('pages.extras.ofShareHostPlaceholder')} />
-                    </Form.Item>
-                  </>
-                )}
-                <Form.Item name="ofCodec" label={t('pages.extras.ofCodec')}>
-                  <Select
-                    options={[
-                      { value: 'batched', label: 'Batched (zstd + coalescing)' },
-                      { value: 'legacy', label: 'Legacy (per-packet LZ4)' },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item
-                  name="ofTransports"
-                  label={t('pages.extras.ofTransports')}
-                  tooltip={t('pages.extras.ofTransportsDesc')}
-                >
-                  <Input placeholder="direct:100,yandex:50" />
-                </Form.Item>
-                {ofTransport === 'oneme' && (
-                  <>
-                    <Form.Item name="ofMaxToken" label={t('pages.extras.ofMaxToken')}>
-                      <Input.Password
-                        placeholder="MAX Web token"
-                        style={{ fontFamily: 'monospace' }}
-                      />
-                    </Form.Item>
-                    <Form.Item name="ofMaxUid" label={t('pages.extras.ofMaxUid')}>
-                      <Input placeholder="MAX user id" />
-                    </Form.Item>
-                  </>
-                )}
-                {ofTransport === 'yandex' && (
-                  <Form.Item name="ofYandexUrl" label={t('pages.extras.ofYandexUrl')}>
-                    <Input placeholder="https://disk.yandex.ru/i/..." />
-                  </Form.Item>
-                )}
-                {ofTransport === 'vyandex' && (
-                  <Form.Item name="ofVyandexUrl" label={t('pages.extras.ofVyandexUrl')}>
-                    <Input placeholder="https://docs.yandex.ru/..." />
-                  </Form.Item>
-                )}
-                {ofTransport === 'mailru' && (
-                  <Form.Item name="ofMailruUrl" label={t('pages.extras.ofMailruUrl')}>
-                    <Input placeholder="https://cloud.mail.ru/..." />
-                  </Form.Item>
-                )}
-                {ofTransport === 'cupsonline' && (
-                  <Form.Item name="ofCupsonlineUrl" label={t('pages.extras.ofCupsonlineUrl')}>
-                    <Input placeholder="https://cups.online/..." />
-                  </Form.Item>
-                )}
-                <Form.Item name="ofConfigFile" label={t('pages.extras.ofConfigFile')}>
-                  <Input placeholder="/etc/openflux/server.conf" />
                 </Form.Item>
                 <Form.Item
                   name="debug"
@@ -1070,7 +918,6 @@ export default function ExtrasPage() {
     () => [
       { name: 'qwdtt' as CoreName, displayName: 'qWDTT' },
       { name: 'olcrtc' as CoreName, displayName: 'olcRTC' },
-      { name: 'openflux' as CoreName, displayName: 'OpenFlux' },
     ],
     [],
   );
