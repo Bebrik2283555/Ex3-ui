@@ -165,6 +165,7 @@ func TestCertPairExists(t *testing.T) {
 		t.Error("missing dir reported as pair")
 	}
 }
+
 func TestAcmeCertPathsFromStreamSettings(t *testing.T) {
 	json := `{"network":"xhttp","security":"tls","tlsSettings":{"serverName":"example.com","certificates":[
 		{"useFile":true,"certificateFile":"/root/cert/example.com/fullchain.pem","keyFile":"/root/cert/example.com/privkey.pem"},

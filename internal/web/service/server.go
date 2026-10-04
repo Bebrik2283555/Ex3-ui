@@ -530,7 +530,7 @@ func (s *ServerService) ResolveDomain(domain string) (map[string]any, error) {
 			return nil, err
 		}
 	}
-	ips, err := stdnet.LookupHost(domain)
+	ips, err := stdnet.DefaultResolver.LookupHost(context.Background(), domain)
 	if err != nil {
 		return nil, fmt.Errorf("dns lookup failed: %w", err)
 	}

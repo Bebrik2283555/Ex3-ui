@@ -160,7 +160,8 @@ func ensureAcmeSh() (string, error) {
 // checkPort80Free ensures nothing else binds the HTTP-01 validation port, the
 // most common reason a standalone issue attempt fails.
 func checkPort80Free() error {
-	l, err := net.Listen("tcp4", ":80")
+	var lc net.ListenConfig
+	l, err := lc.Listen(context.Background(), "tcp4", ":80")
 	if err != nil {
 		return errors.New("port 80 is not available for certificate validation (is a web server running?)")
 	}

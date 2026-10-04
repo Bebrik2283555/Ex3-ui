@@ -240,7 +240,7 @@ func RotateIP() error {
 			rotating = false
 			mu.Unlock()
 		}()
-		cmd := exec.Command("bash", rotateBin, "--force")
+		cmd := exec.CommandContext(context.Background(), "bash", rotateBin, "--force")
 		cmd.Stdout = nil
 		cmd.Stderr = nil
 		_ = cmd.Run()
@@ -284,7 +284,7 @@ func tailFile(path string, n int) []string {
 }
 
 func run(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(context.Background(), name, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s %s: %w (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
@@ -293,7 +293,7 @@ func run(name string, args ...string) error {
 }
 
 func runOutput(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(context.Background(), name, args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -321,5 +321,5 @@ func cleanHostsFile() {
 		}
 		newLines = append(newLines, line)
 	}
-	_ = os.WriteFile("/etc/hosts", []byte(strings.Join(newLines, "\n")), 0644)
+	_ = os.WriteFile("/etc/hosts", []byte(strings.Join(newLines, "\n")), 0o644)
 }
