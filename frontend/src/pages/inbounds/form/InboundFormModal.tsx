@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { QuestionCircleOutlined } from '@ant-design/icons';
+import { AppstoreAddOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import {
   Alert,
+  Button,
   Form,
   Input,
   InputNumber,
@@ -87,6 +88,9 @@ import { useSecurityActions } from './useSecurityActions';
 import { useInboundFallbacks } from './useInboundFallbacks';
 import FallbacksCard from './FallbacksCard';
 import SniffingTab from './SniffingTab';
+import TemplatePickerModal from './TemplatePickerModal';
+import DomainSetupModal, { isIpv4 } from './DomainSetupModal';
+import { INBOUND_TEMPLATES, type InboundTemplate, type TemplateContext } from '@/lib/xray/inbound-templates';
 
 import type { DBInbound } from '@/models/dbinbound';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
@@ -240,6 +244,8 @@ export default function InboundFormModal({
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<RealityScanResult | null>(null);
   const [activeTab, setActiveTab] = useState('basic');
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [domainTemplate, setDomainTemplate] = useState<InboundTemplate | null>(null);
   const {
     fallbacks,
     fallbackChildOptions,
@@ -336,6 +342,66 @@ export default function InboundFormModal({
     setScanResult,
     setScanning,
   });
+
+  /*
+   * Hysteria template context: SNI falls back to the panel's public IP, cert
+   * paths come from the panel's web certificate settings. Fetched lazily so
+   * applying the template never depends on settings that were never loaded.
+   */
+  const gatherHysteriaContext = async (): Promise<TemplateContext> => {
+    const [settingsMsg, statusMsg, certMsg] = await Promise.all([
+      HttpUtil.post<Record<string, unknown>>('/panel/api/setting/all', undefined, { silent: true }),
+      HttpUtil.get<{ publicIP?: { ipv4?: string } }>('/panel/api/server/status', undefined, { silent: true }),
+      HttpUtil.get<{ certFile?: string; keyFile?: string; source?: string }>('/panel/api/server/certPaths', undefined, { silent: true }),
+    ]);
+    const s = settingsMsg.success && settingsMsg.obj ? settingsMsg.obj : {};
+    const st = statusMsg.success && statusMsg.obj ? statusMsg.obj : {};
+    const cp = certMsg.success && certMsg.obj ? certMsg.obj : {};
+    const publicIp = String(st.publicIP?.ipv4 ?? '').trim();
+    return {
+      webDomain: String(s.webDomain ?? '').trim(),
+      defaultCert: String(cp.certFile ?? '').trim(),
+      defaultKey: String(cp.keyFile ?? '').trim(),
+      certSource: String(cp.source ?? ''),
+      publicIp: publicIp && publicIp !== 'N/A' ? publicIp : '',
+    };
+  };
+
+  const applyTemplate = async (tpl: InboundTemplate, ctx: TemplateContext) => {
+    const base = buildAddModeValues();
+    methods.reset({ ...base, ...tpl.build(ctx) } as InboundFormValues);
+    setScanResult(null);
+    if (tpl.id === 'vless-tcp-reality' || tpl.id === 'vless-grpc-reality') {
+      await genRealityKeypair();
+      randomizeShortIds();
+      randomizeSpiderX();
+    }
+  };
+
+  const onPickTemplate = async (tpl: InboundTemplate) => {
+    if (tpl.requiresDomain) {
+      setTemplateOpen(false);
+      setDomainTemplate(tpl);
+      return;
+    }
+    const ctx = tpl.id === 'hysteria2-tls' ? await gatherHysteriaContext() : {};
+    if (tpl.id === 'hysteria2-tls') {
+      if (ctx.certSource === 'rootCert') {
+        messageApi.warning(
+          t('pages.inbounds.form.templateCertFallback', {
+            certFile: ctx.defaultCert,
+            keyFile: ctx.defaultKey,
+          }),
+        );
+      } else if (!ctx.defaultCert || !ctx.defaultKey) {
+        messageApi.warning(t('pages.inbounds.setDefaultCertEmpty'));
+      }
+    }
+    setTemplateOpen(false);
+    await applyTemplate(tpl, ctx);
+    messageApi.success(t('pages.inbounds.form.templateApplied'));
+  };
+
 
   const toggleSockopt = (on: boolean) => {
     if (on) {
@@ -609,8 +675,21 @@ export default function InboundFormModal({
     messageApi.error(formatInboundIssue(issue, methods.getValues(), t));
   });
 
-  const title =
-    mode === 'edit' ? t('pages.inbounds.modifyInbound') : t('pages.inbounds.addInbound');
+  const title = mode === 'edit'
+    ? t('pages.inbounds.modifyInbound')
+    : (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span>{t('pages.inbounds.addInbound')}</span>
+        <Button
+          type="primary"
+          size="small"
+          icon={<AppstoreAddOutlined />}
+          onClick={() => setTemplateOpen(true)}
+        >
+          {t('pages.inbounds.form.createFromTemplate')}
+        </Button>
+      </div>
+    );
 
   const okText = mode === 'edit' ? t('pages.clients.submitEdit') : t('create');
 
@@ -1206,6 +1285,26 @@ export default function InboundFormModal({
           </Form>
         </FormProvider>
       </Modal>
+      <TemplatePickerModal
+        open={templateOpen}
+        templates={INBOUND_TEMPLATES}
+        onPick={onPickTemplate}
+        onClose={() => setTemplateOpen(false)}
+      />
+      <DomainSetupModal
+        open={domainTemplate !== null}
+        onClose={() => setDomainTemplate(null)}
+        onDone={(ctx) => {
+          const tpl = domainTemplate;
+          setDomainTemplate(null);
+          if (!tpl) return;
+          void applyTemplate(tpl, ctx);
+          if (ctx.domain && !isIpv4(ctx.domain)) {
+            messageApi.success(t('pages.inbounds.form.templateCertIssued', { domain: ctx.domain }));
+          }
+          messageApi.success(t('pages.inbounds.form.templateApplied'));
+        }}
+      />
     </>
   );
 }

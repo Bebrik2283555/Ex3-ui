@@ -3,7 +3,6 @@ package database
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +13,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -27,9 +27,8 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/util/random"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 
-	"github.com/mattn/go-sqlite3"
+	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -247,6 +246,10 @@ type sqliteIndexListRow struct {
 	Origin string `gorm:"column:origin"`
 }
 
+// validSQLIdentifier guards names coming from PRAGMA index_list before they
+// are interpolated into PRAGMA/DROP statements.
+var validSQLIdentifier = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+
 func sqliteUniquePortIndexes() (autoIndexes, explicitIndexes []string, err error) {
 	var list []sqliteIndexListRow
 	if err = db.Raw(`PRAGMA index_list('inbounds')`).Scan(&list).Error; err != nil {
@@ -258,6 +261,9 @@ func sqliteUniquePortIndexes() (autoIndexes, explicitIndexes []string, err error
 		}
 		var cols []struct {
 			Name string `gorm:"column:name"`
+		}
+		if !validSQLIdentifier.MatchString(idx.Name) {
+			continue
 		}
 		if err = db.Raw(`PRAGMA index_info("` + idx.Name + `")`).Scan(&cols).Error; err != nil {
 			return nil, nil, err
@@ -316,14 +322,17 @@ func rebuildInboundsWithoutInlineUniquePort() error {
 		if err := tx.Raw(`PRAGMA index_list('inbounds')`).Scan(&list).Error; err != nil {
 			return err
 		}
-		for _, idx := range list {
-			if idx.Origin != "c" {
-				continue
-			}
-			if err := tx.Exec(`DROP INDEX IF EXISTS "` + idx.Name + `"`).Error; err != nil {
-				return err
-			}
+for _, idx := range list {
+		if idx.Origin != "c" {
+			continue
 		}
+		if !validSQLIdentifier.MatchString(idx.Name) {
+			continue
+		}
+		if err := tx.Exec(`DROP INDEX IF EXISTS "` + idx.Name + `"`).Error; err != nil {
+			return err
+		}
+	}
 		if err := tx.Exec(`ALTER TABLE inbounds RENAME TO inbounds_legacy_rebuild`).Error; err != nil {
 			return err
 		}
@@ -3167,64 +3176,11 @@ func BackupSQLite(dstPath string) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), backupSQLiteTimeout)
 	defer cancel()
 
-	sourceDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	sourceConn, err := sourceDB.Conn(ctx)
-	if err != nil {
-		return err
-	}
-	defer sourceConn.Close()
-
-	destinationDB, err := sql.Open("sqlite3", dstPath)
-	if err != nil {
-		return err
-	}
-	defer destinationDB.Close()
-	destinationConn, err := destinationDB.Conn(ctx)
-	if err != nil {
-		return err
-	}
-	defer destinationConn.Close()
-
-	return sourceConn.Raw(func(sourceDriver any) error {
-		source, ok := sourceDriver.(*sqlite3.SQLiteConn)
-		if !ok {
-			return fmt.Errorf("unexpected SQLite source connection type %T", sourceDriver)
-		}
-		return destinationConn.Raw(func(destinationDriver any) error {
-			destination, ok := destinationDriver.(*sqlite3.SQLiteConn)
-			if !ok {
-				return fmt.Errorf("unexpected SQLite destination connection type %T", destinationDriver)
-			}
-			backup, err := destination.Backup("main", source, "main")
-			if err != nil {
-				return err
-			}
-			finished := false
-			defer func() {
-				if !finished {
-					_ = backup.Finish()
-				}
-			}()
-			for {
-				done, err := backup.Step(backupSQLiteStepPages())
-				if err != nil {
-					return err
-				}
-				if done {
-					finished = true
-					return backup.Finish()
-				}
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(10 * time.Millisecond):
-				}
-			}
-		})
-	})
+	escapedDst := strings.ReplaceAll(dstPath, "'", "''")
+	// VACUUM INTO writes a consistent, self-contained copy of the live database
+	// into a single file. It is supported by the pure-Go SQLite driver and avoids
+	// a manual online-backup loop; WAL journaling is handled transparently.
+	return db.WithContext(ctx).Exec("VACUUM INTO '" + escapedDst + "'").Error
 }
 
 func ValidateSQLiteDB(dbPath string) error {

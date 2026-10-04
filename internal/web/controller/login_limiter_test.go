@@ -114,7 +114,29 @@ func TestLoginLimiterSeparatesIPAndUsername(t *testing.T) {
 	if _, ok := limiter.allow("192.0.2.11", "admin"); !ok {
 		t.Fatal("different IP should not be blocked")
 	}
-	if _, ok := limiter.allow("192.0.2.10", "other-admin"); !ok {
-		t.Fatal("different username should not be blocked")
+	if _, ok := limiter.allow("192.0.2.10", "other-admin"); ok {
+		t.Fatal("same-IP login must be blocked even for a different username")
+	}
+}
+
+// TestLoginLimiterBlocksUsernameRotation closes the brute-force hole where an
+// attacker rotates usernames to dodge the per-account counter: the per-ip
+// record must trip first.
+func TestLoginLimiterBlocksUsernameRotation(t *testing.T) {
+	now := time.Date(2026, 5, 6, 12, 0, 0, 0, time.UTC)
+	limiter := newLoginLimiter(5, 5*time.Minute, 15*time.Minute)
+	limiter.now = func() time.Time { return now }
+
+	blocked := false
+	for i := range 5 {
+		var b bool
+		_, b = limiter.registerFailure("198.51.100.7", "user-"+strconv.Itoa(i))
+		blocked = blocked || b
+	}
+	if !blocked {
+		t.Fatal("rotating usernames from one IP must hit the per-ip cooldown")
+	}
+	if _, ok := limiter.allow("198.51.100.7", "fresh-name"); ok {
+		t.Fatal("login must be blocked once the per-ip counter trips")
 	}
 }

@@ -109,6 +109,13 @@ func IsSkipHSTS() bool {
 	return os.Getenv("XUI_SKIP_HSTS") == "true"
 }
 
+// IsCookieSecure returns true if the session cookie must carry the Secure flag
+// even without a panel-configured TLS certificate (XUI_COOKIE_SECURE=true,
+// e.g. when a reverse proxy terminates TLS in front of the panel).
+func IsCookieSecure() bool {
+	return os.Getenv("XUI_COOKIE_SECURE") == "true"
+}
+
 func GetPortOverride() (port int, configured bool, err error) {
 	value, ok := os.LookupEnv("XUI_PORT")
 	if !ok || strings.TrimSpace(value) == "" {

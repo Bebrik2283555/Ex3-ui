@@ -88,6 +88,7 @@ type SUBController struct {
 
 	subTemplateMu    sync.RWMutex
 	subTemplateCache map[string]*cachedSubTemplate
+	subLimiter       *subRateLimiter
 }
 
 type subControllerConfig struct {
@@ -322,6 +323,7 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 		subClashService: NewSubClashService(config.subClashEnableRouting, config.subClashRules, sub),
 
 		subTemplateCache: map[string]*cachedSubTemplate{},
+		subLimiter:       newSubRateLimiter(),
 	}
 	a.initRouter(g)
 	return a
@@ -330,18 +332,18 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 // initRouter registers HTTP routes for subscription links and JSON endpoints
 // on the provided router group.
 func (a *SUBController) initRouter(g *gin.RouterGroup) {
-	gLink := g.Group(a.subPath)
+	gLink := g.Group(a.subPath, a.subLimiter.middleware())
 	gLink.GET(":subid", a.subs)
 	gLink.HEAD(":subid", a.subs)
 	gLink.GET(":subid/hwid-status", a.hwidStatus)
 	gLink.HEAD(":subid/hwid-status", a.hwidStatus)
 	if a.jsonEnabled {
-		gJson := g.Group(a.subJsonPath)
+		gJson := g.Group(a.subJsonPath, a.subLimiter.middleware())
 		gJson.GET(":subid", a.subJsons)
 		gJson.HEAD(":subid", a.subJsons)
 	}
 	if a.clashEnabled {
-		gClash := g.Group(a.subClashPath)
+		gClash := g.Group(a.subClashPath, a.subLimiter.middleware())
 		gClash.GET(":subid", a.subClashs)
 		gClash.HEAD(":subid", a.subClashs)
 		if sameSubscriptionPath(a.subClashPath, subMihomoPath) {

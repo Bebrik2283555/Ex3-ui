@@ -461,6 +461,21 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/server/resolveDomain',
+        summary: 'Resolve a domain via the server\'s own DNS and report whether any of its addresses equals the panel\'s public IP. Used by the inbound template wizard before issuing a certificate. Only performs a DNS lookup, never connects.',
+        params: [
+          { name: 'domain', in: 'query', type: 'string', desc: 'Hostname to resolve (scheme, port, IPs and wildcards are rejected).' },
+        ],
+        response: '{\n  "success": true,\n  "obj": {\n    "domain": "example.com",\n    "ips": ["203.0.113.7"],\n    "serverIp": "203.0.113.7",\n    "matched": true\n  }\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/server/certPaths',
+        summary: 'Returns certificate/key file paths an inbound template should embed. Prefers the panel\'s webTLS pair, then /root/cert/<domain|IP>/ with an existing fullchain.pem+privkey.pem pair, then any matching directory under /root/cert/. Empty strings when nothing usable exists.',
+        response: '{\n  "success": true,\n  "obj": {\n    "certFile": "/root/cert/example.com/fullchain.pem",\n    "keyFile": "/root/cert/example.com/privkey.pem",\n    "source": "rootCert"\n  }\n}',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/server/cpuHistory/:bucket',
         summary:
           'Legacy: aggregated CPU history. Use /history/cpu/:bucket instead — same data with a uniform {t, v} shape.',
@@ -597,6 +612,26 @@ export const sections: readonly Section[] = [
           'Return this panel\'s own web TLS certificate and key file paths. The central panel calls it on a node (via the node API token) so "Set Cert from Panel" fills a node-assigned inbound with paths that exist on the node.',
         response:
           '{\n  "success": true,\n  "obj": {\n    "webCertFile": "/root/cert/example.com/fullchain.pem",\n    "webKeyFile": "/root/cert/example.com/privkey.pem"\n  }\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/selfsignedCert',
+        summary: 'Generate a 10-year self-signed TLS certificate for the given host name or IP, save it next to the panel database and point the panel webTLS settings at it. Useful for HTTPS testing when Let\'s Encrypt issuance is rate-limited or the host has no public domain. The panel must be restarted to pick up the new certificate.',
+        params: [
+          { name: 'host', in: 'body', type: 'string', desc: 'Host name or IP address the certificate must cover (scheme and port are stripped).' },
+        ],
+        body: '{\n  "host": "example.com"\n}',
+        response: '{\n  "success": true,\n  "obj": {\n    "webCertFile": "/etc/x-ui/selfsigned.pem",\n    "webKeyFile": "/etc/x-ui/selfsigned.key"\n  }\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/server/issueCertificate',
+        summary: 'Issue a Let\'s Encrypt certificate for a domain via acme.sh (installs it when missing) using standalone HTTP-01 validation, then installs it into /root/cert/<domain>/. Renewal is handled by acme.sh\'s own cron (reloadcmd restarts the panel). Returns the cert paths to embed in an inbound\'s tlsSettings. Port 80 must be free.',
+        params: [
+          { name: 'domain', in: 'body', type: 'string', desc: 'Hostname to certify (scheme, port, IPs and wildcards are rejected).' },
+        ],
+        body: '{\n  "domain": "example.com"\n}',
+        response: '{\n  "success": true,\n  "obj": {\n    "domain": "example.com",\n    "certFile": "/root/cert/example.com/fullchain.pem",\n    "keyFile": "/root/cert/example.com/privkey.pem"\n  }\n}',
       },
       {
         method: 'GET',
@@ -2657,6 +2692,277 @@ export const sections: readonly Section[] = [
           'Delete a balancer by id (POST alias of DELETE for clients that cannot send DELETE).',
         params: [{ name: 'id', in: 'path', type: 'integer', desc: 'Balancer id.' }],
         responseSchema: 'SubBalancer',
+      },
+    ],
+  },
+
+  {
+    id: 'extra-cores',
+    title: 'Extra Cores',
+    description:
+      'Manage the bundled sidecar cores (qwdtt and olcRTC) that run outside Xray as separate processes, including their configs and binary updates.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/extra/services',
+        summary: 'List every extra core with its status (enabled, running, binary present) and effective config.',
+        response: '{\n  "success": true,\n  "obj": [\n    { "name": "qwdtt", "displayName": "qWDTT", "enabled": true, "running": true, "binaryExists": true, "config": { "listenAddr": "0.0.0.0:56000", "wgPort": 56001 } }\n  ]\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/extra/services/:name/status',
+        summary: 'Status of a single extra core.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or openflux.' },
+        ],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/extra/services/:name/config',
+        summary: 'Current stored configuration of an extra core.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or openflux.' },
+        ],
+      },
+      {
+        method: 'PUT',
+        path: '/panel/api/extra/services/:name/config',
+        summary: 'Update the configuration of an extra core and apply it (restarts the process when its settings changed).',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or openflux.' },
+        ],
+        body: '{\n  "enabled": true,\n  "autoStart": true,\n  "listenAddr": "0.0.0.0:56000",\n  "wgPort": 56001,\n  "password": "secret",\n  "dns": "8.8.8.8"\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/extra/services/:name/start',
+        summary: 'Start an extra core process.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or openflux.' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/extra/services/:name/stop',
+        summary: 'Stop an extra core process.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or openflux.' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/extra/services/:name/restart',
+        summary: 'Restart an extra core process.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or openflux.' },
+        ],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/extra/services/:name/logs',
+        summary: 'Recent output lines of an extra core process.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or openflux.' },
+          { name: 'lines', in: 'query', type: 'integer', optional: true, desc: 'How many lines to return (default 200).' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/extra/services/:name/upload',
+        summary: 'Replace the binary of an extra core (multipart form field "file"). Saved to bin/extra-<name>.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or openflux.' },
+          { name: 'file', in: 'body (multipart)', type: 'file', desc: 'The new binary.' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/extra/services/:name/download',
+        summary: 'Fetch the binary of an extra core from a public URL (file host, Google Drive, CDN) and save it to bin/extra-<name>.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or openflux.' },
+          { name: 'url', in: 'body (json)', type: 'string', desc: 'Direct download link to the core binary.' },
+        ],
+      },
+      {
+        method: 'DELETE',
+        path: '/panel/api/extra/services/:name/binary',
+        summary: 'Stop an extra core and delete its binary from disk.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or openflux.' },
+        ],
+      },
+    ],
+  },
+
+  {
+    id: 'system-tools',
+    title: 'System Tools',
+    description:
+      'One-shot tuning for weak VPSes (DNS, BBR/sysctl, swap), the transparent zapret DPI-bypass service, and the /etc/hosts file used by the extra cores.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/optimize/status',
+        summary: 'Which optimizations are already applied (BBR, TCP buffers, swap, DNS resolvers).',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/optimize/apply',
+        summary: 'Apply the selected tuning steps. At least one of dns/bbr/swap must be true.',
+        body: '{\n  "dns": true,\n  "bbr": true,\n  "swap": true,\n  "swapSize": 1024\n}',
+        response: '{\n  "success": true,\n  "obj": ["dns", "bbr", "swap"]\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/optimize/revert',
+        summary: 'Undo the applied optimizations (remove sysctl file and swapfile).',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/zapret/status',
+        summary: 'Whether zapret is installed, running, enabled and which firewall it uses.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/download',
+        summary: 'Download a zapret release ZIP from a public URL, unpack it and install to /opt/zapret (same layout as install).',
+        body: '{\n  "url": "https://example.com/zapret-master.zip",\n  "firewall": "nftables",\n  "ifaceWan": "eth0",\n  "ifaceLan": ""\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/uninstall',
+        summary: 'Stop and remove zapret and its systemd unit.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/start',
+        summary: 'Start the zapret service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/stop',
+        summary: 'Stop the zapret service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/restart',
+        summary: 'Restart the zapret service (re-applies iptables/nftables rules and nfqws).',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/zapret/hosts',
+        summary: 'The current zapret domain lists (bypass and ignore).',
+        response: '{\n  "success": true,\n  "obj": { "bypass": ["example.com"], "ignore": [] }\n}',
+      },
+      {
+        method: 'PUT',
+        path: '/panel/api/zapret/hosts',
+        summary: 'Replace the zapret domain lists and restart the service to apply them.',
+        body: '{\n  "bypass": ["example.com"],\n  "ignore": []\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/zapret/logs',
+        summary: 'Recent zapret service output from journald.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/zapret/config',
+        summary: 'The raw zapret strategy file (config.txt) as it sits in /opt/zapret.',
+        response: '{\n  "success": true,\n  "obj": { "name": "config.txt", "content": "# strategy\\n..." }\n}',
+      },
+      {
+        method: 'PUT',
+        path: '/panel/api/zapret/config',
+        summary: 'Replace config.txt verbatim and restart the service to apply the new strategy.',
+        body: '{\n  "name": "config.txt",\n  "content": "# strategy\\n..."\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/zapret/files',
+        summary: 'Raw contents of every editable zapret list (autohosts, ignore, whitelist, ipset, youtube, config).',
+        response: '{\n  "success": true,\n  "obj": { "whitelist.txt": "...", "ipset.txt": "..." }\n}',
+      },
+      {
+        method: 'PUT',
+        path: '/panel/api/zapret/file',
+        summary: 'Overwrite one zapret list file verbatim and restart the service to apply it.',
+        body: '{\n  "name": "whitelist.txt",\n  "content": "example.com\\n"\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/zapret/backup',
+        summary: 'Download a zip archive (zapret_backup.zip) of all editable zapret list files.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/zapret/restore',
+        summary: 'Apply a backup zip (multipart "file", max 8 MiB) of the editable zapret lists and restart the service.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/warp/status',
+        summary: 'Whether the WARP tunnel (usque) is installed, running, and whether the watchdog cron is active.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/warp/install',
+        summary: 'Start installing WARP via usque in the background. Returns 409 if an install is already in progress.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/warp/uninstall',
+        summary: 'Stop and remove usque, the systemd unit, /etc/usque config, helper scripts and the watchdog cron entry.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/warp/start',
+        summary: 'Start the usque systemd service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/warp/stop',
+        summary: 'Stop the usque systemd service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/warp/restart',
+        summary: 'Restart the usque systemd service.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/warp/rotate',
+        summary: 'Rotate the WARP IP by re-registering usque in the background. Returns 409 if a rotation is already running.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/warp/logs',
+        summary: 'Return the last N lines of the WARP watchdog log (/var/log/warp-watch.log). Optional ?lines=N query param.',
+        params: [{ name: 'lines', in: 'query', type: 'integer', optional: true, desc: 'Number of lines to return (default 200).' }],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/warp/install-logs',
+        summary: 'Return the last N lines of the WARP install log (/var/log/warp-install.log). Optional ?lines=N query param.',
+        params: [{ name: 'lines', in: 'query', type: 'integer', optional: true, desc: 'Number of lines to return (default 100).' }],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/hostsfile',
+        summary: 'Read the system hosts file (/etc/hosts) as raw text plus parsed entries.',
+      },
+      {
+        method: 'PUT',
+        path: '/panel/api/hostsfile',
+        summary: 'Replace the system hosts file. Useful to pin domains for the extra cores.',
+        body: '{\n  "raw": "# Managed by x-ui\\n1.2.3.4 example.com\\n"\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/hostsfile/download',
+        summary: 'Fetch the hosts content from a public URL and replace /etc/hosts with it.',
+        body: '{\n  "url": "https://example.com/hosts"\n}',
       },
     ],
   },

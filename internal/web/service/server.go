@@ -518,6 +518,95 @@ func (s *ServerService) publicIPs() (ipv4 string, ipv6 string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.cachedIPv4, s.cachedIPv6
+// ResolveDomain resolves a hostname through the server's own DNS and compares
+// every address against the panel's public IPs so the inbound dialog can warn
+// before an ACME HTTP-01 attempt would fail.
+func (s *ServerService) ResolveDomain(domain string) (map[string]any, error) {
+	domain = strings.TrimSpace(domain)
+	if stdnet.ParseIP(domain) == nil {
+		if err := ValidateDomainName(domain); err != nil {
+			return nil, err
+		}
+	}
+	ips, err := stdnet.LookupHost(domain)
+	if err != nil {
+		return nil, fmt.Errorf("dns lookup failed: %w", err)
+	}
+	s.resolvePublicIPs()
+	return map[string]any{
+		"domain":   domain,
+		"ips":      ips,
+		"serverIp": s.cachedIPv4,
+		"matched":  anyIPMatches(ips, s.cachedIPv4, s.cachedIPv6),
+	}, nil
+}
+
+// CertPaths returns the certificate/key file paths an inbound should use,
+// preferring the panel's own webTLS pair, then /root/cert/<domain|IP>/, then
+// any directory under /root/cert/ that holds a matching pair. Empty strings
+// when nothing usable exists (so templates never invent paths).
+func (s *ServerService) CertPaths() map[string]any {
+	if cert, err := s.settingService.GetCertFile(); err == nil && strings.TrimSpace(cert) != "" {
+		if key, err2 := s.settingService.GetKeyFile(); err2 == nil && strings.TrimSpace(key) != "" {
+			return map[string]any{"certFile": cert, "keyFile": key, "source": "webTLS"}
+		}
+	}
+	sni := ""
+	if d, err := s.settingService.GetWebDomain(); err == nil {
+		sni = strings.TrimSpace(d)
+	}
+	if sni == "" {
+		s.resolvePublicIPs()
+		sni = strings.TrimSpace(s.cachedIPv4)
+	}
+	if sni != "" && certPairExists(filepath.Join("/root", "cert", sni)) {
+		return map[string]any{
+			"certFile": filepath.Join("/root", "cert", sni, "fullchain.pem"),
+			"keyFile":  filepath.Join("/root", "cert", sni, "privkey.pem"),
+			"source":   "rootCert",
+		}
+	}
+	entries, err := os.ReadDir(filepath.Join("/root", "cert"))
+	if err != nil {
+		return map[string]any{"certFile": "", "keyFile": "", "source": ""}
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		dir := filepath.Join("/root", "cert", e.Name())
+		if certPairExists(dir) {
+			return map[string]any{
+				"certFile": filepath.Join(dir, "fullchain.pem"),
+				"keyFile":  filepath.Join(dir, "privkey.pem"),
+				"source":   "rootCert",
+			}
+		}
+	}
+	return map[string]any{"certFile": "", "keyFile": "", "source": ""}
+}
+
+func certPairExists(dir string) bool {
+	for _, name := range []string{"fullchain.pem", "privkey.pem"} {
+		if info, err := os.Stat(filepath.Join(dir, name)); err != nil || info.IsDir() {
+			return false
+		}
+	}
+	return true
+}
+
+// anyIPMatches reports whether any resolved address equals one of the panel's
+// public IPs (a plain string compare: LookupHost returns bare addresses).
+func anyIPMatches(resolved []string, serverIPv4, serverIPv6 string) bool {
+	for _, ip := range resolved {
+		if ip == "" || ip == "N/A" {
+			continue
+		}
+		if ip == serverIPv4 || ip == serverIPv6 {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *ServerService) GetStatus(lastStatus *Status) *Status {
@@ -575,12 +664,16 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 		status.Uptime = upTime
 	}
 
-	// Memory stats
+	// Memory stats. Match htop/free: used = total - MemAvailable (reclaimable
+	// page cache excluded); gopsutil's Used counts that cache as in-use.
 	memInfo, err := mem.VirtualMemory()
 	if err != nil {
 		logger.Warning("get virtual memory failed:", err)
 	} else {
 		status.Mem.Current = memInfo.Used
+		if memInfo.Available > 0 && memInfo.Total >= memInfo.Available {
+			status.Mem.Current = memInfo.Total - memInfo.Available
+		}
 		status.Mem.Total = memInfo.Total
 	}
 
@@ -1432,6 +1525,14 @@ func (s *ServerService) GetXrayLogs(
 	)
 
 	countInt, _ := strconv.Atoi(count)
+	// A non-positive count means "read the whole file", which is a memory
+	// DoS vector on a grown access log — clamp it to the valid range.
+	if countInt < 1 {
+		countInt = 100
+	}
+	if countInt > 10000 {
+		countInt = 10000
+	}
 	var entries []LogEntry
 
 	pathToAccessLog, err := xray.GetAccessLogPath()
@@ -2773,6 +2874,9 @@ func (s *ServerService) GetRemoteCertHash(server string, allowPrivate bool) ([]s
 	ctx, cancel := context.WithTimeout(netsafe.ContextWithAllowPrivate(context.Background(), allowPrivate), 10*time.Second)
 	defer cancel()
 	tcpConn, err := netsafe.SSRFGuardedDialContext(ctx, "tcp", stdnet.JoinHostPort(host, port))
+	// The SSRF guard refuses loopback/private destinations so a stolen admin
+	// session cannot use this endpoint to probe the panel's local network.
+	tcpConn, err := netsafe.SSRFGuardedDialContext(context.Background(), "tcp", stdnet.JoinHostPort(host, port))
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial %s: %w", stdnet.JoinHostPort(host, port), err)
 	}

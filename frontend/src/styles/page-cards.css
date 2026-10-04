@@ -132,3 +132,107 @@
 .hosts-page .ant-card .ant-card-actions {
   background: transparent;
 }
+
+/* Extra-core service cards: on mobile the four action buttons (start/stop,
+   restart, config, delete) overflow each other in a single row at default
+   size, so shrink them and let the row wrap instead of overlapping. */
+.extras-page .service-card .ant-card-actions {
+  background: transparent;
+}
+
+@media (max-width: 768px) {
+  .extras-page .service-card .ant-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+
+  .extras-page .service-card .ant-card-actions li {
+    flex: 1 1 auto;
+    min-width: 0;
+    border-right: none !important;
+    border-bottom: 1px solid var(--ant-color-border-secondary);
+    padding: 6px 2px;
+  }
+
+  .extras-page .service-card .ant-card-actions .ant-btn {
+    font-size: 12px;
+    padding-inline: 4px;
+  }
+
+  .extras-page .service-card .ant-card-actions .ant-btn .anticon {
+    font-size: 13px;
+  }
+}
+
+/* Extra-core cards: one core per tab with a fixed three-part anatomy
+   (head: name + status badges + binary actions; body: core-specific content;
+   footer: start/stop, restart, config, delete). The card stretches to a fixed
+   minimum height so switching tabs does not make the layout jump. */
+.extras-page .extras-core-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 540px;
+}
+
+.extras-page .extras-core-card .ant-card-body {
+  flex: 1 1 auto;
+}
+
+.extras-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .extras-page .extras-core-card .ant-card-head-wrapper {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .extras-page .extras-core-card .ant-card-head-title {
+    flex: 1 1 100%;
+    padding-bottom: 0;
+  }
+  .extras-page .extras-core-card .ant-card-extra {
+    margin-inline-start: 0;
+    padding-top: 0;
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+.extras-connect {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.extras-connect .extras-qr {
+  flex: 0 0 180px;
+}
+
+.extras-connect .extras-link {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+
+.extras-core-anim {
+  animation: extrasCoreIn 0.18s ease;
+}
+
+@keyframes extrasCoreIn {
+  from {
+    opacity: 0.35;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

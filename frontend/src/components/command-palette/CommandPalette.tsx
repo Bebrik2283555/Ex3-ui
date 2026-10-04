@@ -27,6 +27,8 @@ import {
   MoonOutlined,
   PlusOutlined,
   ReloadOutlined,
+  RocketOutlined,
+  SafetyCertificateOutlined,
   SafetyOutlined,
   SearchOutlined,
   SettingOutlined,
@@ -34,6 +36,7 @@ import {
   SwapOutlined,
   TagsOutlined,
   TeamOutlined,
+  ThunderboltOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
 
@@ -412,6 +415,30 @@ export default function CommandPalette() {
         title: t('menu.xray'),
         keywords: ['xray', 'templates', 'balancer', 'dns'],
         icon: <ToolOutlined />,
+      },
+      {
+        path: '/extras',
+        title: t('menu.extras'),
+        keywords: ['extras', 'extra cores', 'qwdtt', 'olcrtc', 'core', 'tunnel', 'turn', 'webrtc'],
+        icon: <RocketOutlined />,
+      },
+      {
+        path: '/optimize',
+        title: t('menu.optimize'),
+        keywords: ['optimize', 'optimization', 'bbr', 'dns', 'swap', 'sysctl', 'tcp', 'vps'],
+        icon: <ThunderboltOutlined />,
+      },
+      {
+        path: '/zapret',
+        title: t('menu.zapret'),
+        keywords: ['zapret', 'dpi', 'nfqws', 'bypass', 'blocking'],
+        icon: <SafetyCertificateOutlined />,
+      },
+      {
+        path: '/hostsfile',
+        title: t('menu.hostsFile'),
+        keywords: ['hosts', 'hosts file', 'dns', 'bypass', 'geo'],
+        icon: <CloudServerOutlined />,
       },
       {
         path: '/api-docs',

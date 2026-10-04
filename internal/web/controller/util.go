@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/entity"
@@ -70,8 +72,27 @@ func isTrustedProxy(ip string) bool {
 	return false
 }
 
+// trustedProxyCIDRs returns the trusted proxy CIDR list, cached for
+// trustedProxyCacheTTL so per-request lookups don't hit the DB each time.
+var (
+	trustedProxyMu      sync.Mutex
+	trustedProxyCache   string
+	trustedProxyFetched time.Time
+	trustedProxyTTL     = 30 * time.Second
+)
+
 func trustedProxyCIDRs() (trusted string) {
 	trusted = service.DefaultTrustedProxyCIDRs
+	now := time.Now()
+
+	trustedProxyMu.Lock()
+	if trustedProxyCache != "" && now.Sub(trustedProxyFetched) < trustedProxyTTL {
+		trusted = trustedProxyCache
+		trustedProxyMu.Unlock()
+		return trusted
+	}
+	trustedProxyMu.Unlock()
+
 	defer func() {
 		_ = recover()
 	}()
@@ -79,6 +100,11 @@ func trustedProxyCIDRs() (trusted string) {
 	if value, err := settingService.GetTrustedProxyCIDRs(); err == nil && strings.TrimSpace(value) != "" {
 		trusted = value
 	}
+
+	trustedProxyMu.Lock()
+	trustedProxyCache = trusted
+	trustedProxyFetched = now
+	trustedProxyMu.Unlock()
 	return trusted
 }
 

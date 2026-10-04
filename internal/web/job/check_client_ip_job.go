@@ -39,8 +39,6 @@ type CheckClientIpJob struct {
 	lastIpPrune int64
 }
 
-var job *CheckClientIpJob
-
 const defaultXrayAPIPort = 62789
 
 const ipStaleAfterSeconds = int64(30 * 60)
@@ -50,8 +48,7 @@ const ipPruneIntervalSeconds = int64(5 * 60)
 
 // NewCheckClientIpJob creates a new client IP monitoring job instance.
 func NewCheckClientIpJob() *CheckClientIpJob {
-	job = new(CheckClientIpJob)
-	return job
+	return new(CheckClientIpJob)
 }
 
 func (j *CheckClientIpJob) Run() {

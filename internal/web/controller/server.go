@@ -4,16 +4,23 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
+
+	"github.com/mhsanaei/3x-ui/v3/internal/util"
+
 	"github.com/mhsanaei/3x-ui/v3/internal/web/entity"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/global"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/websocket"
@@ -66,6 +73,8 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.GET("/getNewVlessEnc", a.getNewVlessEnc)
 	g.GET("/clientIps", a.getClientIps)
 	g.GET("/fail2banStatus", a.getFail2banStatus)
+	g.GET("/resolveDomain", a.resolveDomain)
+	g.GET("/certPaths", a.certPaths)
 
 	g.POST("/stopXrayService", a.stopXrayService)
 	g.POST("/restartXrayService", a.restartXrayService)
@@ -84,6 +93,8 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.POST("/scanRealityTarget", a.scanRealityTarget)
 	g.POST("/scanRealityTargets", a.scanRealityTargets)
 	g.POST("/clientIps", a.setClientIps)
+	g.POST("/selfsignedCert", a.generateSelfSignedCert)
+	g.POST("/issueCertificate", a.issueCertificate)
 }
 
 // startTask registers the @2s ticker that refreshes server status, samples
@@ -425,6 +436,37 @@ func (a *ServerController) getWebCertFiles(c *gin.Context) {
 	jsonObj(c, gin.H{"webCertFile": certFile, "webKeyFile": keyFile}, nil)
 }
 
+// selfSignedCertForm carries the host name or IP the certificate must cover.
+type selfSignedCertForm struct {
+	Host string `json:"host" form:"host" binding:"required"`
+}
+
+// generateSelfSignedCert creates a 10-year self-signed certificate for the
+// given host/IP, stores it next to the panel database and points the panel TLS
+// settings at it. Handy for HTTPS testing where Let's Encrypt issuance is
+// rate-limited or the host has no public domain.
+func (a *ServerController) generateSelfSignedCert(c *gin.Context) {
+	form := &selfSignedCertForm{}
+	if !middleware.BindAndValidateInto(c, form) {
+		return
+	}
+	certPath := filepath.Join(config.GetDBFolderPath(), "selfsigned.pem")
+	keyPath := filepath.Join(config.GetDBFolderPath(), "selfsigned.key")
+	if err := util.GenerateSelfSigned(certPath, keyPath, form.Host); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	if err := a.settingService.SetCertFile(certPath); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	if err := a.settingService.SetKeyFile(keyPath); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	jsonObj(c, gin.H{"webCertFile": certPath, "webKeyFile": keyPath}, nil)
+}
+
 // getNewX25519Cert generates a new X25519 certificate.
 func (a *ServerController) getNewX25519Cert(c *gin.Context) {
 	cert, err := a.serverService.GetNewX25519Cert()
@@ -514,6 +556,34 @@ func (a *ServerController) getNewVlessEnc(c *gin.Context) {
 		return
 	}
 	jsonObj(c, out, nil)
+}
+
+// resolveDomain resolves a domain via the server's DNS and reports whether it
+// points at the panel's public IP (used by the inbound template wizard).
+func (a *ServerController) resolveDomain(c *gin.Context) {
+	res, err := a.serverService.ResolveDomain(c.Query("domain"))
+	if err != nil {
+		jsonMsg(c, err.Error(), err)
+		return
+	}
+	jsonObj(c, res, nil)
+}
+
+// certPaths returns certificate paths the panel found on disk (webTLS pair or
+// /root/cert/ scan) for inbound templates to embed.
+func (a *ServerController) certPaths(c *gin.Context) {
+	jsonObj(c, a.serverService.CertPaths(), nil)
+}
+
+// issueCertificate provisions a TLS certificate for a domain via acme.sh and
+// returns the cert/key paths to embed in an inbound's tlsSettings.
+func (a *ServerController) issueCertificate(c *gin.Context) {
+	res, err := a.serverService.IssueCertificate(strings.TrimSpace(c.PostForm("domain")))
+	if err != nil {
+		jsonMsg(c, err.Error(), err)
+		return
+	}
+	jsonObj(c, res, nil)
 }
 
 // getNewUUID generates a new UUID.

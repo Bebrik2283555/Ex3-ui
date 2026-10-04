@@ -1414,3 +1414,19 @@ func splitClientLinkCallback(data string) (action, email string, ok bool) {
 	}
 	return "", "", false
 }
+
+// clientOwnedBy reports whether the client with the given email belongs to the
+// Telegram user (matches one of their TgID-bound clients). Non-admin callbacks
+// that name an email must pass this check before any link is served.
+func (t *Tgbot) clientOwnedBy(tgUserID int64, email string) bool {
+	traffics, err := t.inboundService.GetClientTrafficTgBot(tgUserID)
+	if err != nil {
+		return false
+	}
+	for _, tr := range traffics {
+		if strings.EqualFold(strings.TrimSpace(tr.Email), strings.TrimSpace(email)) {
+			return true
+		}
+	}
+	return false
+}

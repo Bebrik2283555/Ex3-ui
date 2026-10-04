@@ -1532,6 +1532,9 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 	if postCommitApply != nil {
 		postCommitApply()
 	}
+	if loadErr == nil && ib.NodeID == nil {
+		CleanupUnusedAcmeCerts(ib.StreamSettings, id)
+	}
 	if loadErr == nil && ib.Tag != "" {
 		if routingChanged, syncErr := (&XraySettingService{}).RemoveInboundTagReferences(ib.Tag); syncErr != nil {
 			logger.Warning("DelInbound: sync routing on inbound delete failed:", syncErr)

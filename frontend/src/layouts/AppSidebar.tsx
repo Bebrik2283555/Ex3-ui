@@ -29,6 +29,8 @@ import {
   PushpinFilled,
   PushpinOutlined,
   ReadOutlined,
+  RocketOutlined,
+  SafetyCertificateOutlined,
   SafetyOutlined,
   SearchOutlined,
   SettingOutlined,
@@ -36,6 +38,7 @@ import {
   SwapOutlined,
   TagsOutlined,
   TeamOutlined,
+  ThunderboltOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
 
@@ -52,7 +55,7 @@ const DONATE_URL = 'https://donate.sanaei.dev/';
 // Mac glyph to the Linux and Windows operators who are most of this panel's.
 const SHORTCUT_MODIFIER = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent) ? '⌘' : 'Ctrl';
 const DOCS_URL = 'https://docs.sanaei.dev/';
-const REPO_URL = 'https://github.com/MHSanaei/3x-ui';
+const REPO_URL = 'https://github.com/Bebrik2283555/Ex3-ui';
 const LOGOUT_KEY = '__logout__';
 const RAIL_WIDTH = 72;
 const SIDER_WIDTH = 220;
@@ -73,7 +76,11 @@ type IconName =
   | 'sponsors'
   | 'apidocs'
   | 'outbound'
-  | 'routing';
+  | 'routing'
+  | 'extras'
+  | 'optimize'
+  | 'zapret'
+  | 'hostsfile';
 
 const iconByName: Record<IconName, ComponentType> = {
   dashboard: DashboardOutlined,
@@ -89,6 +96,10 @@ const iconByName: Record<IconName, ComponentType> = {
   apidocs: ApiOutlined,
   outbound: ExportOutlined,
   routing: SwapOutlined,
+  extras: RocketOutlined,
+  optimize: ThunderboltOutlined,
+  zapret: SafetyCertificateOutlined,
+  hostsfile: CloudServerOutlined,
 };
 
 function DonateButton({ ariaLabel }: { ariaLabel: string }) {
@@ -235,6 +246,10 @@ export default function AppSidebar() {
       { key: '/routing', icon: 'routing', title: t('menu.routing') },
       { key: '/settings', icon: 'setting', title: t('menu.settings') },
       { key: '/xray', icon: 'tool', title: t('menu.xray') },
+      { key: '/extras', icon: 'extras', title: t('menu.extras') },
+      { key: '/optimize', icon: 'optimize', title: t('menu.optimize') },
+      { key: '/zapret', icon: 'zapret', title: t('menu.zapret') },
+      { key: '/hostsfile', icon: 'hostsfile', title: t('menu.hostsFile') },
       { key: '/api-docs', icon: 'apidocs', title: t('menu.apiDocs') },
       { key: '/sponsors', icon: 'sponsors', title: t('menu.sponsors') },
       { key: LOGOUT_KEY, icon: 'logout', title: t('logout') },
@@ -383,7 +398,7 @@ export default function AppSidebar() {
       >
         <div className="sider-brand">
           <div className="brand-block">
-            <span className="brand-text">{railCollapsed ? '3X' : '3X-UI'}</span>
+            <span className="brand-text">{railCollapsed ? 'EX3' : 'EX3-UI'}</span>
           </div>
           {!railCollapsed && (
             <div className="brand-actions">
@@ -478,7 +493,7 @@ export default function AppSidebar() {
       >
         <div className="drawer-header">
           <div className="brand-block">
-            <span className="drawer-brand">3X-UI</span>
+            <span className="drawer-brand">EX3-UI</span>
           </div>
           <div className="drawer-header-actions">
             <DocsButton ariaLabel={t('menu.docs') || 'Documentation'} />

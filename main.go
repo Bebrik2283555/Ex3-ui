@@ -86,7 +86,8 @@ func runWebServer() {
 	case config.Error:
 		logger.InitLogger(logging.ERROR)
 	default:
-		log.Fatalf("Unknown log level: %v", config.GetLogLevel())
+		logger.InitLogger(logging.INFO)
+		log.Printf("Unknown XUI_LOG_LEVEL %q, falling back to info", config.GetLogLevel())
 	}
 
 	_ = godotenv.Load()

@@ -6,7 +6,12 @@
 .nodes-page,
 .groups-page,
 .api-docs-page,
-.sponsors-page {
+.sponsors-page,
+.hosts-page,
+.extras-page,
+.optimize-page,
+.zapret-page,
+.hostsfile-page {
   --bg-page: #e6e8ec;
   --bg-card: #ffffff;
   min-height: 100vh;
@@ -21,7 +26,12 @@
 .nodes-page.is-dark,
 .groups-page.is-dark,
 .api-docs-page.is-dark,
-.sponsors-page.is-dark {
+.sponsors-page.is-dark,
+.hosts-page.is-dark,
+.extras-page.is-dark,
+.optimize-page.is-dark,
+.zapret-page.is-dark,
+.hostsfile-page.is-dark {
   --bg-page: #1a1b1f;
   --bg-card: #23252b;
 }
@@ -34,7 +44,12 @@
 .nodes-page.is-dark.is-ultra,
 .groups-page.is-dark.is-ultra,
 .api-docs-page.is-dark.is-ultra,
-.sponsors-page.is-dark.is-ultra {
+.sponsors-page.is-dark.is-ultra,
+.hosts-page.is-dark.is-ultra,
+.extras-page.is-dark.is-ultra,
+.optimize-page.is-dark.is-ultra,
+.zapret-page.is-dark.is-ultra,
+.hostsfile-page.is-dark.is-ultra {
   --bg-page: #000;
   --bg-card: #101013;
 }

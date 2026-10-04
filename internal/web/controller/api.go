@@ -6,6 +6,7 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service/tgbot"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
@@ -207,6 +208,13 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 
 	// Subscription balancers — client-side balancers for the JSON sub output
 	NewSubBalancerController(api)
+
+	// Extra cores (qwdtt / olcRTC), system optimization, zapret and warp
+	NewExtraController(api, &service.SettingService{})
+	NewOptimizeController(api)
+	NewZapretController(api)
+	NewWarpController(api)
+	NewHostsFileController(api)
 
 	// Extra routes
 	api.POST("/backuptotgbot", a.BackuptoTgbot)

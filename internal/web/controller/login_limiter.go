@@ -46,19 +46,20 @@ func (l *loginLimiter) allow(ip, username string) (time.Time, bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	key := loginLimitKey(ip, username)
-	record := l.attempts[key]
-	if record == nil {
-		return time.Time{}, true
-	}
 	now := l.now()
-	if now.Before(record.blockedUntil) {
-		return record.blockedUntil, false
-	}
-	record.blockedUntil = time.Time{}
-	record.failures = pruneLoginFailures(record.failures, now.Add(-l.window))
-	if len(record.failures) == 0 {
-		delete(l.attempts, key)
+	for _, key := range loginLimitKeys(ip, username) {
+		record := l.attempts[key]
+		if record == nil {
+			continue
+		}
+		if now.Before(record.blockedUntil) {
+			return record.blockedUntil, false
+		}
+		record.blockedUntil = time.Time{}
+		record.failures = pruneLoginFailures(record.failures, now.Add(-l.window))
+		if len(record.failures) == 0 {
+			delete(l.attempts, key)
+		}
 	}
 	return time.Time{}, true
 }
@@ -68,27 +69,44 @@ func (l *loginLimiter) registerFailure(ip, username string) (time.Time, bool) {
 	defer l.mu.Unlock()
 
 	now := l.now()
-	key := loginLimitKey(ip, username)
-	record := l.attempts[key]
-	if record == nil {
-		l.evictForRoom(now)
-		record = &loginLimitRecord{}
-		l.attempts[key] = record
+	var blockedAt time.Time
+	blocked := false
+	for _, key := range loginLimitKeys(ip, username) {
+		record := l.attempts[key]
+		if record == nil {
+			l.evictForRoom(now)
+			record = &loginLimitRecord{}
+			l.attempts[key] = record
+		}
+		record.failures = pruneLoginFailures(record.failures, now.Add(-l.window))
+		record.failures = append(record.failures, now)
+		if len(record.failures) >= l.maxFailures {
+			record.failures = nil
+			record.blockedUntil = now.Add(l.cooldown)
+			blockedAt = record.blockedUntil
+			blocked = true
+		}
 	}
-	record.failures = pruneLoginFailures(record.failures, now.Add(-l.window))
-	record.failures = append(record.failures, now)
-	if len(record.failures) >= l.maxFailures {
-		record.failures = nil
-		record.blockedUntil = now.Add(l.cooldown)
-		return record.blockedUntil, true
-	}
-	return time.Time{}, false
+	return blockedAt, blocked
 }
 
 func (l *loginLimiter) registerSuccess(ip, username string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	delete(l.attempts, loginLimitKey(ip, username))
+	for _, key := range loginLimitKeys(ip, username) {
+		delete(l.attempts, key)
+	}
+}
+
+// loginLimitKeys returns the per-(ip, username) key and the per-ip key. The
+// per-ip record closes the hole where an attacker rotates usernames to dodge
+// the per-account counter while still hammering the login endpoint.
+func loginLimitKeys(ip, username string) []string {
+	ip = strings.TrimSpace(ip)
+	return []string{
+		ip + "\x00" + strings.ToLower(strings.TrimSpace(username)),
+		ip + "\x00*",
+	}
 }
 
 // evictForRoom keeps the attempts map bounded before inserting a new record.
@@ -124,10 +142,6 @@ func (l *loginLimiter) evictForRoom(now time.Time) {
 		delete(l.attempts, key)
 		return
 	}
-}
-
-func loginLimitKey(ip, username string) string {
-	return strings.TrimSpace(ip) + "\x00" + strings.ToLower(strings.TrimSpace(username))
 }
 
 func pruneLoginFailures(failures []time.Time, cutoff time.Time) []time.Time {

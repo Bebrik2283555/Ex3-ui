@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+﻿import { describe, it, expect } from 'vitest';
 
 import { formatPanelVersion, isPanelUpdateAvailable } from '@/lib/panel-version';
 
@@ -59,5 +59,9 @@ describe('formatPanelVersion', () => {
     expect(formatPanelVersion('')).toBe('');
     expect(formatPanelVersion(undefined)).toBe('');
     expect(formatPanelVersion('?')).toBe('?');
+  });
+
+  it('passes fork version labels through verbatim', () => {
+    expect(formatPanelVersion('1.2 (Based on 3X_UI 3.8.5)')).toBe('1.2 (Based on 3X_UI 3.8.5)');
   });
 });
