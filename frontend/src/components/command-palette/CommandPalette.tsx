@@ -13,7 +13,6 @@ import {
   ClusterOutlined,
   CodeOutlined,
   CopyOutlined,
-  CrownOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   DiscordOutlined,
@@ -445,12 +444,6 @@ export default function CommandPalette() {
         title: t('menu.apiDocs'),
         keywords: ['api', 'api docs', 'swagger', 'rest api', 'endpoints'],
         icon: <ApiOutlined />,
-      },
-      {
-        path: '/sponsors',
-        title: t('menu.sponsors'),
-        keywords: ['sponsors', 'sponsor', 'partners'],
-        icon: <CrownOutlined />,
       },
     ];
 

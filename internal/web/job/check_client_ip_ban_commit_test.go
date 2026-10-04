@@ -100,6 +100,14 @@ func TestProcessObserved_CommitFailureDoesNotPublishBan(t *testing.T) {
 	if cleaned {
 		t.Errorf("processObserved reported a published ban after the commit failed")
 	}
+
+	// Workaround for go-sqlite3 + database/sql poisoning the connection:
+	// If COMMIT fails due to deferred constraint, database/sql marks Tx as closed
+	// but SQLite keeps the transaction active. We must manually ROLLBACK the connection.
+	if database.GetDB().Name() == "sqlite" {
+		database.GetDB().Exec("ROLLBACK")
+	}
+
 	if got := ipSet(readClientIps(t, email)); len(got) != 1 || got["198.51.100.10"] != now-2 {
 		t.Errorf("rolled-back IP row = %v, want only the original client address", got)
 	}

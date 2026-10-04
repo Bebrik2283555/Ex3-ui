@@ -989,8 +989,7 @@
             "renewOnDay": "按日期续期",
             "renewOnDayDesc": "每个自然月的这一天午夜（按面板时区）续期，而不是每 N 天续期一次。若当月没有该日期，则在当月最后一天续期。填 0 保持按天间隔模式。",
             "renewsUsed": "已用续期次数",
-            "bulkAdTagHint": "输入 32 位十六进制标签以设置，或输入 'none' 清除 MTProto 赞助频道。",
-            "tuicTotalGBDesc": "TUIC does not support per-client traffic limits; set traffic limit on the inbound instead."
+            "bulkAdTagHint": "输入 32 位十六进制标签以设置，或输入 'none' 清除 MTProto 赞助频道。"
         },
         "groups": {
             "name": "名称",
@@ -2497,31 +2496,7 @@
             "clientQwdttLink": "Qwdtt Link",
             "clientEnable": "Enable",
             "subInfoQrHint": "дєЊз»ґз ЃеЊ…еђ«и®ўй…ж–‡жЎЈпјљењЁеє”з”Ёдё­ж‰«жЏЏпј€дёЄдєєиµ„ж–™ в†’ ж‰«жЏЏдєЊз»ґз Ѓпј‰гЂ‚дёЉйќўзљ„й“ѕжЋҐжЇж‰‹еЉЁж·»еЉ и®ўй…зљ„ JSON ењ°еќЂпј€и‡ЄеЉЁж›ґж–°пј‰гЂ‚",
-            "clientInfo": "Client Info",
-            "ofConnectUri": "OpenFlux share link",
-            "ofTransportLabel": "Transport",
-            "ofModeLabel": "Exit mode",
-            "ofUrlLabel": "Document URL",
-            "ofUrlDesc": "Document URL for Yandex/Volga/Boards/Mail.ru/Cups.online transports",
-            "ofEncryptionKey": "Encryption key",
-            "ofEncryptionKeyDesc": "Shared secret for AES-256-GCM encryption. Both peers must use the same key.",
-            "ofEncryptionKeyPlaceholder": "Paste or generate a shared secret",
-            "ofNegotiate": "Negotiate session",
-            "ofDirectListen": "Direct listen address",
-            "ofDirectListenDesc": "Exit-node listen address for the Direct TCP transport",
-            "ofShareHost": "Public host",
-            "ofShareHostDesc": "Public IP or hostname for the share link. Auto-detected if empty.",
-            "ofShareHostPlaceholder": "Auto-detect",
-            "ofCodec": "Codec",
-            "ofTransports": "Multi-transport list",
-            "ofTransportsDesc": "Comma-separated transports with priorities, e.g. direct:100,yandex:50. Overrides single transport.",
-            "ofMaxToken": "MAX token",
-            "ofMaxUid": "MAX user ID",
-            "ofYandexUrl": "Yandex URL",
-            "ofVyandexUrl": "Volga URL",
-            "ofMailruUrl": "Mail.ru URL",
-            "ofCupsonlineUrl": "Cups.online URL",
-            "ofConfigFile": "Config file path"
+            "clientInfo": "Client Info"
         },
         "optimize": {
             "currentState": "Current state",

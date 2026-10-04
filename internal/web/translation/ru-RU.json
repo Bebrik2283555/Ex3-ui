@@ -989,8 +989,7 @@
             "renewOnDay": "Продлевать числа",
             "renewOnDayDesc": "Продлевать этого числа каждого месяца, в полночь по часовому поясу панели, вместо интервала в днях. Если в месяце такого числа нет, продление придётся на последний день. 0 — оставить режим интервала.",
             "renewsUsed": "Продлений израсходовано",
-            "bulkAdTagHint": "Введите 32-значный hex-тег для установки или 'none' для очистки спонсорского канала на MTProto.",
-            "tuicTotalGBDesc": "TUIC не поддерживает персональные квоты трафика; задайте лимит на уровне инбаунда."
+            "bulkAdTagHint": "Введите 32-значный hex-тег для установки или 'none' для очистки спонсорского канала на MTProto."
         },
         "groups": {
             "name": "Имя",
@@ -2497,31 +2496,7 @@
             "clientQwdttLink": "Ссылка Qwdtt",
             "clientEnable": "Включить",
             "subInfoQrHint": "QR-код содержит документ подписки — сканируйте его приложением (Профили → Сканировать QR). Ссылка выше — адрес JSON для ручного добавления подписки (автообновление).",
-            "clientInfo": "Информация о клиенте",
-            "ofConnectUri": "Ссылка подключения OpenFlux",
-            "ofTransportLabel": "Транспорт",
-            "ofModeLabel": "Режим выхода",
-            "ofUrlLabel": "URL документа",
-            "ofUrlDesc": "URL документа для транспортов Yandex/Volga/Boards/Mail.ru/Cups.online",
-            "ofEncryptionKey": "Ключ шифрования",
-            "ofEncryptionKeyDesc": "Общий секрет для AES-256-GCM. Оба пира должны использовать один и тот же ключ.",
-            "ofEncryptionKeyPlaceholder": "Вставьте или сгенерируйте общий секрет",
-            "ofNegotiate": "Согласование сессии",
-            "ofDirectListen": "Адрес прослушивания Direct",
-            "ofDirectListenDesc": "Адрес прослушивания exit-ноды для прямого TCP-транспорта",
-            "ofShareHost": "Публичный хост",
-            "ofShareHostDesc": "IP или хост для ссылки подключения. Определяется автоматически.",
-            "ofShareHostPlaceholder": "Автоопределение",
-            "ofCodec": "Кодек",
-            "ofTransports": "Мультитранспорт",
-            "ofTransportsDesc": "Список транспортов с приоритетами, напр. direct:100,yandex:50.",
-            "ofMaxToken": "Токен MAX",
-            "ofMaxUid": "ID пользователя MAX",
-            "ofYandexUrl": "URL Яндекс",
-            "ofVyandexUrl": "URL Volga",
-            "ofMailruUrl": "URL Mail.ru",
-            "ofCupsonlineUrl": "URL Cups.online",
-            "ofConfigFile": "Путь к конфиг-файлу"
+            "clientInfo": "Информация о клиенте"
         },
         "optimize": {
             "currentState": "Текущее состояние",

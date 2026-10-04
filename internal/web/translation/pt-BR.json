@@ -989,8 +989,7 @@
             "renewOnDay": "Renovar no dia",
             "renewOnDayDesc": "Renova neste dia de cada mês do calendário, à meia-noite no fuso horário do painel, em vez de a cada N dias. Se o mês for curto demais para o dia escolhido, renova no último dia dele. 0 mantém o modo de intervalo em dias.",
             "renewsUsed": "Renovações usadas",
-            "bulkAdTagHint": "Insira uma tag hexadecimal de 32 caracteres para definir ou 'none' para limpar no MTProto.",
-            "tuicTotalGBDesc": "TUIC does not support per-client traffic limits; set traffic limit on the inbound instead."
+            "bulkAdTagHint": "Insira uma tag hexadecimal de 32 caracteres para definir ou 'none' para limpar no MTProto."
         },
         "groups": {
             "name": "Nome",
@@ -2497,31 +2496,7 @@
             "clientQwdttLink": "Qwdtt Link",
             "clientEnable": "Enable",
             "subInfoQrHint": "O QR contГ©m o documento da assinatura: escaneie pelo aplicativo (Perfis в†’ Escanear QR). O link acima Г© o endereГ§o JSON para adicionar a assinatura manualmente (atualizaГ§ГЈo automГЎtica).",
-            "clientInfo": "Client Info",
-            "ofConnectUri": "OpenFlux share link",
-            "ofTransportLabel": "Transport",
-            "ofModeLabel": "Exit mode",
-            "ofUrlLabel": "Document URL",
-            "ofUrlDesc": "Document URL for Yandex/Volga/Boards/Mail.ru/Cups.online transports",
-            "ofEncryptionKey": "Encryption key",
-            "ofEncryptionKeyDesc": "Shared secret for AES-256-GCM encryption. Both peers must use the same key.",
-            "ofEncryptionKeyPlaceholder": "Paste or generate a shared secret",
-            "ofNegotiate": "Negotiate session",
-            "ofDirectListen": "Direct listen address",
-            "ofDirectListenDesc": "Exit-node listen address for the Direct TCP transport",
-            "ofShareHost": "Public host",
-            "ofShareHostDesc": "Public IP or hostname for the share link. Auto-detected if empty.",
-            "ofShareHostPlaceholder": "Auto-detect",
-            "ofCodec": "Codec",
-            "ofTransports": "Multi-transport list",
-            "ofTransportsDesc": "Comma-separated transports with priorities, e.g. direct:100,yandex:50. Overrides single transport.",
-            "ofMaxToken": "MAX token",
-            "ofMaxUid": "MAX user ID",
-            "ofYandexUrl": "Yandex URL",
-            "ofVyandexUrl": "Volga URL",
-            "ofMailruUrl": "Mail.ru URL",
-            "ofCupsonlineUrl": "Cups.online URL",
-            "ofConfigFile": "Config file path"
+            "clientInfo": "Client Info"
         },
         "optimize": {
             "currentState": "Current state",

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
 import { message } from 'antd';
@@ -104,7 +104,7 @@ describe('Happ routing preset controls', () => {
   it('keeps selecting and toggling local until Apply updates the routing rules', () => {
     const updateSetting = renderSettings();
 
-    choosePreset('China Direct (Bypass-CN)');
+    choosePreset('China Direct');
     const includeAdblock = screen.getByRole('switch', { name: 'Include AdBlock' });
     expect(includeAdblock.getAttribute('aria-checked')).toBe('false');
     fireEvent.click(includeAdblock);
@@ -121,7 +121,7 @@ describe('Happ routing preset controls', () => {
 
   it.each([
     ['Iran Bypass', 'Iran Bypass'],
-    ['China Direct (Bypass-CN)', 'Bypass-CN'],
+    ['China Direct', 'Bypass-CN'],
     ['Full Proxy', 'Global Proxy'],
     ['Global Bypass Local Network', 'Global Bypass Local Network'],
   ])('applies %s without AdBlock by default', (label, profileName) => {
@@ -164,7 +164,7 @@ describe('Happ routing preset controls', () => {
 
   it('preserves China routing when opting in and clears AdBlock when reapplied after opting out', () => {
     const updateSetting = renderSettings(true);
-    choosePreset('China Direct (Bypass-CN)');
+    choosePreset('China Direct');
     const includeAdblock = screen.getByRole('switch', { name: 'Include AdBlock' });
     fireEvent.click(includeAdblock);
     fireEvent.click(screen.getByRole('button', { name: 'Apply preset' }));
@@ -189,7 +189,7 @@ describe('Happ routing preset controls', () => {
 
     expect(openPresets().map((option) => option.textContent)).toEqual([
       'Iran Bypass',
-      'China Direct (Bypass-CN)',
+      'China Direct',
       'Full Proxy',
       'Global Bypass Local Network',
       'Disable Routing (happ://routing/off)',

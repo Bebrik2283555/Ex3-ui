@@ -96,7 +96,7 @@ func normalizeTuicSettingsBlock(settings map[string]json.RawMessage) error {
 			return fmt.Errorf("TUIC max_udp_relay_packet_size must be an integer: %w", err)
 		}
 		if value > 65507 {
-			return fmt.Errorf("TUIC max_udp_relay_packet_size must not exceed %d", 65245)
+			return fmt.Errorf("TUIC max_udp_relay_packet_size must not exceed %d", 65507)
 		}
 		if value > 65245 {
 			value = 65245

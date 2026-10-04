@@ -989,8 +989,7 @@
             "renewOnDay": "更新する日",
             "renewOnDayDesc": "毎月この日の深夜（パネルのタイムゾーン基準）に更新します。N 日ごとの更新の代わりになります。その日が存在しない月は月末に更新されます。0 で日数間隔モードのままになります。",
             "renewsUsed": "使用済み更新回数",
-            "bulkAdTagHint": "設定するには 32 文字の 16 進数タグを入力し、クリアするには 'none' を入力します (MTProto 用)。",
-            "tuicTotalGBDesc": "TUIC does not support per-client traffic limits; set traffic limit on the inbound instead."
+            "bulkAdTagHint": "設定するには 32 文字の 16 進数タグを入力し、クリアするには 'none' を入力します (MTProto 用)。"
         },
         "groups": {
             "name": "名前",
@@ -2497,31 +2496,7 @@
             "clientQwdttLink": "Qwdtt Link",
             "clientEnable": "Enable",
             "subInfoQrHint": "QRгЃ«гЃЇг‚µгѓ–г‚№г‚ЇгѓЄгѓ—г‚·гѓ§гѓіж–‡ж›ёгЃЊеђ«гЃѕг‚ЊгЃѕгЃ™пјљг‚ўгѓ—гѓЄгЃ‹г‚‰г‚№г‚­гѓЈгѓігЃ—гЃ¦гЃЏгЃ гЃ•гЃ„пј€гѓ—гѓ­гѓ•г‚Ўг‚¤гѓ« в†’ QRг‚№г‚­гѓЈгѓіпј‰гЂ‚дёЉиЁгЃ®гѓЄгѓіг‚ЇгЃЇж‰‹е‹•гЃ§г‚µгѓ–г‚№г‚ЇгѓЄгѓ—г‚·гѓ§гѓіг‚’иїЅеЉ гЃ™г‚‹гЃџг‚ЃгЃ®JSONг‚ўгѓ‰гѓ¬г‚№гЃ§гЃ™пј€и‡Єе‹•ж›ґж–°пј‰гЂ‚",
-            "clientInfo": "Client Info",
-            "ofConnectUri": "OpenFlux share link",
-            "ofTransportLabel": "Transport",
-            "ofModeLabel": "Exit mode",
-            "ofUrlLabel": "Document URL",
-            "ofUrlDesc": "Document URL for Yandex/Volga/Boards/Mail.ru/Cups.online transports",
-            "ofEncryptionKey": "Encryption key",
-            "ofEncryptionKeyDesc": "Shared secret for AES-256-GCM encryption. Both peers must use the same key.",
-            "ofEncryptionKeyPlaceholder": "Paste or generate a shared secret",
-            "ofNegotiate": "Negotiate session",
-            "ofDirectListen": "Direct listen address",
-            "ofDirectListenDesc": "Exit-node listen address for the Direct TCP transport",
-            "ofShareHost": "Public host",
-            "ofShareHostDesc": "Public IP or hostname for the share link. Auto-detected if empty.",
-            "ofShareHostPlaceholder": "Auto-detect",
-            "ofCodec": "Codec",
-            "ofTransports": "Multi-transport list",
-            "ofTransportsDesc": "Comma-separated transports with priorities, e.g. direct:100,yandex:50. Overrides single transport.",
-            "ofMaxToken": "MAX token",
-            "ofMaxUid": "MAX user ID",
-            "ofYandexUrl": "Yandex URL",
-            "ofVyandexUrl": "Volga URL",
-            "ofMailruUrl": "Mail.ru URL",
-            "ofCupsonlineUrl": "Cups.online URL",
-            "ofConfigFile": "Config file path"
+            "clientInfo": "Client Info"
         },
         "optimize": {
             "currentState": "Current state",

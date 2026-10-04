@@ -616,6 +616,9 @@ func (m *Manager) LoadConfig(n Name) (Config, error) {
 // running process (restarting it when its settings changed).
 func (m *Manager) SaveConfig(n Name, cfg Config) error {
 	cfg = cfg.Merge(n)
+	if strings.Contains(cfg.BinaryPath, "..") || strings.Contains(cfg.ConfigDir, "..") || strings.Contains(cfg.ConfigFile, "..") || strings.Contains(cfg.DataDir, "..") {
+		return fmt.Errorf("%s: paths cannot contain '..'", n.DisplayName())
+	}
 	// The binary must exist before anything is persisted: a save with a
 	// missing binary would otherwise commit config that can never start.
 	if cfg.Enabled && cfg.AutoStart {
@@ -769,6 +772,9 @@ func (m *Manager) SaveConfig(n Name, cfg Config) error {
 func (m *Manager) WriteYAML(n Name, cfg Config) error {
 	if n != OLCRTC || cfg.ConfigFile == "" {
 		return nil
+	}
+	if strings.Contains(cfg.ConfigFile, "..") || strings.Contains(cfg.DataDir, "..") {
+		return fmt.Errorf("invalid path")
 	}
 	if cfg.DataDir != "" {
 		if err := ensureNameDictionaries(cfg.DataDir); err != nil {
@@ -1097,6 +1103,9 @@ func (m *Manager) SyncPasswords(n Name, cfg Config) error {
 // syncPasswordsFile merges the panel's enabled clients into one password
 // store file and writes it back atomically.
 func syncPasswordsFile(dbFile string, cfg Config) error {
+	if strings.Contains(dbFile, "..") {
+		return fmt.Errorf("invalid path")
+	}
 	db := struct {
 		MainPassword string                     `json:"main_password"`
 		AdminID      json.RawMessage            `json:"admin_id,omitempty"`

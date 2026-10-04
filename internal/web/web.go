@@ -841,6 +841,9 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 		logger.Warning("persist system metrics on shutdown failed:", err)
 	}
 	if stopXray {
+		if err := job.NewTuicJob().FlushStoppedTraffic(); err != nil {
+			logger.Warning("persist TUIC traffic on shutdown failed:", err)
+		}
 		service.StopTrafficWriter()
 	}
 	if stopTgBot && s.tgbotService.IsRunning() {
