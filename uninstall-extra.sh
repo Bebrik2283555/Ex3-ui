@@ -21,7 +21,7 @@ if command -v systemctl > /dev/null 2>&1 && systemctl is-active x-ui > /dev/null
     echo -e "${green}[INF] x-ui stopped.${plain}"
 fi
 
-for core in extra-qwdtt extra-olcrtc extra-openflux; do
+for core in extra-qwdtt extra-olcrtc; do
     if [[ -f "$BIN_DIR/$core" ]]; then
         rm -f "$BIN_DIR/$core"
         echo -e "${green}[INF] Removed $BIN_DIR/$core${plain}"

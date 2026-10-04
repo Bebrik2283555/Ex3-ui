@@ -5,7 +5,7 @@ import { keys } from '@/api/queryKeys';
 
 const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } };
 
-export type CoreName = 'qwdtt' | 'olcrtc' | 'openflux';
+export type CoreName = 'qwdtt' | 'olcrtc';
 
 export interface WDTTClient {
   name: string;
@@ -137,7 +137,9 @@ export function useExtrasStatus() {
   return useQuery({
     queryKey: ['extras', 'services'],
     queryFn: async (): Promise<ExtraStatus[]> => {
-      const msg = await HttpUtil.get<ExtraStatus[]>('/panel/api/extra/services', undefined, { silent: true });
+      const msg = await HttpUtil.get<ExtraStatus[]>('/panel/api/extra/services', undefined, {
+        silent: true,
+      });
       if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch services');
       return msg.obj ?? [];
     },
@@ -199,7 +201,9 @@ export function useOptimizeStatus() {
   return useQuery({
     queryKey: ['optimize', 'status'],
     queryFn: async (): Promise<OptimizeStatus> => {
-      const msg = await HttpUtil.get<OptimizeStatus>('/panel/api/optimize/status', undefined, { silent: true });
+      const msg = await HttpUtil.get<OptimizeStatus>('/panel/api/optimize/status', undefined, {
+        silent: true,
+      });
       if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch optimize status');
       return msg.obj ?? EMPTY_OPTIMIZE_STATUS;
     },
@@ -230,7 +234,9 @@ export function useZapretStatus() {
   return useQuery({
     queryKey: ['zapret', 'status'],
     queryFn: async (): Promise<ZapretStatus> => {
-      const msg = await HttpUtil.get<ZapretStatus>('/panel/api/zapret/status', undefined, { silent: true });
+      const msg = await HttpUtil.get<ZapretStatus>('/panel/api/zapret/status', undefined, {
+        silent: true,
+      });
       if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch zapret status');
       return msg.obj ?? EMPTY_ZAPRET_STATUS;
     },
@@ -241,7 +247,9 @@ export function useZapretHosts() {
   return useQuery({
     queryKey: ['zapret', 'hosts'],
     queryFn: async (): Promise<ZapretHosts> => {
-      const msg = await HttpUtil.get<ZapretHosts>('/panel/api/zapret/hosts', undefined, { silent: true });
+      const msg = await HttpUtil.get<ZapretHosts>('/panel/api/zapret/hosts', undefined, {
+        silent: true,
+      });
       if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch zapret hosts');
       return msg.obj ?? { bypass: [], ignore: [] };
     },
@@ -252,7 +260,9 @@ export function useZapretFiles() {
   return useQuery({
     queryKey: ['zapret', 'files'],
     queryFn: async (): Promise<Record<string, string>> => {
-      const msg = await HttpUtil.get<Record<string, string>>('/panel/api/zapret/files', undefined, { silent: true });
+      const msg = await HttpUtil.get<Record<string, string>>('/panel/api/zapret/files', undefined, {
+        silent: true,
+      });
       if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch zapret files');
       return msg.obj ?? {};
     },
@@ -273,11 +283,21 @@ export function useZapretMutations() {
     mutationFn: () => HttpUtil.post('/panel/api/zapret/uninstall'),
     onSuccess: () => invalidate(),
   });
-  const start = useMutation({ mutationFn: () => HttpUtil.post('/panel/api/zapret/start'), onSuccess: () => invalidate() });
-  const stop = useMutation({ mutationFn: () => HttpUtil.post('/panel/api/zapret/stop'), onSuccess: () => invalidate() });
-  const restart = useMutation({ mutationFn: () => HttpUtil.post('/panel/api/zapret/restart'), onSuccess: () => invalidate() });
+  const start = useMutation({
+    mutationFn: () => HttpUtil.post('/panel/api/zapret/start'),
+    onSuccess: () => invalidate(),
+  });
+  const stop = useMutation({
+    mutationFn: () => HttpUtil.post('/panel/api/zapret/stop'),
+    onSuccess: () => invalidate(),
+  });
+  const restart = useMutation({
+    mutationFn: () => HttpUtil.post('/panel/api/zapret/restart'),
+    onSuccess: () => invalidate(),
+  });
   const saveHosts = useMutation({
-    mutationFn: (hosts: ZapretHosts) => HttpUtil.put('/panel/api/zapret/hosts', hosts, JSON_HEADERS),
+    mutationFn: (hosts: ZapretHosts) =>
+      HttpUtil.put('/panel/api/zapret/hosts', hosts, JSON_HEADERS),
     onSuccess: () => invalidate(),
   });
   const saveConfig = useMutation({
@@ -317,7 +337,9 @@ export function useHostsFile() {
   return useQuery({
     queryKey: ['hostsfile'],
     queryFn: async (): Promise<HostsFile> => {
-      const msg = await HttpUtil.get<HostsFile>('/panel/api/hostsfile', undefined, { silent: true });
+      const msg = await HttpUtil.get<HostsFile>('/panel/api/hostsfile', undefined, {
+        silent: true,
+      });
       if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch hosts file');
       return msg.obj ?? { entries: [], raw: '' };
     },
@@ -333,7 +355,8 @@ export function useHostsFileMutations() {
     onSuccess: () => invalidate(),
   });
   const download = useMutation({
-    mutationFn: (url: string) => HttpUtil.post('/panel/api/hostsfile/download', { url }, JSON_HEADERS),
+    mutationFn: (url: string) =>
+      HttpUtil.post('/panel/api/hostsfile/download', { url }, JSON_HEADERS),
     onSuccess: () => invalidate(),
   });
 
@@ -364,7 +387,9 @@ export function useWarpStatus(refetchInterval?: number) {
   return useQuery({
     queryKey: ['warp', 'status'],
     queryFn: async (): Promise<WarpStatus> => {
-      const msg = await HttpUtil.get<WarpStatus>('/panel/api/warp/status', undefined, { silent: true });
+      const msg = await HttpUtil.get<WarpStatus>('/panel/api/warp/status', undefined, {
+        silent: true,
+      });
       if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch warp status');
       return msg.obj ?? EMPTY_WARP_STATUS;
     },
@@ -376,12 +401,30 @@ export function useWarpMutations() {
   const queryClient = useQueryClient();
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['warp'] });
 
-  const install = useMutation({ mutationFn: () => HttpUtil.post('/panel/api/warp/install'), onSuccess: () => invalidate() });
-  const uninstall = useMutation({ mutationFn: () => HttpUtil.post('/panel/api/warp/uninstall'), onSuccess: () => invalidate() });
-  const start = useMutation({ mutationFn: () => HttpUtil.post('/panel/api/warp/start'), onSuccess: () => invalidate() });
-  const stop = useMutation({ mutationFn: () => HttpUtil.post('/panel/api/warp/stop'), onSuccess: () => invalidate() });
-  const restart = useMutation({ mutationFn: () => HttpUtil.post('/panel/api/warp/restart'), onSuccess: () => invalidate() });
-  const rotate = useMutation({ mutationFn: () => HttpUtil.post('/panel/api/warp/rotate'), onSuccess: () => invalidate() });
+  const install = useMutation({
+    mutationFn: () => HttpUtil.post('/panel/api/warp/install'),
+    onSuccess: () => invalidate(),
+  });
+  const uninstall = useMutation({
+    mutationFn: () => HttpUtil.post('/panel/api/warp/uninstall'),
+    onSuccess: () => invalidate(),
+  });
+  const start = useMutation({
+    mutationFn: () => HttpUtil.post('/panel/api/warp/start'),
+    onSuccess: () => invalidate(),
+  });
+  const stop = useMutation({
+    mutationFn: () => HttpUtil.post('/panel/api/warp/stop'),
+    onSuccess: () => invalidate(),
+  });
+  const restart = useMutation({
+    mutationFn: () => HttpUtil.post('/panel/api/warp/restart'),
+    onSuccess: () => invalidate(),
+  });
+  const rotate = useMutation({
+    mutationFn: () => HttpUtil.post('/panel/api/warp/rotate'),
+    onSuccess: () => invalidate(),
+  });
 
   return {
     install: () => install.mutateAsync(),
@@ -409,11 +452,12 @@ export function useWarpInstallLogs(refetchInterval?: number) {
   return useQuery({
     queryKey: ['warp', 'install-logs'],
     queryFn: async (): Promise<string[]> => {
-      const msg = await HttpUtil.get<string[]>('/panel/api/warp/install-logs', undefined, { silent: true });
+      const msg = await HttpUtil.get<string[]>('/panel/api/warp/install-logs', undefined, {
+        silent: true,
+      });
       if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch warp install logs');
       return msg.obj ?? [];
     },
     refetchInterval,
   });
 }
-

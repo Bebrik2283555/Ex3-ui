@@ -2453,7 +2453,7 @@
                 "stopped": "Core stopped",
                 "restarted": "Core restarted"
             },
-            "desc": "Run extra proxy cores (qWDTT, olcRTC and OpenFlux) alongside Xray as managed sidecar processes. Upload their binaries here, then start, stop and configure them.",
+            "desc": "Run extra proxy cores (qWDTT and olcRTC) alongside Xray as managed sidecar processes. Upload their binaries here, then start, stop and configure them.",
             "dns": "DNS",
             "listenRaw": "Raw-mode port",
             "listenRawDesc": "Raw-IP mode (own TUN/NAT, without WireGuard). Empty = disabled.",

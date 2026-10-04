@@ -15562,7 +15562,7 @@
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt, olcrtc or openflux.",
+            "description": "Core name: qwdtt or olcrtc.",
             "schema": {
               "type": "string"
             }
@@ -15603,7 +15603,7 @@
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt, olcrtc or openflux.",
+            "description": "Core name: qwdtt or olcrtc.",
             "schema": {
               "type": "string"
             }
@@ -15642,7 +15642,7 @@
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt, olcrtc or openflux.",
+            "description": "Core name: qwdtt or olcrtc.",
             "schema": {
               "type": "string"
             }
@@ -15701,7 +15701,7 @@
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt, olcrtc or openflux.",
+            "description": "Core name: qwdtt or olcrtc.",
             "schema": {
               "type": "string"
             }
@@ -15742,7 +15742,7 @@
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt, olcrtc or openflux.",
+            "description": "Core name: qwdtt or olcrtc.",
             "schema": {
               "type": "string"
             }
@@ -15783,7 +15783,7 @@
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt, olcrtc or openflux.",
+            "description": "Core name: qwdtt or olcrtc.",
             "schema": {
               "type": "string"
             }
@@ -15824,7 +15824,7 @@
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt, olcrtc or openflux.",
+            "description": "Core name: qwdtt or olcrtc.",
             "schema": {
               "type": "string"
             }
@@ -15874,7 +15874,7 @@
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt, olcrtc or openflux.",
+            "description": "Core name: qwdtt or olcrtc.",
             "schema": {
               "type": "string"
             }
@@ -15935,7 +15935,7 @@
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt, olcrtc or openflux.",
+            "description": "Core name: qwdtt or olcrtc.",
             "schema": {
               "type": "string"
             }
@@ -15995,7 +15995,7 @@
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt, olcrtc or openflux.",
+            "description": "Core name: qwdtt or olcrtc.",
             "schema": {
               "type": "string"
             }

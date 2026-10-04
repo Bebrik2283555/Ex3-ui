@@ -63,7 +63,7 @@ chmod 755 "$XUI_DIR/x-ui.new"
 mv -f "$XUI_DIR/x-ui.new" "$XUI_DIR/x-ui"
 echo -e "${green}[INF] Installed panel binary ($TAG) -> $XUI_DIR/x-ui${plain}"
 
-NEED=("extra-qwdtt" "extra-olcrtc" "extra-openflux")
+NEED=("extra-qwdtt" "extra-olcrtc")
 for f in "${NEED[@]}"; do
     if [[ -f "$SRC/bin/$f" ]]; then
         cp -f "$SRC/bin/$f" "$BIN_DIR/$f"
