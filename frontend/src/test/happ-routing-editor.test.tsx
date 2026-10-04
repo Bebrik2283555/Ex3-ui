@@ -8,6 +8,11 @@ import HappSettingsContent from '@/pages/settings/HappSettingsContent';
 import { toBase64Utf8 } from '@/pages/settings/happPresets';
 
 import { renderWithProviders } from './test-utils';
+import { message } from 'antd';
+
+vi.spyOn(message, 'success').mockImplementation(
+  () => undefined as unknown as ReturnType<typeof message.success>,
+);
 
 const profile = {
   Name: '当前草稿',
