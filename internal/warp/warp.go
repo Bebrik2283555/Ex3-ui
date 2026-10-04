@@ -5,6 +5,7 @@ package warp
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -40,7 +41,7 @@ func requireLinux() error {
 
 // installing and rotating guard concurrent runs of the long-running tasks.
 var (
-	mu        sync.Mutex
+	mu         sync.Mutex
 	installing bool
 	rotating   bool
 )
@@ -133,7 +134,7 @@ func runInstallScript(script []byte, logFile string) {
 	}
 	defer f.Close()
 	fmt.Fprintf(f, "=== warp install started at %s ===\n", time.Now().Format(time.RFC3339))
-	cmd := exec.Command("bash", "-s")
+	cmd := exec.CommandContext(context.Background(), "bash", "-s")
 	cmd.Stdin = bytes.NewReader(script)
 	cmd.Stdout = f
 	cmd.Stderr = f
@@ -286,7 +287,7 @@ func run(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("%s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("%s %s: %w (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

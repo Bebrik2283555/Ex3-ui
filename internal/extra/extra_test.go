@@ -395,7 +395,7 @@ func TestSaveConfigFallsBackToDefaultBinaryPath(t *testing.T) {
 	if err := os.WriteFile(n.DefaultBinaryPath(), []byte("x"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-m2 := NewManager(memStore{})
+	m2 := NewManager(memStore{})
 	if err := m2.SaveConfig(n, Config{Enabled: true, AutoStart: true}); err != nil {
 		t.Fatalf("save with present default binary failed: %v", err)
 	}
@@ -580,7 +580,7 @@ func TestDetectPublicIPFrom(t *testing.T) {
 
 func TestPublicPort(t *testing.T) {
 	cases := map[string]int{
-		"0.0.0.0:56000": 56000,
+		"0.0.0.0:56000":  56000,
 		"127.0.0.1:9000": 9000,
 		"":               56000,
 		"no-port":        56000,

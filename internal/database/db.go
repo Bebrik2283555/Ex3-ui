@@ -322,17 +322,17 @@ func rebuildInboundsWithoutInlineUniquePort() error {
 		if err := tx.Raw(`PRAGMA index_list('inbounds')`).Scan(&list).Error; err != nil {
 			return err
 		}
-for _, idx := range list {
-		if idx.Origin != "c" {
-			continue
+		for _, idx := range list {
+			if idx.Origin != "c" {
+				continue
+			}
+			if !validSQLIdentifier.MatchString(idx.Name) {
+				continue
+			}
+			if err := tx.Exec(`DROP INDEX IF EXISTS "` + idx.Name + `"`).Error; err != nil {
+				return err
+			}
 		}
-		if !validSQLIdentifier.MatchString(idx.Name) {
-			continue
-		}
-		if err := tx.Exec(`DROP INDEX IF EXISTS "` + idx.Name + `"`).Error; err != nil {
-			return err
-		}
-	}
 		if err := tx.Exec(`ALTER TABLE inbounds RENAME TO inbounds_legacy_rebuild`).Error; err != nil {
 			return err
 		}

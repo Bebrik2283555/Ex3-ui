@@ -1,7 +1,13 @@
 import { RandomUtil } from '@/utils';
 
-import { createDefaultHysteriaInboundSettings, createDefaultVlessInboundSettings } from '@/lib/xray/inbound-defaults';
-import { createHysteriaTlsSettingsWithDefaultCert, createTlsSettingsWithDefaultCert } from '@/lib/xray/inbound-tls-defaults';
+import {
+  createDefaultHysteriaInboundSettings,
+  createDefaultVlessInboundSettings,
+} from '@/lib/xray/inbound-defaults';
+import {
+  createHysteriaTlsSettingsWithDefaultCert,
+  createTlsSettingsWithDefaultCert,
+} from '@/lib/xray/inbound-tls-defaults';
 import { HysteriaStreamSettingsSchema } from '@/schemas/protocols/stream/hysteria';
 import { RealityStreamSettingsSchema } from '@/schemas/protocols/security/reality';
 import { TcpStreamSettingsSchema } from '@/schemas/protocols/stream/tcp';
@@ -46,27 +52,34 @@ function buildRealitySettings() {
   });
 }
 
-function buildTlsWithDomain(domain: string, certFile: string | undefined, keyFile: string | undefined) {
+function buildTlsWithDomain(
+  domain: string,
+  certFile: string | undefined,
+  keyFile: string | undefined,
+) {
   const tls = createTlsSettingsWithDefaultCert() as Record<string, unknown>;
   tls.serverName = domain;
   tls.alpn = ['h2', 'http/1.1'];
-  const settings = tls.settings && typeof tls.settings === 'object' && !Array.isArray(tls.settings)
-    ? { ...(tls.settings as Record<string, unknown>) }
-    : {};
+  const settings =
+    tls.settings && typeof tls.settings === 'object' && !Array.isArray(tls.settings)
+      ? { ...(tls.settings as Record<string, unknown>) }
+      : {};
   settings.fingerprint = 'firefox';
   tls.settings = settings;
   if (certFile && keyFile) {
-    tls.certificates = [{
-      useFile: true,
-      certificateFile: certFile,
-      keyFile,
-      certificate: [],
-      key: [],
-      ocspStapling: 0,
-      oneTimeLoading: false,
-      usage: 'encipherment',
-      buildChain: false,
-    }];
+    tls.certificates = [
+      {
+        useFile: true,
+        certificateFile: certFile,
+        keyFile,
+        certificate: [],
+        key: [],
+        ocspStapling: 0,
+        oneTimeLoading: false,
+        usage: 'encipherment',
+        buildChain: false,
+      },
+    ];
   } else {
     tls.certificates = [];
   }
@@ -106,17 +119,19 @@ export const INBOUND_TEMPLATES: InboundTemplate[] = [
       const sni = (ctx.webDomain?.trim() || ctx.publicIp || '').trim();
       if (sni) tls.serverName = sni;
       if (ctx.defaultCert && ctx.defaultKey) {
-        tls.certificates = [{
-          useFile: true,
-          certificateFile: ctx.defaultCert,
-          keyFile: ctx.defaultKey,
-          certificate: [],
-          key: [],
-          ocspStapling: 0,
-          oneTimeLoading: false,
-          usage: 'encipherment',
-          buildChain: false,
-        }];
+        tls.certificates = [
+          {
+            useFile: true,
+            certificateFile: ctx.defaultCert,
+            keyFile: ctx.defaultKey,
+            certificate: [],
+            key: [],
+            ocspStapling: 0,
+            oneTimeLoading: false,
+            usage: 'encipherment',
+            buildChain: false,
+          },
+        ];
       } else {
         // An empty certificateFile/keyFile pair makes xray fail with "both
         // file and bytes are empty" — leave no cert entry at all and let the
@@ -130,7 +145,16 @@ export const INBOUND_TEMPLATES: InboundTemplate[] = [
           network: 'hysteria',
           security: 'tls',
           hysteriaSettings: HysteriaStreamSettingsSchema.parse({
-            masquerade: { type: '', dir: '', url: '', rewriteHost: false, insecure: false, content: '', headers: {}, statusCode: 0 },
+            masquerade: {
+              type: '',
+              dir: '',
+              url: '',
+              rewriteHost: false,
+              insecure: false,
+              content: '',
+              headers: {},
+              statusCode: 0,
+            },
           }),
           tlsSettings: tls,
           finalmask: {
@@ -153,7 +177,10 @@ export const INBOUND_TEMPLATES: InboundTemplate[] = [
         streamSettings: {
           network: 'grpc',
           security: 'reality',
-          grpcSettings: GrpcStreamSettingsSchema.parse({ serviceName: 'gRPC_service', authority: REALITY_SNI }),
+          grpcSettings: GrpcStreamSettingsSchema.parse({
+            serviceName: 'gRPC_service',
+            authority: REALITY_SNI,
+          }),
           realitySettings: buildRealitySettings(),
         },
       };

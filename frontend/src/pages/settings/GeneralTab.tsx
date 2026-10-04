@@ -46,7 +46,7 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
     if (!host) return;
     setSelfSignedBusy(true);
     try {
-      const msg = await HttpUtil.post('/panel/api/server/selfsignedCert', { host }) as ApiMsg<{
+      const msg = (await HttpUtil.post('/panel/api/server/selfsignedCert', { host })) as ApiMsg<{
         webCertFile: string;
         webKeyFile: string;
       }>;
@@ -444,7 +444,11 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
                     placeholder="example.com or 1.2.3.4"
                     onPressEnter={() => void generateSelfSigned()}
                   />
-                  <Button type="primary" loading={selfSignedBusy} onClick={() => void generateSelfSigned()}>
+                  <Button
+                    type="primary"
+                    loading={selfSignedBusy}
+                    onClick={() => void generateSelfSigned()}
+                  >
                     {t('pages.settings.selfSignedGenerate')}
                   </Button>
                 </Space.Compact>

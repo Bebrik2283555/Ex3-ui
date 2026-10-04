@@ -6,8 +6,9 @@ package extra
 
 import (
 	"bytes"
-		"crypto/rand"
-		"encoding/hex"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -64,13 +65,13 @@ func (n Name) Valid() bool {
 // its own name and description. The wdtt-server binary stores passwords in
 // {ConfigDir}/passwords.json and re-reads it on SIGHUP.
 type WDTTClient struct {
-	Name                     string `json:"name"`
-	SubscriptionName         string `json:"subscriptionName"`
-	SubscriptionDescription  string `json:"subscriptionDescription"`
-	Password                 string `json:"password"`
-	VkHashes                 string `json:"vkHashes"`
-	Enabled                  bool   `json:"enabled"`
-	SubURI                   string `json:"subUri"`
+	Name                    string `json:"name"`
+	SubscriptionName        string `json:"subscriptionName"`
+	SubscriptionDescription string `json:"subscriptionDescription"`
+	Password                string `json:"password"`
+	VkHashes                string `json:"vkHashes"`
+	Enabled                 bool   `json:"enabled"`
+	SubURI                  string `json:"subUri"`
 }
 
 // Config holds the runtime configuration of one extra core.
@@ -107,14 +108,14 @@ type Config struct {
 	// olcrtc
 	ConfigFile string `json:"configFile"`
 	DataDir    string `json:"dataDir"`
-	Provider   string `json:"provider"`   // auth.provider: jitsi | telemost | wbstream
-	RoomID     string `json:"roomId"`     // room.id: full room URL for the provider
-	CryptoKey  string `json:"cryptoKey"`  // crypto.key: 64 hex chars (32 bytes), shared with the client
-	Transport  string `json:"transport"`  // net.transport: datachannel | vp8channel
-	OlcrtcDNS  string `json:"olcrtcDns"`  // net.dns: resolver in host:port form
-	VP8Fps     int    `json:"vp8Fps"`     // vp8.fps: frames per second (1..120)
-	VP8Batch   int    `json:"vp8Batch"`   // vp8.batch_size: frames per batch (1..64)
-	Debug      bool   `json:"debug"`      // verbose logging
+	Provider   string `json:"provider"`  // auth.provider: jitsi | telemost | wbstream
+	RoomID     string `json:"roomId"`    // room.id: full room URL for the provider
+	CryptoKey  string `json:"cryptoKey"` // crypto.key: 64 hex chars (32 bytes), shared with the client
+	Transport  string `json:"transport"` // net.transport: datachannel | vp8channel
+	OlcrtcDNS  string `json:"olcrtcDns"` // net.dns: resolver in host:port form
+	VP8Fps     int    `json:"vp8Fps"`    // vp8.fps: frames per second (1..120)
+	VP8Batch   int    `json:"vp8Batch"`  // vp8.batch_size: frames per batch (1..64)
+	Debug      bool   `json:"debug"`     // verbose logging
 
 	// Generic
 	ExtraArgs string `json:"extraArgs"`
@@ -287,8 +288,6 @@ func (c Config) OlcrtcURI() string {
 	return fmt.Sprintf("olcrtc://%s?%s@%s#%s",
 		strings.TrimSpace(c.Provider), transport, strings.TrimSpace(c.RoomID), strings.TrimSpace(c.CryptoKey))
 }
-
-
 
 // yamlString double-quotes a scalar and escapes embedded quotes/newlines so a
 // user-supplied value cannot break out of its string token.
@@ -491,7 +490,11 @@ var defaultIPURLs = []string{
 // address. The first plain-IP response wins; "" means none answered.
 func detectPublicIPFrom(client *http.Client, urls []string) string {
 	for _, u := range urls {
-		resp, err := client.Get(u)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, u, nil)
+		if err != nil {
+			continue
+		}
+		resp, err := client.Do(req)
 		if err != nil {
 			continue
 		}
@@ -789,7 +792,6 @@ func (m *Manager) WriteYAML(n Name, cfg Config) error {
 	}
 	return nil
 }
-
 
 // BinaryPathExists reports whether the configured binary is present.
 func (c Config) BinaryPathExists() bool {

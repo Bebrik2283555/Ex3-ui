@@ -466,7 +466,6 @@ func (s *SettingService) SetRawSetting(key string, value string) error {
 	return s.saveSetting(key, value)
 }
 
-
 func effectiveSettingValue(key, stored string) string {
 	if stored == "" {
 		if def, ok := defaultValueMap[key]; ok {

@@ -10,7 +10,8 @@ const DOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61
 const IPV4_RE = /^(\d{1,3}\.){3}\d{1,3}$/;
 
 export const isIpv4 = (value: string) =>
-  IPV4_RE.test(value) && value.split('.').every((octet) => Number(octet) >= 0 && Number(octet) <= 255);
+  IPV4_RE.test(value) &&
+  value.split('.').every((octet) => Number(octet) >= 0 && Number(octet) <= 255);
 
 interface ResolveResult {
   domain: string;
@@ -48,7 +49,11 @@ export default function DomainSetupModal({ open, onClose, onDone }: DomainSetupM
     setChecking(true);
     setIssueError('');
     try {
-      const msg = await HttpUtil.get<ResolveResult>('/panel/api/server/resolveDomain', { domain: trimmed }, { silent: true });
+      const msg = await HttpUtil.get<ResolveResult>(
+        '/panel/api/server/resolveDomain',
+        { domain: trimmed },
+        { silent: true },
+      );
       if (!msg.success || !msg.obj) {
         setIssueError(msg.msg || t('pages.inbounds.form.templateIssueFailed'));
         setResolve(null);
@@ -73,7 +78,11 @@ export default function DomainSetupModal({ open, onClose, onDone }: DomainSetupM
         });
         return;
       }
-      const msg = await HttpUtil.post<IssueResult>('/panel/api/server/issueCertificate', { domain: trimmed }, { silent: true });
+      const msg = await HttpUtil.post<IssueResult>(
+        '/panel/api/server/issueCertificate',
+        { domain: trimmed },
+        { silent: true },
+      );
       if (!msg.success || !msg.obj) {
         setIssueError(msg.msg || t('pages.inbounds.form.templateIssueFailed'));
         return;
@@ -131,7 +140,12 @@ export default function DomainSetupModal({ open, onClose, onDone }: DomainSetupM
             }
           />
           {!isIp && (
-            <Button type="primary" loading={checking} disabled={!valid || issuing} onClick={checkDns}>
+            <Button
+              type="primary"
+              loading={checking}
+              disabled={!valid || issuing}
+              onClick={checkDns}
+            >
               {t('pages.inbounds.form.templateCheckDns')}
             </Button>
           )}

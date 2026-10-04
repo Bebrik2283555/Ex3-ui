@@ -216,6 +216,9 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
     devDependencies:
+      '@fumadocs/api-docs':
+        specifier: 0.2.1
+        version: 0.2.1(e77b979f0d308e4f9c46dfa797b73191)
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
@@ -568,6 +571,21 @@ packages:
       '@types/react':
         optional: true
 
+  '@fumadocs/api-docs@0.2.1':
+    resolution: {integrity: sha512-kt46+I6/ACScikHpyY5NbR20vo74pLgG2bagl3CHUOdiH3Pg15ecpuHSPbXw2ZhDg68t1XUGZbrGE/JvxhSVBg==}
+    peerDependencies:
+      '@types/react': '*'
+      fumadocs-core: ^16.9.0
+      fumadocs-ui: ^16.9.0
+      json-schema-typed: '*'
+      react: ^19.2.0
+      react-dom: ^19.2.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      json-schema-typed:
+        optional: true
+
   '@fumadocs/json-schema@0.2.0':
     resolution: {integrity: sha512-I3sB2wwJr1Up5JSmaAThmQ2CSP4j2pM01igpbsuKDG3kHYuoHDXiKGEoFWmYK3a81VjQ98AOYx60SEs6xEXr7A==}
     peerDependencies:
@@ -596,6 +614,16 @@ packages:
       json-schema-typed: '*'
     peerDependenciesMeta:
       json-schema-typed:
+        optional: true
+
+  '@fumari/stf@1.1.0':
+    resolution: {integrity: sha512-ta/qVbB03SSQ29185hNkF4E+DcteLTuX6FOjzRpQehk5738VLkfw2mIZuejqrubmoRAeKfxSrtqLwnS9W9XgKQ==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^19.2.0
+      react-dom: ^19.2.0
+    peerDependenciesMeta:
+      '@types/react':
         optional: true
 
   '@fumari/stf@1.1.1':
@@ -1562,8 +1590,16 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
+  '@scalar/helpers@0.10.0':
+    resolution: {integrity: sha512-IAfnpIZnXY6ni+zyFMwWHBa5b/7yr4mCSvoTGR84oS9q4Quy2wjgafnr7CyfL65ney3iilBZHigZYLYqdqCu3Q==}
+    engines: {node: '>=22'}
+
   '@scalar/helpers@0.12.0':
     resolution: {integrity: sha512-rcX0rFLiWWc0VBr/E+HkatubL0I0ZzxASQkd3032NWEMAEfNd2TiJ9kH46HwbSAOOl696ghxymWegjpjjvxwzA==}
+    engines: {node: '>=22'}
+
+  '@scalar/json-magic@0.12.20':
+    resolution: {integrity: sha512-5JawJ1L3+ddDoKefkXsklKs6CmmTIcPDmkJPpAkbRi9QQiU9MUONQ4VSi2z3ij+8Ka4neNhsXBNG4itPjurBLg==}
     engines: {node: '>=22'}
 
   '@scalar/json-magic@0.13.5':
@@ -2275,6 +2311,10 @@ packages:
   cn@0.3.3:
     resolution: {integrity: sha512-OEiyJkSpYm2kOuNOKQ+c2wmzZRG8orrb9fnObtHTbCGNx/E9KLnGcmcocItOzREKk5KzQN5I2e3BUCj563KEpw==}
     engines: {node: '>=20'}
+    hasBin: true
+
+  cnfast@0.0.8:
+    resolution: {integrity: sha512-EjXKMfGfdwtV4AcNSQ6AwQaVzpC1B7IxeiwA3FlhTXz+YFlMKVi4c1JX9tgD2QOlahQXjB8KUXrBaYG+3v871Q==}
     hasBin: true
 
   collapse-white-space@2.1.0:
@@ -4082,6 +4122,26 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
 
+  '@fumadocs/api-docs@0.2.1(e77b979f0d308e4f9c46dfa797b73191)':
+    dependencies:
+      '@base-ui/react': 1.8.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@fuma-translate/react': 1.0.2(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@fumari/stf': 1.1.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@scalar/json-magic': 0.12.20
+      class-variance-authority: 0.7.1
+      cnfast: 0.0.8
+      fumadocs-core: 16.15.18(@mdx-js/mdx@3.1.1(supports-color@7.2.0))(@types/estree-jsx@1.0.5)(@types/hast@3.0.5)(@types/mdast@4.0.4)(@types/react@19.3.0)(lucide-react@1.50.0(@types/react@19.3.0)(react@19.3.0))(next@16.3.8(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@26.6.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@7.2.0)(zod@4.6.5)
+      fumadocs-ui: 16.15.18(@types/mdx@2.0.14)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(fumadocs-core@16.15.18(@mdx-js/mdx@3.1.1(supports-color@7.2.0))(@types/estree-jsx@1.0.5)(@types/hast@3.0.5)(@types/mdast@4.0.4)(@types/react@19.3.0)(lucide-react@1.50.0(@types/react@19.3.0)(react@19.3.0))(next@16.3.8(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@26.6.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@7.2.0)(zod@4.6.5))(next@16.3.8(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@26.6.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(tailwindcss@4.3.3)
+      github-slugger: 2.0.0
+      lucide-react: 1.50.0(@types/react@19.3.0)(react@19.3.0)
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+    optionalDependencies:
+      '@types/react': 19.3.0
+    transitivePeerDependencies:
+      - '@date-fns/tz'
+      - date-fns
+
   '@fumadocs/json-schema@0.2.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@fuma-translate/react': 1.0.2(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -4099,6 +4159,13 @@ snapshots:
   '@fumari/image-size@0.1.1': {}
 
   '@fumari/json-schema-ts@1.0.2': {}
+
+  '@fumari/stf@1.1.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+    optionalDependencies:
+      '@types/react': 19.3.0
 
   '@fumari/stf@1.1.1(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
@@ -4826,7 +4893,15 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
+  '@scalar/helpers@0.10.0': {}
+
   '@scalar/helpers@0.12.0': {}
+
+  '@scalar/json-magic@0.12.20':
+    dependencies:
+      '@scalar/helpers': 0.10.0
+      pathe: 2.0.3
+      yaml: 2.9.1
 
   '@scalar/json-magic@0.13.5':
     dependencies:
@@ -5381,6 +5456,8 @@ snapshots:
   clsx@2.1.1: {}
 
   cn@0.3.3: {}
+
+  cnfast@0.0.8: {}
 
   collapse-white-space@2.1.0: {}
 

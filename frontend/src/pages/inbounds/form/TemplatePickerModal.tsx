@@ -10,7 +10,12 @@ interface TemplatePickerModalProps {
   onClose: () => void;
 }
 
-export default function TemplatePickerModal({ open, templates, onPick, onClose }: TemplatePickerModalProps) {
+export default function TemplatePickerModal({
+  open,
+  templates,
+  onPick,
+  onClose,
+}: TemplatePickerModalProps) {
   const { t } = useTranslation();
 
   return (

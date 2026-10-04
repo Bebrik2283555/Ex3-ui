@@ -53,7 +53,8 @@ import {
 
 const { Text, Title } = Typography;
 
-const ZAPRET_DOWNLOAD_URL = 'https://github.com/ImMALWARE/zapret-linux-easy/archive/refs/heads/main.zip';
+const ZAPRET_DOWNLOAD_URL =
+  'https://github.com/ImMALWARE/zapret-linux-easy/archive/refs/heads/main.zip';
 
 // ─── Zapret tab ──────────────────────────────────────────────────────────────
 
@@ -63,7 +64,17 @@ function ZapretTab() {
   const { data: status, isLoading, isError, refetch } = useZapretStatus();
   const { data: hosts, refetch: refetchHosts } = useZapretHosts();
   const { data: files, refetch: refetchFiles } = useZapretFiles();
-  const { downloadInstall, uninstall, start, stop, restart, saveHosts, saveConfig, saveListFile, restoreZip } = useZapretMutations();
+  const {
+    downloadInstall,
+    uninstall,
+    start,
+    stop,
+    restart,
+    saveHosts,
+    saveConfig,
+    saveListFile,
+    restoreZip,
+  } = useZapretMutations();
   const [dlForm] = Form.useForm<{ firewall: string; ifaceWan: string; ifaceLan: string }>();
   const [bypassText, setBypassText] = useState('');
   const [ignoreText, setIgnoreText] = useState('');
@@ -83,7 +94,9 @@ function ZapretTab() {
 
   const editableLists = useMemo(() => {
     if (!files) return [];
-    return Object.keys(files).filter((name) => name !== 'config.txt' && name !== 'autohosts.txt' && name !== 'ignore.txt');
+    return Object.keys(files).filter(
+      (name) => name !== 'config.txt' && name !== 'autohosts.txt' && name !== 'ignore.txt',
+    );
   }, [files]);
 
   const openConfig = async () => {
@@ -95,9 +108,13 @@ function ZapretTab() {
   const openLists = async () => {
     setListsOpen(true);
     const { data } = await refetchFiles();
-    const names = data ? Object.keys(data).filter((n) => n !== 'config.txt' && n !== 'autohosts.txt' && n !== 'ignore.txt') : [];
+    const names = data
+      ? Object.keys(data).filter(
+          (n) => n !== 'config.txt' && n !== 'autohosts.txt' && n !== 'ignore.txt',
+        )
+      : [];
     setListName(names[0] ?? '');
-    setListText(names[0] ? data?.[names[0]] ?? '' : '');
+    setListText(names[0] ? (data?.[names[0]] ?? '') : '');
   };
 
   const runSaveConfig = async () => {
@@ -159,7 +176,12 @@ function ZapretTab() {
     const values = await dlForm.validateFields();
     setBusy('download');
     try {
-      const cfg = { url: ZAPRET_DOWNLOAD_URL, firewall: values.firewall || 'nftables', ifaceWan: values.ifaceWan ?? '', ifaceLan: values.ifaceLan ?? '' };
+      const cfg = {
+        url: ZAPRET_DOWNLOAD_URL,
+        firewall: values.firewall || 'nftables',
+        ifaceWan: values.ifaceWan ?? '',
+        ifaceLan: values.ifaceLan ?? '',
+      };
       await downloadInstall(cfg);
     } finally {
       setBusy(null);
@@ -173,8 +195,14 @@ function ZapretTab() {
     setBusy('hosts');
     try {
       await saveHosts({
-        bypass: bypassText.split('\n').map((s) => s.trim()).filter(Boolean),
-        ignore: ignoreText.split('\n').map((s) => s.trim()).filter(Boolean),
+        bypass: bypassText
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        ignore: ignoreText
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean),
       });
     } finally {
       setBusy(null);
@@ -183,29 +211,51 @@ function ZapretTab() {
   };
 
   const tag = (label: React.ReactNode, ok: boolean) => (
-    <Tag color={ok ? 'green' : 'red'} icon={ok ? <CheckCircleOutlined /> : <CloseCircleOutlined />}>{label}</Tag>
+    <Tag color={ok ? 'green' : 'red'} icon={ok ? <CheckCircleOutlined /> : <CloseCircleOutlined />}>
+      {label}
+    </Tag>
   );
 
   return (
     <Spin spinning={isLoading}>
       <Card title={t('pages.zapret.statusCard')} variant="borderless" style={{ marginBottom: 16 }}>
-        {isError ? <Result status="error" title={t('pages.zapret.installFailed')} /> : !status ? null : (
+        {isError ? (
+          <Result status="error" title={t('pages.zapret.installFailed')} />
+        ) : !status ? null : (
           <Space wrap size="large">
             {tag(t('pages.zapret.installed'), status.installed)}
             {status.installed && tag(t('pages.zapret.running'), status.running)}
-            {status.firewall && <Text>{t('pages.zapret.firewall')}: <Text strong>{status.firewall}</Text></Text>}
+            {status.firewall && (
+              <Text>
+                {t('pages.zapret.firewall')}: <Text strong>{status.firewall}</Text>
+              </Text>
+            )}
           </Space>
         )}
       </Card>
 
       {!status?.installed ? (
-        <Card title={t('pages.zapret.downloadTitle')} variant="borderless" style={{ marginBottom: 16 }}>
+        <Card
+          title={t('pages.zapret.downloadTitle')}
+          variant="borderless"
+          style={{ marginBottom: 16 }}
+        >
           <Form form={dlForm} layout="vertical" initialValues={{ firewall: 'nftables' }}>
             <Form.Item label={t('pages.zapret.downloadUrl')}>
-              <Input value={ZAPRET_DOWNLOAD_URL} readOnly placeholder={t('pages.zapret.downloadPlaceholder')} style={{ fontFamily: 'monospace' }} />
+              <Input
+                value={ZAPRET_DOWNLOAD_URL}
+                readOnly
+                placeholder={t('pages.zapret.downloadPlaceholder')}
+                style={{ fontFamily: 'monospace' }}
+              />
             </Form.Item>
             <Form.Item name="firewall" label={t('pages.zapret.firewallLabel')}>
-              <Select options={[{ value: 'nftables', label: 'nftables' }, { value: 'iptables', label: 'iptables' }]} />
+              <Select
+                options={[
+                  { value: 'nftables', label: 'nftables' },
+                  { value: 'iptables', label: 'iptables' },
+                ]}
+              />
             </Form.Item>
             <Form.Item name="ifaceWan" label={t('pages.zapret.ifaceWan')}>
               <Input placeholder="eth0" />
@@ -213,66 +263,162 @@ function ZapretTab() {
             <Form.Item name="ifaceLan" label={t('pages.zapret.ifaceLan')}>
               <Input placeholder="" />
             </Form.Item>
-            <Button type="primary" icon={<DownloadOutlined />} loading={busy === 'download'} onClick={() => void runDownload()}>
+            <Button
+              type="primary"
+              icon={<DownloadOutlined />}
+              loading={busy === 'download'}
+              onClick={() => void runDownload()}
+            >
               {t('pages.zapret.downloadBtn')}
             </Button>
           </Form>
         </Card>
       ) : (
         <>
-          <Card title={t('pages.zapret.hostsTitle')} variant="borderless" style={{ marginBottom: 16 }}>
+          <Card
+            title={t('pages.zapret.hostsTitle')}
+            variant="borderless"
+            style={{ marginBottom: 16 }}
+          >
             <Space wrap style={{ marginBottom: 16 }}>
-              <Button icon={<RedoOutlined />} loading={busy === 'restart'} onClick={() => void run('restart')}>{t('pages.zapret.restartBtn')}</Button>
-              <Button danger icon={<PoweroffOutlined />} loading={busy === 'stop'} onClick={() => void run('stop')}>{t('pages.zapret.stopBtn')}</Button>
-              <Button icon={<PlayCircleOutlined />} loading={busy === 'start'} onClick={() => void run('start')}>{t('pages.zapret.startBtn')}</Button>
+              <Button
+                icon={<RedoOutlined />}
+                loading={busy === 'restart'}
+                onClick={() => void run('restart')}
+              >
+                {t('pages.zapret.restartBtn')}
+              </Button>
+              <Button
+                danger
+                icon={<PoweroffOutlined />}
+                loading={busy === 'stop'}
+                onClick={() => void run('stop')}
+              >
+                {t('pages.zapret.stopBtn')}
+              </Button>
+              <Button
+                icon={<PlayCircleOutlined />}
+                loading={busy === 'start'}
+                onClick={() => void run('start')}
+              >
+                {t('pages.zapret.startBtn')}
+              </Button>
             </Space>
             <Row gutter={16}>
               <Col xs={24} md={12}>
                 <Text strong>{t('pages.zapret.bypassLabel')}</Text>
-                <Input.TextArea rows={10} value={bypassText} onChange={(e) => setBypassText(e.target.value)} placeholder="example.com" />
+                <Input.TextArea
+                  rows={10}
+                  value={bypassText}
+                  onChange={(e) => setBypassText(e.target.value)}
+                  placeholder="example.com"
+                />
               </Col>
               <Col xs={24} md={12}>
                 <Text strong>{t('pages.zapret.ignoreLabel')}</Text>
-                <Input.TextArea rows={10} value={ignoreText} onChange={(e) => setIgnoreText(e.target.value)} />
+                <Input.TextArea
+                  rows={10}
+                  value={ignoreText}
+                  onChange={(e) => setIgnoreText(e.target.value)}
+                />
               </Col>
             </Row>
             <Space wrap style={{ marginTop: 16 }}>
-              <Button type="primary" icon={<SaveOutlined />} loading={busy === 'hosts'} onClick={() => void runSaveHosts()}>
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                loading={busy === 'hosts'}
+                onClick={() => void runSaveHosts()}
+              >
                 {t('pages.zapret.saveHosts')}
               </Button>
-              <Button icon={<SettingOutlined />} loading={busy === 'config'} onClick={() => void openConfig()}>
+              <Button
+                icon={<SettingOutlined />}
+                loading={busy === 'config'}
+                onClick={() => void openConfig()}
+              >
                 {t('pages.zapret.strategyBtn')}
               </Button>
-              <Button icon={<FileTextOutlined />} loading={busy === 'list'} onClick={() => void openLists()}>
+              <Button
+                icon={<FileTextOutlined />}
+                loading={busy === 'list'}
+                onClick={() => void openLists()}
+              >
                 {t('pages.zapret.listBtn')}
               </Button>
               <Button icon={<DownloadOutlined />} onClick={() => setBackupOpen(true)}>
                 {t('pages.zapret.backupBtn')}
               </Button>
             </Space>
-            <Modal open={configOpen} title={t('pages.zapret.strategyTitle')} onOk={() => void runSaveConfig()} onCancel={() => setConfigOpen(false)} okText={t('save')} cancelText={t('cancel')} confirmLoading={busy === 'config'}>
-              <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>{t('pages.zapret.strategyHint')}</Text>
-              <Input.TextArea rows={16} value={configText} onChange={(e) => setConfigText(e.target.value)} style={{ fontFamily: 'monospace' }} />
+            <Modal
+              open={configOpen}
+              title={t('pages.zapret.strategyTitle')}
+              onOk={() => void runSaveConfig()}
+              onCancel={() => setConfigOpen(false)}
+              okText={t('save')}
+              cancelText={t('cancel')}
+              confirmLoading={busy === 'config'}
+            >
+              <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                {t('pages.zapret.strategyHint')}
+              </Text>
+              <Input.TextArea
+                rows={16}
+                value={configText}
+                onChange={(e) => setConfigText(e.target.value)}
+                style={{ fontFamily: 'monospace' }}
+              />
             </Modal>
-            <Modal open={listsOpen} title={t('pages.zapret.listTitle')} onOk={() => void runSaveList()} onCancel={() => setListsOpen(false)} okText={t('save')} cancelText={t('cancel')} confirmLoading={busy === 'list'}>
+            <Modal
+              open={listsOpen}
+              title={t('pages.zapret.listTitle')}
+              onOk={() => void runSaveList()}
+              onCancel={() => setListsOpen(false)}
+              okText={t('save')}
+              cancelText={t('cancel')}
+              confirmLoading={busy === 'list'}
+            >
               <Select
                 style={{ width: '100%', marginBottom: 8 }}
                 value={listName}
                 placeholder={t('pages.zapret.listSelect')}
                 options={editableLists.map((name) => ({ value: name, label: name }))}
-                onChange={(name) => { setListName(name); setListText(files?.[name] ?? ''); }}
+                onChange={(name) => {
+                  setListName(name);
+                  setListText(files?.[name] ?? '');
+                }}
               />
-              <Input.TextArea rows={14} value={listText} onChange={(e) => setListText(e.target.value)} style={{ fontFamily: 'monospace' }} />
+              <Input.TextArea
+                rows={14}
+                value={listText}
+                onChange={(e) => setListText(e.target.value)}
+                style={{ fontFamily: 'monospace' }}
+              />
             </Modal>
           </Card>
           <Card title={t('pages.zapret.uninstallBtn')} variant="borderless">
-            <Button danger loading={busy === 'uninstall'} onClick={() => void run('uninstall')}>{t('pages.zapret.uninstallBtn')}</Button>
+            <Button danger loading={busy === 'uninstall'} onClick={() => void run('uninstall')}>
+              {t('pages.zapret.uninstallBtn')}
+            </Button>
           </Card>
-          <Modal open={backupOpen} title={t('pages.zapret.backupBtn')} footer={null} onCancel={() => setBackupOpen(false)}>
+          <Modal
+            open={backupOpen}
+            title={t('pages.zapret.backupBtn')}
+            footer={null}
+            onCancel={() => setBackupOpen(false)}
+          >
             <Space direction="vertical" style={{ width: '100%' }}>
-              <Button block icon={<DownloadOutlined />} onClick={runBackup}>{t('pages.zapret.backupDownload')}</Button>
-              <Upload accept=".zip,application/zip" showUploadList={false} customRequest={onRestore}>
-                <Button block icon={<UploadOutlined />}>{t('pages.zapret.restoreBtn')}</Button>
+              <Button block icon={<DownloadOutlined />} onClick={runBackup}>
+                {t('pages.zapret.backupDownload')}
+              </Button>
+              <Upload
+                accept=".zip,application/zip"
+                showUploadList={false}
+                customRequest={onRestore}
+              >
+                <Button block icon={<UploadOutlined />}>
+                  {t('pages.zapret.restoreBtn')}
+                </Button>
               </Upload>
               <Text type="secondary">{t('pages.zapret.restoreHint')}</Text>
             </Space>
@@ -296,32 +442,37 @@ function WarpTab() {
   // Derive a fast refetch interval while any long task is running
   useEffect(() => {
     if (!isWorking) return;
-    const id = setInterval(() => { void refetchStatus(); }, 2000);
+    const id = setInterval(() => {
+      void refetchStatus();
+    }, 2000);
     return () => clearInterval(id);
   }, [isWorking, refetchStatus]);
-  const { data: installLogs } = useWarpInstallLogs(
-    status?.installing ? 2000 : undefined,
-  );
+  const { data: installLogs } = useWarpInstallLogs(status?.installing ? 2000 : undefined);
   const { data: watchLogs, refetch: refetchWatchLogs } = useWarpLogs(logsOpen);
   const { install, uninstall, start, stop, restart, rotate } = useWarpMutations();
 
-  const run = useCallback(async (kind: 'install' | 'uninstall' | 'start' | 'stop' | 'restart' | 'rotate') => {
-    setBusy(kind);
-    try {
-      if (kind === 'install') await install();
-      else if (kind === 'uninstall') await uninstall();
-      else if (kind === 'start') await start();
-      else if (kind === 'stop') await stop();
-      else if (kind === 'restart') await restart();
-      else await rotate();
-    } finally {
-      setBusy(null);
-      await refetchStatus();
-    }
-  }, [install, uninstall, start, stop, restart, rotate, refetchStatus]);
+  const run = useCallback(
+    async (kind: 'install' | 'uninstall' | 'start' | 'stop' | 'restart' | 'rotate') => {
+      setBusy(kind);
+      try {
+        if (kind === 'install') await install();
+        else if (kind === 'uninstall') await uninstall();
+        else if (kind === 'start') await start();
+        else if (kind === 'stop') await stop();
+        else if (kind === 'restart') await restart();
+        else await rotate();
+      } finally {
+        setBusy(null);
+        await refetchStatus();
+      }
+    },
+    [install, uninstall, start, stop, restart, rotate, refetchStatus],
+  );
 
   const tag = (label: React.ReactNode, ok: boolean) => (
-    <Tag color={ok ? 'green' : 'red'} icon={ok ? <CheckCircleOutlined /> : <CloseCircleOutlined />}>{label}</Tag>
+    <Tag color={ok ? 'green' : 'red'} icon={ok ? <CheckCircleOutlined /> : <CloseCircleOutlined />}>
+      {label}
+    </Tag>
   );
 
   return (
@@ -332,7 +483,10 @@ function WarpTab() {
           {tag(t('pages.warp.installed'), !!status?.installed)}
           {status?.installed && tag(t('pages.warp.running'), !!status.running)}
           {status?.installed && (
-            <Tag color={status.watchdogActive ? 'green' : 'orange'} icon={status.watchdogActive ? <CheckCircleOutlined /> : <CloseCircleOutlined />}>
+            <Tag
+              color={status.watchdogActive ? 'green' : 'orange'}
+              icon={status.watchdogActive ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+            >
               {t('pages.warp.watchdog')}
             </Tag>
           )}
@@ -349,23 +503,41 @@ function WarpTab() {
         <Card variant="borderless" style={{ marginBottom: 16 }}>
           <Collapse
             defaultActiveKey={status?.installing ? ['log'] : []}
-            items={[{
-              key: 'log',
-              label: t('pages.warp.installLogsTitle'),
-              children: (
-                <pre style={{ margin: 0, maxHeight: 300, overflow: 'auto', fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                  {(installLogs ?? []).join('\n')}
-                </pre>
-              ),
-            }]}
+            items={[
+              {
+                key: 'log',
+                label: t('pages.warp.installLogsTitle'),
+                children: (
+                  <pre
+                    style={{
+                      margin: 0,
+                      maxHeight: 300,
+                      overflow: 'auto',
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {(installLogs ?? []).join('\n')}
+                  </pre>
+                ),
+              },
+            ]}
           />
         </Card>
       )}
 
       {/* Install card (not yet installed) */}
       {!status?.installed && !status?.installing && (
-        <Card title={t('pages.warp.installTitle')} variant="borderless" style={{ marginBottom: 16 }}>
-          <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>{t('pages.warp.desc')}</Text>
+        <Card
+          title={t('pages.warp.installTitle')}
+          variant="borderless"
+          style={{ marginBottom: 16 }}
+        >
+          <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+            {t('pages.warp.desc')}
+          </Text>
           <Button
             type="primary"
             icon={<DownloadOutlined />}
@@ -380,11 +552,34 @@ function WarpTab() {
       {/* Controls (installed) */}
       {status?.installed && (
         <>
-          <Card title={t('pages.warp.controlsTitle')} variant="borderless" style={{ marginBottom: 16 }}>
+          <Card
+            title={t('pages.warp.controlsTitle')}
+            variant="borderless"
+            style={{ marginBottom: 16 }}
+          >
             <Space wrap>
-              <Button icon={<PlayCircleOutlined />} loading={busy === 'start'} onClick={() => void run('start')}>{t('pages.warp.startBtn')}</Button>
-              <Button danger icon={<PoweroffOutlined />} loading={busy === 'stop'} onClick={() => void run('stop')}>{t('pages.warp.stopBtn')}</Button>
-              <Button icon={<RedoOutlined />} loading={busy === 'restart'} onClick={() => void run('restart')}>{t('pages.warp.restartBtn')}</Button>
+              <Button
+                icon={<PlayCircleOutlined />}
+                loading={busy === 'start'}
+                onClick={() => void run('start')}
+              >
+                {t('pages.warp.startBtn')}
+              </Button>
+              <Button
+                danger
+                icon={<PoweroffOutlined />}
+                loading={busy === 'stop'}
+                onClick={() => void run('stop')}
+              >
+                {t('pages.warp.stopBtn')}
+              </Button>
+              <Button
+                icon={<RedoOutlined />}
+                loading={busy === 'restart'}
+                onClick={() => void run('restart')}
+              >
+                {t('pages.warp.restartBtn')}
+              </Button>
               <Button
                 icon={<SyncOutlined spin={status.rotating} />}
                 loading={busy === 'rotate'}
@@ -404,21 +599,35 @@ function WarpTab() {
                 setLogsOpen(open);
                 if (open) void refetchWatchLogs();
               }}
-              items={[{
-                key: 'watchlog',
-                label: t('pages.warp.watchLogsTitle'),
-                children: (
-                  <pre style={{ margin: 0, maxHeight: 300, overflow: 'auto', fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                    {(watchLogs ?? []).join('\n') || '—'}
-                  </pre>
-                ),
-              }]}
+              items={[
+                {
+                  key: 'watchlog',
+                  label: t('pages.warp.watchLogsTitle'),
+                  children: (
+                    <pre
+                      style={{
+                        margin: 0,
+                        maxHeight: 300,
+                        overflow: 'auto',
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      {(watchLogs ?? []).join('\n') || '—'}
+                    </pre>
+                  ),
+                },
+              ]}
             />
           </Card>
 
           {/* Uninstall */}
           <Card title={t('pages.warp.uninstallBtn')} variant="borderless">
-            <Button danger loading={busy === 'uninstall'} onClick={() => void run('uninstall')}>{t('pages.warp.uninstallBtn')}</Button>
+            <Button danger loading={busy === 'uninstall'} onClick={() => void run('uninstall')}>
+              {t('pages.warp.uninstallBtn')}
+            </Button>
           </Card>
         </>
       )}
@@ -434,7 +643,9 @@ export default function ZapretPage() {
   const { t } = useTranslation();
   const { isDark, isUltra, antdThemeConfig } = useTheme();
   const [messageApi, messageContextHolder] = message.useMessage();
-  useEffect(() => { setMessageInstance(messageApi); }, [messageApi]);
+  useEffect(() => {
+    setMessageInstance(messageApi);
+  }, [messageApi]);
   usePageTitle();
   const [activeTab, setActiveTab] = useState<TabKey>('zapret');
 

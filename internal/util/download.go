@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -44,7 +45,11 @@ func DownloadTo(url, dst string, mode os.FileMode) error {
 			return nil
 		},
 	}
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

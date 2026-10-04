@@ -578,7 +578,7 @@ func run(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("%s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("%s %s: %w (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

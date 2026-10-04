@@ -90,7 +90,11 @@ import FallbacksCard from './FallbacksCard';
 import SniffingTab from './SniffingTab';
 import TemplatePickerModal from './TemplatePickerModal';
 import DomainSetupModal, { isIpv4 } from './DomainSetupModal';
-import { INBOUND_TEMPLATES, type InboundTemplate, type TemplateContext } from '@/lib/xray/inbound-templates';
+import {
+  INBOUND_TEMPLATES,
+  type InboundTemplate,
+  type TemplateContext,
+} from '@/lib/xray/inbound-templates';
 
 import type { DBInbound } from '@/models/dbinbound';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
@@ -351,8 +355,14 @@ export default function InboundFormModal({
   const gatherHysteriaContext = async (): Promise<TemplateContext> => {
     const [settingsMsg, statusMsg, certMsg] = await Promise.all([
       HttpUtil.post<Record<string, unknown>>('/panel/api/setting/all', undefined, { silent: true }),
-      HttpUtil.get<{ publicIP?: { ipv4?: string } }>('/panel/api/server/status', undefined, { silent: true }),
-      HttpUtil.get<{ certFile?: string; keyFile?: string; source?: string }>('/panel/api/server/certPaths', undefined, { silent: true }),
+      HttpUtil.get<{ publicIP?: { ipv4?: string } }>('/panel/api/server/status', undefined, {
+        silent: true,
+      }),
+      HttpUtil.get<{ certFile?: string; keyFile?: string; source?: string }>(
+        '/panel/api/server/certPaths',
+        undefined,
+        { silent: true },
+      ),
     ]);
     const s = settingsMsg.success && settingsMsg.obj ? settingsMsg.obj : {};
     const st = statusMsg.success && statusMsg.obj ? statusMsg.obj : {};
@@ -401,7 +411,6 @@ export default function InboundFormModal({
     await applyTemplate(tpl, ctx);
     messageApi.success(t('pages.inbounds.form.templateApplied'));
   };
-
 
   const toggleSockopt = (on: boolean) => {
     if (on) {
@@ -675,9 +684,10 @@ export default function InboundFormModal({
     messageApi.error(formatInboundIssue(issue, methods.getValues(), t));
   });
 
-  const title = mode === 'edit'
-    ? t('pages.inbounds.modifyInbound')
-    : (
+  const title =
+    mode === 'edit' ? (
+      t('pages.inbounds.modifyInbound')
+    ) : (
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span>{t('pages.inbounds.addInbound')}</span>
         <Button

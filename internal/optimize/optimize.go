@@ -4,6 +4,7 @@
 package optimize
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -240,14 +241,14 @@ func Revert() error {
 }
 
 func run(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(context.Background(), name, args...)
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run()
 }
 
 func runOutput(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(context.Background(), name, args...)
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
 }
