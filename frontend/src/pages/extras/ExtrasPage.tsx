@@ -31,6 +31,7 @@ import {
   PoweroffOutlined,
   QrcodeOutlined,
   RedoOutlined,
+  SyncOutlined,
   RobotOutlined,
   SettingOutlined,
   UploadOutlined,
@@ -43,6 +44,7 @@ import {
 import { useTheme } from '@/hooks/useTheme';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { setMessageInstance } from '@/utils/messageBus';
+import { RandomUtil } from '@/utils';
 import AppSidebar from '@/layouts/AppSidebar';
 import { LazyMount } from '@/components/utility';
 import {
@@ -741,10 +743,18 @@ function ServiceCard({
                   label={t('pages.extras.ofEncryptionKey')}
                   tooltip={t('pages.extras.ofEncryptionKeyDesc')}
                 >
-                  <Input.Password
-                    placeholder={t('pages.extras.ofEncryptionKeyPlaceholder')}
-                    style={{ fontFamily: 'monospace' }}
-                  />
+                  <Space.Compact style={{ width: '100%' }}>
+                    <Input.Password
+                      placeholder={t('pages.extras.ofEncryptionKeyPlaceholder')}
+                      style={{ fontFamily: 'monospace' }}
+                    />
+                    <Button
+                      onClick={() =>
+                        form.setFieldValue('ofEncryptionKey', RandomUtil.randomSeq(32))
+                      }
+                      icon={<SyncOutlined />}
+                    />
+                  </Space.Compact>
                 </Form.Item>
                 <Form.Item
                   name="ofNegotiate"

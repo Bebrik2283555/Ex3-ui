@@ -13,7 +13,7 @@ const HostsPage = lazy(() => import('@/pages/hosts/HostsPage'));
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'));
 const XrayPage = lazy(() => import('@/pages/xray/XrayPage'));
 const ApiDocsPage = lazy(() => import('@/pages/api-docs/ApiDocsPage'));
-const SponsorsPage = lazy(() => import('@/pages/sponsors/SponsorsPage'));const ExtrasPage = lazy(() => import('@/pages/extras/ExtrasPage'));
+const ExtrasPage = lazy(() => import('@/pages/extras/ExtrasPage'));
 const OptimizePage = lazy(() => import('@/pages/optimize/OptimizePage'));
 const ZapretPage = lazy(() => import('@/pages/zapret/ZapretPage'));
 const HostsFilePage = lazy(() => import('@/pages/hostsfile/HostsFilePage'));
@@ -54,10 +54,11 @@ const routes: RouteObject[] = [
       { path: 'outbound', element: withSuspense(<XrayPage />) },
       { path: 'routing', element: withSuspense(<XrayPage />) },
       { path: 'api-docs', element: withSuspense(<ApiDocsPage />) },
-      { path: 'sponsors', element: withSuspense(<SponsorsPage />) },      { path: 'extras', element: withSuspense(<ExtrasPage />) },
+      { path: 'extras', element: withSuspense(<ExtrasPage />) },
       { path: 'optimize', element: withSuspense(<OptimizePage />) },
       { path: 'zapret', element: withSuspense(<ZapretPage />) },
-      { path: 'hostsfile', element: withSuspense(<HostsFilePage />) },    ],
+      { path: 'hostsfile', element: withSuspense(<HostsFilePage />) },
+    ],
   },
 ];
 

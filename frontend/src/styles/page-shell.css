@@ -6,7 +6,6 @@
 .nodes-page,
 .groups-page,
 .api-docs-page,
-.sponsors-page,
 .hosts-page,
 .extras-page,
 .optimize-page,
@@ -25,8 +24,7 @@
 .settings-page.is-dark,
 .nodes-page.is-dark,
 .groups-page.is-dark,
-.api-docs-page.is-dark,
-.sponsors-page.is-dark,
+.api-docs-page.is-dark.is-dark,
 .hosts-page.is-dark,
 .extras-page.is-dark,
 .optimize-page.is-dark,
@@ -43,8 +41,7 @@
 .settings-page.is-dark.is-ultra,
 .nodes-page.is-dark.is-ultra,
 .groups-page.is-dark.is-ultra,
-.api-docs-page.is-dark.is-ultra,
-.sponsors-page.is-dark.is-ultra,
+.api-docs-page.is-dark.is-ultra.is-dark.is-ultra,
 .hosts-page.is-dark.is-ultra,
 .extras-page.is-dark.is-ultra,
 .optimize-page.is-dark.is-ultra,
@@ -241,6 +238,64 @@ body.dark .ant-dropdown-menu-item-divider {
 @media (max-width: 768px) {
   .hosts-page .content-area,
   .hosts-page .summary-card {
+    padding: 8px;
+  }
+}
+
+/* Ex3-UI custom page styles */
+.extras-page,
+.optimize-page,
+.zapret-page,
+.hostsfile-page {
+  --bg-page: #e6e8ec;
+  --bg-card: #ffffff;
+  min-height: 100vh;
+  background: var(--bg-page);
+}
+
+.extras-page.is-dark,
+.optimize-page.is-dark,
+.zapret-page.is-dark,
+.hostsfile-page.is-dark {
+  --bg-page: #1a1b1f;
+  --bg-card: #23252b;
+}
+
+.extras-page.is-dark.is-ultra,
+.optimize-page.is-dark.is-ultra,
+.zapret-page.is-dark.is-ultra,
+.hostsfile-page.is-dark.is-ultra {
+  --bg-page: #000;
+  --bg-card: #101013;
+}
+
+.extras-page .ant-layout,
+.extras-page .ant-layout-content,
+.extras-page .content-shell,
+.optimize-page .ant-layout,
+.optimize-page .ant-layout-content,
+.optimize-page .content-shell,
+.zapret-page .ant-layout,
+.zapret-page .ant-layout-content,
+.zapret-page .content-shell,
+.hostsfile-page .ant-layout,
+.hostsfile-page .ant-layout-content,
+.hostsfile-page .content-shell {
+  background: transparent;
+}
+
+.extras-page .content-area,
+.optimize-page .content-area,
+.zapret-page .content-area,
+.hostsfile-page .content-area {
+  padding: 24px;
+}
+
+@media (max-width: 768px) {
+  .extras-page .content-area,
+  .optimize-page .content-area,
+  .zapret-page .content-area,
+  .hostsfile-page .content-area {
     padding: 8px;
   }
 }
