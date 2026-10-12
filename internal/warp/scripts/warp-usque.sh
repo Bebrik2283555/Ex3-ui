@@ -17,6 +17,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y curl unzip iproute2 iptables c
 wg-quick down warp 2>/dev/null || true
 systemctl disable --now wg-quick@warp 2>/dev/null || true
 ip rule del to 91.108.0.0/16 table $TABLE priority 100 2>/dev/null || true
+ip rule del fwmark $TABLE table $TABLE priority 99 2>/dev/null || true
 
 if [ ! -x "$USQUE_BIN" ]; then
   TMP_DIR=$(mktemp -d)
@@ -76,8 +77,12 @@ for n in $NETS; do
   ip rule del to $n table $TABLE priority 100 2>/dev/null || true
   ip rule add to $n table $TABLE priority 100
 done
+ip rule del fwmark $TABLE table $TABLE priority 99 2>/dev/null || true
+ip rule add fwmark $TABLE table $TABLE priority 99
 iptables -t nat -C POSTROUTING -o warp -j MASQUERADE 2>/dev/null || \
   iptables -t nat -A POSTROUTING -o warp -j MASQUERADE
+iptables -t mangle -C POSTROUTING -o warp -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || \
+  iptables -t mangle -A POSTROUTING -o warp -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
 EOF
   chmod +x "$USQUE_DIR/up.sh"
 
@@ -86,10 +91,12 @@ EOF
 TABLE=10000
 NETS="91.108.0.0/16 149.154.160.0/20 95.161.64.0/20 185.76.151.0/24 185.64.92.0/22 91.105.192.0/23 194.169.233.0/24 194.102.202.0/24"
 for n in $NETS; do ip rule del to $n table $TABLE priority 100 2>/dev/null || true; done
+ip rule del fwmark $TABLE table $TABLE priority 99 2>/dev/null || true
 ip route flush table $TABLE 2>/dev/null || true
 ip route del 162.159.198.1/32 2>/dev/null || true
 ip route del 162.159.198.2/32 2>/dev/null || true
 iptables -t nat -D POSTROUTING -o warp -j MASQUERADE 2>/dev/null || true
+iptables -t mangle -D POSTROUTING -o warp -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
 EOF
   chmod +x "$USQUE_DIR/down.sh"
 

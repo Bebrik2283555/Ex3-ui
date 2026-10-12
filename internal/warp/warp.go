@@ -163,6 +163,7 @@ func Uninstall() error {
 	_ = os.Remove(installLog)
 	removeCronEntry("warp-watch.sh")
 	cleanHostsFile()
+	_ = run("ip", "rule", "del", "fwmark", "10000", "table", "10000", "priority", "99")
 	return nil
 }
 
