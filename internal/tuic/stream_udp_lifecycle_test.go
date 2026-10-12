@@ -57,9 +57,7 @@ func startLifecycleTestServer(t *testing.T, relayAddr, email string) (*Server, *
 	if _, err := stream.Write(auth); err != nil {
 		t.Fatalf("write authentication: %v", err)
 	}
-	if err := stream.Close(); err != nil {
-		t.Logf("close authentication stream (ignored): %v", err)
-	}
+	closeUniStream(t, stream)
 	return server, client, clientID, password
 }
 
@@ -154,20 +152,20 @@ func TestDownstreamUDPResponseRefreshesAssociationIdleTime(t *testing.T) {
 		t.Fatalf("response association id = %d, want %d", header.AssocID, associationID)
 	}
 
-	var refreshedAt time.Time
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
+	// Receiving the datagram can precede the sender's post-send activity update.
+	// Wait for that protected state before exercising idle reaping.
+	deadline := time.Now().Add(time.Second)
+	for {
 		registry.mu.Lock()
-		refreshedAt = association.lastActive
+		refreshedAt := association.lastActive
 		registry.mu.Unlock()
 		if refreshedAt.After(oldActive) {
 			break
 		}
-		time.Sleep(5 * time.Millisecond)
-	}
-
-	if !refreshedAt.After(oldActive) {
-		t.Fatal("successful downstream response did not refresh association activity")
+		if time.Now().After(deadline) {
+			t.Fatal("successful downstream response did not refresh association activity")
+		}
+		time.Sleep(time.Millisecond)
 	}
 	registry.reapIdle(oldActive.Add(udpAssociationIdleTimeout + time.Second))
 	registry.mu.Lock()
