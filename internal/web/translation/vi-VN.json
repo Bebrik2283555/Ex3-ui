@@ -529,6 +529,8 @@
         "mtprotoFakeTlsDomainHint": "Tên miền FakeTLS mặc định dùng để tạo secret cho client mới. Mỗi client có thể dùng tên miền riêng.",
         "mtgThrottleMaxConnections": "Số kết nối tối đa",
         "mtgThrottleMaxConnectionsHint": "Giới hạn kết nối đồng thời của tất cả người dùng theo phân bổ công bằng. 0 để tắt.",
+        "mtgPendingHandshakesMaxPerIp": "Số bắt tay chờ tối đa mỗi IP",
+        "mtgPendingHandshakesMaxPerIpHint": "Đóng kết nối mới từ IP đang có số bắt tay chưa hoàn tất bằng mức này. Các máy khách dùng chung IP (NAT nhà mạng) chia sẻ giới hạn. 0 để tắt.",
         "mtgAdTagInvalid": "Ad-tag phải có đúng 32 ký tự thập lục phân.",
         "mtgPublicIpv4": "IPv4 công khai",
         "mtgPublicIpv6": "IPv6 công khai",
@@ -2662,7 +2664,18 @@
       "rotateRunning": "Xoay IP đang diễn ra.",
       "rotateFailed": "Xoay IP thất bại",
       "controlsTitle": "Điều khiển",
-      "watchLogsTitle": "Nhật ký watchdog (/var/log/warp-watch.log)"
+      "watchLogsTitle": "Log",
+      "settingsBtn": "Settings",
+      "settingsTitle": "WARP Settings",
+      "settingsSave": "Save",
+      "settingsFailed": "Failed to save settings",
+      "settingsSuccess": "Settings saved",
+      "domainsRoutingNote": "Routed domains are configured for Telegram by default. You can customize or add domains in the Routing tab.",
+      "timeoutLabel": "Response timeout (seconds)",
+      "checkIntervalLabel": "Check interval (minutes)",
+      "checkUrlLabel": "Health check URL",
+      "autoRotateLabel": "Auto rotate IP",
+      "autoRotateHint": "Automatically rotate IP when health check fails"
     }
   },
   "tgbot": {

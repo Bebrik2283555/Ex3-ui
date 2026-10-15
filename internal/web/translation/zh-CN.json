@@ -528,6 +528,8 @@
         "mtprotoFakeTlsDomainHint": "生成新客户端密钥时使用的默认 FakeTLS 域名。每个客户端可使用各自的域名。",
         "mtgThrottleMaxConnections": "最大连接数",
         "mtgThrottleMaxConnectionsHint": "按公平分配限制所有用户的并发连接数。0 表示不限制。",
+        "mtgPendingHandshakesMaxPerIp": "每 IP 最大未完成握手数",
+        "mtgPendingHandshakesMaxPerIpHint": "当某个 IP 的未完成握手达到此数量时，关闭其新连接。共享 IP（运营商 NAT）后的客户端共用此上限。0 表示禁用。",
         "mtgAdTagInvalid": "广告标签必须为 32 位十六进制字符。",
         "mtgPublicIpv4": "公网 IPv4",
         "mtgPublicIpv6": "公网 IPv6",
@@ -2662,7 +2664,18 @@
       "rotateRunning": "IP 更换已在进行中。",
       "rotateFailed": "IP 更换失败",
       "controlsTitle": "控制",
-      "watchLogsTitle": "守护日志 (/var/log/warp-watch.log)"
+      "watchLogsTitle": "Log",
+      "settingsBtn": "Settings",
+      "settingsTitle": "WARP Settings",
+      "settingsSave": "Save",
+      "settingsFailed": "Failed to save settings",
+      "settingsSuccess": "Settings saved",
+      "domainsRoutingNote": "Routed domains are configured for Telegram by default. You can customize or add domains in the Routing tab.",
+      "timeoutLabel": "Response timeout (seconds)",
+      "checkIntervalLabel": "Check interval (minutes)",
+      "checkUrlLabel": "Health check URL",
+      "autoRotateLabel": "Auto rotate IP",
+      "autoRotateHint": "Automatically rotate IP when health check fails"
     }
   },
   "tgbot": {

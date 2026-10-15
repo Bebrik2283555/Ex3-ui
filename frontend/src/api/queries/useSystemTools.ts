@@ -373,6 +373,8 @@ export interface WarpStatus {
   installing: boolean;
   rotating: boolean;
   error?: string;
+  ip?: string;
+  country?: string;
 }
 
 export const EMPTY_WARP_STATUS: WarpStatus = {
@@ -381,6 +383,22 @@ export const EMPTY_WARP_STATUS: WarpStatus = {
   watchdogActive: false,
   installing: false,
   rotating: false,
+};
+
+export interface WarpSettings {
+  domains: string[];
+  timeout: number;
+  checkInterval: number;
+  checkUrl: string;
+  autoRotate: boolean;
+}
+
+export const DEFAULT_WARP_SETTINGS: WarpSettings = {
+  domains: [],
+  timeout: 5,
+  checkInterval: 5,
+  checkUrl: 'https://api.telegram.org/',
+  autoRotate: true,
 };
 
 export function useWarpStatus(refetchInterval?: number) {
@@ -397,12 +415,93 @@ export function useWarpStatus(refetchInterval?: number) {
   });
 }
 
+export function useWarpSettings(enabled = true) {
+  return useQuery({
+    queryKey: ['warp', 'settings'],
+    queryFn: async (): Promise<WarpSettings> => {
+      const msg = await HttpUtil.get<WarpSettings>('/panel/api/warp/settings', undefined, {
+        silent: true,
+      });
+      if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch warp settings');
+      return msg.obj ?? DEFAULT_WARP_SETTINGS;
+    },
+    enabled,
+  });
+}
+
+export const DEFAULT_TG_DOMAINS = [
+  't.me',
+  'tg.dev',
+  'tg.org',
+  'tx.me',
+  'teleg.xyz',
+  'telegram.ai',
+  'telegram.asia',
+  'telegram.biz',
+  'telegram.cloud',
+  'telegram.cn',
+  'telegram.co',
+  'telegram.com',
+  'telegram.de',
+  'telegram.dev',
+  'telegram.dog',
+  'telegram.eu',
+  'telegram.fr',
+  'telegram.host',
+  'telegram.in',
+  'telegram.info',
+  'telegram.io',
+  'telegram.jp',
+  'telegram.me',
+  'telegram.net',
+  'telegram.org',
+  'telegram.qa',
+  'telegram.ru',
+  'telegram.services',
+  'telegram.solutions',
+  'telegram.space',
+  'telegram.team',
+  'telegram.tech',
+  'telegram.uk',
+  'telegram.us',
+  'telegram.website',
+  'telegram.xyz',
+  'telegramapp.org',
+  'telegra.ph',
+  'telesco.pe',
+  'nicegram.app',
+  'telegramdownload.com',
+  'cdn-telegram.org',
+  'comments.app',
+  'contest.com',
+  'fragment.com',
+  'graph.org',
+  'quiz.directory',
+  'tdesktop.com',
+  'telega.one',
+  'telegram-cdn.org',
+  'usercontent.dev',
+  'tgram.org',
+  'torg.org',
+];
+
+export function isDefaultTelegramDomains(domains?: string[]): boolean {
+  if (!domains || domains.length === 0) return true;
+  if (domains.length === 1 && domains[0] === 'api.telegram.org') return true;
+  if (domains.length === DEFAULT_TG_DOMAINS.length) {
+    const set = new Set(domains);
+    return DEFAULT_TG_DOMAINS.every((d) => set.has(d));
+  }
+  return false;
+}
+
 export function useWarpMutations() {
   const queryClient = useQueryClient();
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['warp'] });
 
   const install = useMutation({
-    mutationFn: () => HttpUtil.post('/panel/api/warp/install'),
+    mutationFn: (settings?: WarpSettings) =>
+      HttpUtil.post('/panel/api/warp/install', settings, JSON_HEADERS),
     onSuccess: () => invalidate(),
   });
   const uninstall = useMutation({
@@ -425,14 +524,20 @@ export function useWarpMutations() {
     mutationFn: () => HttpUtil.post('/panel/api/warp/rotate'),
     onSuccess: () => invalidate(),
   });
+  const saveSettings = useMutation({
+    mutationFn: (settings: WarpSettings) =>
+      HttpUtil.post('/panel/api/warp/settings', settings, JSON_HEADERS),
+    onSuccess: () => invalidate(),
+  });
 
   return {
-    install: () => install.mutateAsync(),
+    install: (settings?: WarpSettings) => install.mutateAsync(settings),
     uninstall: () => uninstall.mutateAsync(),
     start: () => start.mutateAsync(),
     stop: () => stop.mutateAsync(),
     restart: () => restart.mutateAsync(),
     rotate: () => rotate.mutateAsync(),
+    saveSettings: (settings: WarpSettings) => saveSettings.mutateAsync(settings),
   };
 }
 
@@ -445,6 +550,7 @@ export function useWarpLogs(enabled = false) {
       return msg.obj ?? [];
     },
     enabled,
+    refetchInterval: enabled ? 5000 : undefined,
   });
 }
 

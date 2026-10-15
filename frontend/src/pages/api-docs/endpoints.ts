@@ -2937,6 +2937,18 @@ export const sections: readonly Section[] = [
           'Whether the WARP tunnel (usque) is installed, running, and whether the watchdog cron is active.',
       },
       {
+        method: 'GET',
+        path: '/panel/api/warp/settings',
+        summary:
+          'Return current WARP settings (domains, timeout, check interval, check url, auto-rotate).',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/warp/settings',
+        summary: 'Update WARP settings and re-apply routing rules and watchdog cron.',
+        body: '{\n  "domains": ["api.telegram.org"],\n  "timeout": 5,\n  "checkInterval": 5,\n  "checkUrl": "https://api.telegram.org/",\n  "autoRotate": true\n}',
+      },
+      {
         method: 'POST',
         path: '/panel/api/warp/install',
         summary:

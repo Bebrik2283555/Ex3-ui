@@ -508,6 +508,8 @@
         "mtprotoFakeTlsDomainHint": "دامنه پیش‌فرض FakeTLS برای ساخت سکرت کلاینت جدید. هر کلاینت می‌تواند دامنه مخصوص خود را داشته باشد.",
         "mtgThrottleMaxConnections": "حداکثر اتصالات",
         "mtgThrottleMaxConnectionsHint": "محدود کردن اتصالات همزمان همه کاربران با تقسیم منصفانه. مقدار ۰ غیرفعال است.",
+        "mtgPendingHandshakesMaxPerIp": "حداکثر هندشیک‌های در انتظار به ازای هر IP",
+        "mtgPendingHandshakesMaxPerIpHint": "اتصالات جدید از یک IP که این تعداد هندشیک تکمیل‌نشده دارد را می‌بندد. کلاینت‌های پشت IP مشترک (NAT اپراتور) در این سقف سهیم هستند. 0 غیرفعال می‌کند.",
         "mtgAdTagInvalid": "برچسب تبلیغاتی باید دقیقاً ۳۲ کاراکتر هگزادسیمال باشد.",
         "mtgPublicIpv4": "IPv4 عمومی",
         "mtgPublicIpv6": "IPv6 عمومی",
@@ -2662,7 +2664,18 @@
       "rotateRunning": "تغییر IP از قبل در جریان است.",
       "rotateFailed": "تغییر IP ناموفق بود",
       "controlsTitle": "کنترل‌ها",
-      "watchLogsTitle": "لاگ نگهبان (/var/log/warp-watch.log)"
+      "watchLogsTitle": "Log",
+      "settingsBtn": "Settings",
+      "settingsTitle": "WARP Settings",
+      "settingsSave": "Save",
+      "settingsFailed": "Failed to save settings",
+      "settingsSuccess": "Settings saved",
+      "domainsRoutingNote": "Routed domains are configured for Telegram by default. You can customize or add domains in the Routing tab.",
+      "timeoutLabel": "Response timeout (seconds)",
+      "checkIntervalLabel": "Check interval (minutes)",
+      "checkUrlLabel": "Health check URL",
+      "autoRotateLabel": "Auto rotate IP",
+      "autoRotateHint": "Automatically rotate IP when health check fails"
     }
   },
   "tgbot": {

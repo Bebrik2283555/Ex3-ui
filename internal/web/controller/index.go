@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/entity"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
@@ -52,15 +51,9 @@ func (a *IndexController) initRouter(g *gin.RouterGroup) {
 	g.POST("/getTwoFactorEnable", middleware.CSRFMiddleware(), a.getTwoFactorEnable)
 }
 
-// sponsors is public so the login page can render its slot; failures stay silent.
+// sponsors returns an empty list in this fork to remove all sponsor banners.
 func (a *IndexController) sponsors(c *gin.Context) {
-	list, err := a.panelService.GetSponsors()
-	if err != nil {
-		logger.Debug("sponsors fetch failed:", err)
-		c.JSON(http.StatusOK, entity.Msg{Success: false})
-		return
-	}
-	jsonObj(c, list, nil)
+	jsonObj(c, &panel.SponsorList{Sponsors: []panel.Sponsor{}}, nil)
 }
 
 func (a *IndexController) sponsorLogo(c *gin.Context) {

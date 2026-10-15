@@ -508,6 +508,8 @@
         "mtprotoFakeTlsDomainHint": "نطاق FakeTLS الافتراضي المستخدم لإنشاء سر عميل جديد. يمكن لكل عميل استخدام نطاقه الخاص.",
         "mtgThrottleMaxConnections": "الحد الأقصى للاتصالات",
         "mtgThrottleMaxConnectionsHint": "تحديد الاتصالات المتزامنة لجميع المستخدمين بتوزيع عادل. القيمة 0 تعطّل الميزة.",
+        "mtgPendingHandshakesMaxPerIp": "الحد الأقصى للمصافحات المعلقة لكل IP",
+        "mtgPendingHandshakesMaxPerIpHint": "تُغلق الاتصالات الجديدة من عنوان IP لديه هذا العدد من المصافحات غير المكتملة. يتشارك المستخدمون خلف عنوان IP مشترك (NAT لدى المشغّل) هذا الحد. القيمة 0 تعطّله.",
         "mtgAdTagInvalid": "يجب أن تتكوّن العلامة الإعلانية من 32 حرفًا ست عشريًا بالضبط.",
         "mtgPublicIpv4": "عنوان IPv4 العام",
         "mtgPublicIpv6": "عنوان IPv6 العام",
@@ -2662,7 +2664,18 @@
       "rotateRunning": "تدوير IP جارٍ بالفعل.",
       "rotateFailed": "فشل تدوير IP",
       "controlsTitle": "التحكم",
-      "watchLogsTitle": "سجل الحارس (/var/log/warp-watch.log)"
+      "watchLogsTitle": "Log",
+      "settingsBtn": "Settings",
+      "settingsTitle": "WARP Settings",
+      "settingsSave": "Save",
+      "settingsFailed": "Failed to save settings",
+      "settingsSuccess": "Settings saved",
+      "domainsRoutingNote": "Routed domains are configured for Telegram by default. You can customize or add domains in the Routing tab.",
+      "timeoutLabel": "Response timeout (seconds)",
+      "checkIntervalLabel": "Check interval (minutes)",
+      "checkUrlLabel": "Health check URL",
+      "autoRotateLabel": "Auto rotate IP",
+      "autoRotateHint": "Automatically rotate IP when health check fails"
     }
   },
   "tgbot": {

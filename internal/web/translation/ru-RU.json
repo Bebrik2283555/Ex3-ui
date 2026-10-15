@@ -531,6 +531,8 @@
         "mtprotoFakeTlsDomainHint": "Домен FakeTLS по умолчанию для генерации секрета нового клиента. Каждый клиент может использовать свой домен.",
         "mtgThrottleMaxConnections": "Макс. подключений",
         "mtgThrottleMaxConnectionsHint": "Ограничение одновременных подключений всех пользователей по справедливому распределению. 0 — отключено.",
+        "mtgPendingHandshakesMaxPerIp": "Макс. незавершённых рукопожатий на IP",
+        "mtgPendingHandshakesMaxPerIpHint": "Новые подключения с IP, у которого уже столько незавершённых рукопожатий, закрываются. Клиенты за общим IP (NAT оператора) делят этот лимит. 0 — отключено.",
         "mtgAdTagInvalid": "Рекламный тег должен содержать ровно 32 шестнадцатеричных символа.",
         "mtgPublicIpv4": "Публичный IPv4",
         "mtgPublicIpv6": "Публичный IPv6",
@@ -2662,7 +2664,18 @@
       "rotateRunning": "Смена IP уже выполняется.",
       "rotateFailed": "Ошибка смены IP",
       "controlsTitle": "Управление",
-      "watchLogsTitle": "Лог сторожа (/var/log/warp-watch.log)"
+      "watchLogsTitle": "Лог",
+      "settingsBtn": "Параметры",
+      "settingsTitle": "Параметры WARP",
+      "settingsSave": "Сохранить",
+      "settingsFailed": "Ошибка сохранения параметров",
+      "settingsSuccess": "Параметры сохранены",
+      "domainsRoutingNote": "Домены для маршрутизации по умолчанию настроены для Telegram. Изменить или добавить домены можно во вкладке «Маршрутизация».",
+      "timeoutLabel": "Лимит ответа (секунды)",
+      "checkIntervalLabel": "Частота проверки (минуты)",
+      "checkUrlLabel": "URL проверки доступности",
+      "autoRotateLabel": "Автоматическая смена IP",
+      "autoRotateHint": "Автоматически подбирать рабочий IP при недоступности проверки"
     }
   },
   "tgbot": {

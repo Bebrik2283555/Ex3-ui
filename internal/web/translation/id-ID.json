@@ -508,6 +508,8 @@
         "mtprotoFakeTlsDomainHint": "Domain FakeTLS default untuk membuat secret klien baru. Setiap klien bisa memakai domainnya sendiri.",
         "mtgThrottleMaxConnections": "Koneksi maksimum",
         "mtgThrottleMaxConnectionsHint": "Batasi koneksi bersamaan semua pengguna dengan pembagian adil. 0 menonaktifkan.",
+        "mtgPendingHandshakesMaxPerIp": "Maks. handshake tertunda per IP",
+        "mtgPendingHandshakesMaxPerIpHint": "Tutup koneksi baru dari IP yang sudah memiliki handshake belum selesai sebanyak ini. Klien di balik IP bersama (NAT operator) berbagi batas ini. 0 menonaktifkan.",
         "mtgAdTagInvalid": "Ad-tag harus tepat 32 karakter heksadesimal.",
         "mtgPublicIpv4": "IPv4 Publik",
         "mtgPublicIpv6": "IPv6 Publik",
@@ -2662,7 +2664,18 @@
       "rotateRunning": "Rotasi IP sudah berjalan.",
       "rotateFailed": "Rotasi IP gagal",
       "controlsTitle": "Kontrol",
-      "watchLogsTitle": "Log watchdog (/var/log/warp-watch.log)"
+      "watchLogsTitle": "Log",
+      "settingsBtn": "Settings",
+      "settingsTitle": "WARP Settings",
+      "settingsSave": "Save",
+      "settingsFailed": "Failed to save settings",
+      "settingsSuccess": "Settings saved",
+      "domainsRoutingNote": "Routed domains are configured for Telegram by default. You can customize or add domains in the Routing tab.",
+      "timeoutLabel": "Response timeout (seconds)",
+      "checkIntervalLabel": "Check interval (minutes)",
+      "checkUrlLabel": "Health check URL",
+      "autoRotateLabel": "Auto rotate IP",
+      "autoRotateHint": "Automatically rotate IP when health check fails"
     }
   },
   "tgbot": {

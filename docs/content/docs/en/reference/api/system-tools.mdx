@@ -76,6 +76,13 @@ _openapi:
         watchdog cron is active.
       url: '#whether-the-warp-tunnel-usque-is-installed-running-and-whether-the-watchdog-cron-is-active'
     - depth: 2
+      title: Return current WARP settings (domains, timeout, check interval, check
+        url, auto-rotate).
+      url: '#return-current-warp-settings-domains-timeout-check-interval-check-url-auto-rotate'
+    - depth: 2
+      title: Update WARP settings and re-apply routing rules and watchdog cron.
+      url: '#update-warp-settings-and-re-apply-routing-rules-and-watchdog-cron'
+    - depth: 2
       title: Start installing WARP via usque in the background. Returns 409 if an
         install is already in progress.
       url: '#start-installing-warp-via-usque-in-the-background-returns-409-if-an-install-is-already-in-progress'
@@ -164,6 +171,11 @@ _openapi:
       - content: Whether the WARP tunnel (usque) is installed, running, and whether the
           watchdog cron is active.
         id: whether-the-warp-tunnel-usque-is-installed-running-and-whether-the-watchdog-cron-is-active
+      - content: Return current WARP settings (domains, timeout, check interval, check
+          url, auto-rotate).
+        id: return-current-warp-settings-domains-timeout-check-interval-check-url-auto-rotate
+      - content: Update WARP settings and re-apply routing rules and watchdog cron.
+        id: update-warp-settings-and-re-apply-routing-rules-and-watchdog-cron
       - content: Start installing WARP via usque in the background. Returns 409 if an
           install is already in progress.
         id: start-installing-warp-via-usque-in-the-background-returns-409-if-an-install-is-already-in-progress
@@ -204,7 +216,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/optimize/status","method":"get"},{"path":"/panel/api/optimize/apply","method":"post"},{"path":"/panel/api/optimize/revert","method":"post"},{"path":"/panel/api/zapret/status","method":"get"},{"path":"/panel/api/zapret/download","method":"post"},{"path":"/panel/api/zapret/uninstall","method":"post"},{"path":"/panel/api/zapret/start","method":"post"},{"path":"/panel/api/zapret/stop","method":"post"},{"path":"/panel/api/zapret/restart","method":"post"},{"path":"/panel/api/zapret/hosts","method":"get"},{"path":"/panel/api/zapret/hosts","method":"put"},{"path":"/panel/api/zapret/logs","method":"get"},{"path":"/panel/api/zapret/config","method":"get"},{"path":"/panel/api/zapret/config","method":"put"},{"path":"/panel/api/zapret/files","method":"get"},{"path":"/panel/api/zapret/file","method":"put"},{"path":"/panel/api/zapret/backup","method":"get"},{"path":"/panel/api/zapret/restore","method":"post"},{"path":"/panel/api/warp/status","method":"get"},{"path":"/panel/api/warp/install","method":"post"},{"path":"/panel/api/warp/uninstall","method":"post"},{"path":"/panel/api/warp/start","method":"post"},{"path":"/panel/api/warp/stop","method":"post"},{"path":"/panel/api/warp/restart","method":"post"},{"path":"/panel/api/warp/rotate","method":"post"},{"path":"/panel/api/warp/logs","method":"get"},{"path":"/panel/api/warp/install-logs","method":"get"},{"path":"/panel/api/hostsfile","method":"get"},{"path":"/panel/api/hostsfile","method":"put"},{"path":"/panel/api/hostsfile/download","method":"post"}]} showTitle />
+      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/optimize/status","method":"get"},{"path":"/panel/api/optimize/apply","method":"post"},{"path":"/panel/api/optimize/revert","method":"post"},{"path":"/panel/api/zapret/status","method":"get"},{"path":"/panel/api/zapret/download","method":"post"},{"path":"/panel/api/zapret/uninstall","method":"post"},{"path":"/panel/api/zapret/start","method":"post"},{"path":"/panel/api/zapret/stop","method":"post"},{"path":"/panel/api/zapret/restart","method":"post"},{"path":"/panel/api/zapret/hosts","method":"get"},{"path":"/panel/api/zapret/hosts","method":"put"},{"path":"/panel/api/zapret/logs","method":"get"},{"path":"/panel/api/zapret/config","method":"get"},{"path":"/panel/api/zapret/config","method":"put"},{"path":"/panel/api/zapret/files","method":"get"},{"path":"/panel/api/zapret/file","method":"put"},{"path":"/panel/api/zapret/backup","method":"get"},{"path":"/panel/api/zapret/restore","method":"post"},{"path":"/panel/api/warp/status","method":"get"},{"path":"/panel/api/warp/settings","method":"get"},{"path":"/panel/api/warp/settings","method":"post"},{"path":"/panel/api/warp/install","method":"post"},{"path":"/panel/api/warp/uninstall","method":"post"},{"path":"/panel/api/warp/start","method":"post"},{"path":"/panel/api/warp/stop","method":"post"},{"path":"/panel/api/warp/restart","method":"post"},{"path":"/panel/api/warp/rotate","method":"post"},{"path":"/panel/api/warp/logs","method":"get"},{"path":"/panel/api/warp/install-logs","method":"get"},{"path":"/panel/api/hostsfile","method":"get"},{"path":"/panel/api/hostsfile","method":"put"},{"path":"/panel/api/hostsfile/download","method":"post"}]} showTitle />
     </>
   );
 }

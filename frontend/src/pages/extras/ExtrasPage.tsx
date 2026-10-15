@@ -42,7 +42,8 @@ import {
 
 import { useTheme } from '@/hooks/useTheme';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { setMessageInstance } from '@/utils/messageBus';
+import { setMessageInstance, getMessage } from '@/utils/messageBus';
+
 import AppSidebar from '@/layouts/AppSidebar';
 import { LazyMount } from '@/components/utility';
 import {
@@ -844,7 +845,7 @@ function ServiceCard({
                               const link = wdttLink(qrClient.client);
                               if (link) {
                                 navigator.clipboard.writeText(link).catch(() => {});
-                                message.success(t('copySuccess'));
+                                getMessage().success(t('copySuccess'));
                               }
                             }}
                           />

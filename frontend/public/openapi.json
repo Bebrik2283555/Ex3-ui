@@ -16698,6 +16698,83 @@
         }
       }
     },
+    "/panel/api/warp/settings": {
+      "get": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Return current WARP settings (domains, timeout, check interval, check url, auto-rotate).",
+        "operationId": "get_panel_api_warp_settings",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Update WARP settings and re-apply routing rules and watchdog cron.",
+        "operationId": "post_panel_api_warp_settings",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "domains": [
+                  "api.telegram.org"
+                ],
+                "timeout": 5,
+                "checkInterval": 5,
+                "checkUrl": "https://api.telegram.org/",
+                "autoRotate": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/warp/install": {
       "post": {
         "tags": [

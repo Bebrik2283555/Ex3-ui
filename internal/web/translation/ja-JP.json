@@ -529,6 +529,8 @@
         "mtprotoFakeTlsDomainHint": "新しいクライアントのシークレット生成に使う既定の FakeTLS ドメイン。クライアントごとに別のドメインを使用できます。",
         "mtgThrottleMaxConnections": "最大接続数",
         "mtgThrottleMaxConnectionsHint": "全ユーザーの同時接続数を公平配分で制限します。0 で無効。",
+        "mtgPendingHandshakesMaxPerIp": "IPあたりの最大保留ハンドシェイク数",
+        "mtgPendingHandshakesMaxPerIpHint": "未完了のハンドシェイクがこの数に達しているIPからの新規接続を切断します。共有IP（キャリアNAT）配下のクライアントはこの上限を共有します。0 で無効化。",
         "mtgAdTagInvalid": "広告タグは正確に 32 文字の 16 進数である必要があります。",
         "mtgPublicIpv4": "パブリック IPv4",
         "mtgPublicIpv6": "パブリック IPv6",
@@ -2662,7 +2664,18 @@
       "rotateRunning": "IP ローテーションはすでに進行中です。",
       "rotateFailed": "IP ローテーションに失敗しました",
       "controlsTitle": "コントロール",
-      "watchLogsTitle": "ウォッチドッグログ (/var/log/warp-watch.log)"
+      "watchLogsTitle": "Log",
+      "settingsBtn": "Settings",
+      "settingsTitle": "WARP Settings",
+      "settingsSave": "Save",
+      "settingsFailed": "Failed to save settings",
+      "settingsSuccess": "Settings saved",
+      "domainsRoutingNote": "Routed domains are configured for Telegram by default. You can customize or add domains in the Routing tab.",
+      "timeoutLabel": "Response timeout (seconds)",
+      "checkIntervalLabel": "Check interval (minutes)",
+      "checkUrlLabel": "Health check URL",
+      "autoRotateLabel": "Auto rotate IP",
+      "autoRotateHint": "Automatically rotate IP when health check fails"
     }
   },
   "tgbot": {

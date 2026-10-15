@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Alert,
   Button,
   Card,
   Col,
@@ -8,13 +9,16 @@ import {
   ConfigProvider,
   Form,
   Input,
+  InputNumber,
   Layout,
   Modal,
   Result,
   Row,
+  Segmented,
   Select,
   Space,
   Spin,
+  Switch,
   Tabs,
   Tag,
   Typography,
@@ -46,9 +50,11 @@ import {
   useZapretMutations,
   useZapretFiles,
   useWarpStatus,
+  useWarpSettings,
   useWarpMutations,
   useWarpInstallLogs,
   useWarpLogs,
+  type WarpSettings,
 } from '@/api/queries/useSystemTools';
 
 const { Text, Title } = Typography;
@@ -435,10 +441,19 @@ function WarpTab() {
   const { t } = useTranslation();
   const [busy, setBusy] = useState<string | null>(null);
   const [logsOpen, setLogsOpen] = useState(false);
+  const [logTab, setLogTab] = useState<'watch' | 'install'>('watch');
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [isInstallMode, setIsInstallMode] = useState(false);
+  const [settingsForm] = Form.useForm<{
+    timeout?: number;
+    checkInterval?: number;
+    checkUrl?: string;
+    autoRotate?: boolean;
+  }>();
 
   // Start with a 5s baseline poll; once we know the state we refetch faster if needed
   const { data: status, refetch: refetchStatus } = useWarpStatus(5000);
-  const isWorking = status?.installing || status?.rotating;
+  const isWorking = status?.installing || (status?.installed && status?.rotating);
   // Derive a fast refetch interval while any long task is running
   useEffect(() => {
     if (!isWorking) return;
@@ -447,17 +462,123 @@ function WarpTab() {
     }, 2000);
     return () => clearInterval(id);
   }, [isWorking, refetchStatus]);
-  const { data: installLogs } = useWarpInstallLogs(status?.installing ? 2000 : undefined);
-  const { data: watchLogs, refetch: refetchWatchLogs } = useWarpLogs(logsOpen);
-  const { install, uninstall, start, stop, restart, rotate } = useWarpMutations();
+
+  const [prevInstalling, setPrevInstalling] = useState(false);
+  if (status?.installing && !prevInstalling) {
+    setPrevInstalling(true);
+    setLogTab('install');
+    setLogsOpen(true);
+  } else if (!status?.installing && prevInstalling) {
+    setPrevInstalling(false);
+    setLogTab('install');
+    setLogsOpen(true);
+  }
+
+  const { data: installLogs, refetch: refetchInstallLogs } = useWarpInstallLogs(
+    status?.installing ? 2000 : logsOpen && logTab === 'install' ? 5000 : undefined,
+  );
+  const { data: watchLogs, refetch: refetchWatchLogs } = useWarpLogs(
+    logsOpen && logTab === 'watch',
+  );
+  const { data: savedSettings, refetch: refetchSettings } = useWarpSettings(status?.installed);
+  const { install, uninstall, start, stop, restart, rotate, saveSettings } = useWarpMutations();
+
+  const handleOpenInstall = () => {
+    setIsInstallMode(true);
+    settingsForm.resetFields();
+    settingsForm.setFieldsValue({
+      timeout: undefined,
+      checkInterval: undefined,
+      checkUrl: '',
+      autoRotate: true,
+    });
+    setSettingsModalOpen(true);
+  };
+
+  const handleOpenSettings = async () => {
+    setIsInstallMode(false);
+    settingsForm.resetFields();
+    const res = await refetchSettings();
+    const current = res.data ?? savedSettings;
+    if (current) {
+      settingsForm.setFieldsValue({
+        timeout: current.timeout === 5 ? undefined : current.timeout,
+        checkInterval: current.checkInterval === 5 ? undefined : current.checkInterval,
+        checkUrl: current.checkUrl === 'https://api.telegram.org/' ? '' : current.checkUrl,
+        autoRotate: current.autoRotate ?? true,
+      });
+    } else {
+      settingsForm.setFieldsValue({
+        timeout: undefined,
+        checkInterval: undefined,
+        checkUrl: '',
+        autoRotate: true,
+      });
+    }
+    setSettingsModalOpen(true);
+  };
+
+  useEffect(() => {
+    if (!settingsModalOpen) return;
+    if (isInstallMode) {
+      settingsForm.setFieldsValue({
+        timeout: undefined,
+        checkInterval: undefined,
+        checkUrl: '',
+        autoRotate: true,
+      });
+    } else if (savedSettings) {
+      settingsForm.setFieldsValue({
+        timeout: savedSettings.timeout === 5 ? undefined : savedSettings.timeout,
+        checkInterval: savedSettings.checkInterval === 5 ? undefined : savedSettings.checkInterval,
+        checkUrl:
+          savedSettings.checkUrl === 'https://api.telegram.org/' ? '' : savedSettings.checkUrl,
+        autoRotate: savedSettings.autoRotate ?? true,
+      });
+    }
+  }, [settingsModalOpen, isInstallMode, savedSettings, settingsForm]);
+
+  const handleSaveSettings = async () => {
+    try {
+      const values = await settingsForm.validateFields();
+      const payload: WarpSettings = {
+        domains: [],
+        timeout: values.timeout ? Number(values.timeout) : 5,
+        checkInterval: values.checkInterval ? Number(values.checkInterval) : 5,
+        checkUrl: values.checkUrl?.trim() || 'https://api.telegram.org/',
+        autoRotate: values.autoRotate ?? true,
+      };
+
+      setBusy(isInstallMode ? 'install' : 'settings');
+      try {
+        if (isInstallMode) {
+          await install(payload);
+          setSettingsModalOpen(false);
+        } else {
+          await saveSettings(payload);
+          setSettingsModalOpen(false);
+        }
+      } finally {
+        setBusy(null);
+        await refetchStatus();
+        if (!isInstallMode) {
+          await refetchSettings();
+        }
+      }
+    } catch {
+      // validation error
+    }
+  };
 
   const run = useCallback(
-    async (kind: 'install' | 'uninstall' | 'start' | 'stop' | 'restart' | 'rotate') => {
+    async (kind: 'uninstall' | 'start' | 'stop' | 'restart' | 'rotate') => {
       setBusy(kind);
       try {
-        if (kind === 'install') await install();
-        else if (kind === 'uninstall') await uninstall();
-        else if (kind === 'start') await start();
+        if (kind === 'uninstall') {
+          await uninstall();
+          setLogsOpen(false);
+          setLogTab('watch');
+        } else if (kind === 'start') await start();
         else if (kind === 'stop') await stop();
         else if (kind === 'restart') await restart();
         else await rotate();
@@ -466,7 +587,7 @@ function WarpTab() {
         await refetchStatus();
       }
     },
-    [install, uninstall, start, stop, restart, rotate, refetchStatus],
+    [uninstall, start, stop, restart, rotate, refetchStatus],
   );
 
   const tag = (label: React.ReactNode, ok: boolean) => (
@@ -490,6 +611,12 @@ function WarpTab() {
               {t('pages.warp.watchdog')}
             </Tag>
           )}
+          {status?.installed && (
+            <Tag color="blue">
+              WARP: {status.ip || '—'}
+              {status.country ? ` (${status.country})` : ''}
+            </Tag>
+          )}
           {isWorking && (
             <Tag icon={<SyncOutlined spin />} color="processing">
               {status?.installing ? t('pages.warp.installing') : t('pages.warp.rotating')}
@@ -498,15 +625,58 @@ function WarpTab() {
         </Space>
       </Card>
 
-      {/* Install log while installing */}
-      {(status?.installing || (installLogs && installLogs.length > 0 && !status?.installed)) && (
+      {/* Unified log panel: install log while installing, watchdog log otherwise */}
+      {(status?.installing || (installLogs && installLogs.length > 0) || status?.installed) && (
         <Card variant="borderless" style={{ marginBottom: 16 }}>
           <Collapse
-            defaultActiveKey={status?.installing ? ['log'] : []}
+            activeKey={logsOpen ? ['log'] : []}
+            onChange={(keys) => {
+              const open = Array.isArray(keys) ? keys.includes('log') : keys === 'log';
+              setLogsOpen(open);
+              if (open) {
+                if (logTab === 'watch') void refetchWatchLogs();
+                else void refetchInstallLogs();
+              }
+            }}
             items={[
               {
                 key: 'log',
-                label: t('pages.warp.installLogsTitle'),
+                label: (
+                  <Space onClick={(e) => e.stopPropagation()}>
+                    <span>
+                      {logTab === 'watch'
+                        ? t('pages.warp.watchLogsTitle')
+                        : t('pages.warp.installLogsTitle')}
+                    </span>
+                    <Segmented
+                      size="small"
+                      value={logTab}
+                      onChange={(val) => {
+                        const tab = val as 'watch' | 'install';
+                        setLogTab(tab);
+                        setLogsOpen(true);
+                        if (tab === 'watch') void refetchWatchLogs();
+                        else void refetchInstallLogs();
+                      }}
+                      options={[
+                        { label: t('pages.warp.watchLogsTitle'), value: 'watch' },
+                        { label: t('pages.warp.installLogsTitle'), value: 'install' },
+                      ]}
+                    />
+                  </Space>
+                ),
+                extra: (
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<SyncOutlined />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (logTab === 'watch') void refetchWatchLogs();
+                      else void refetchInstallLogs();
+                    }}
+                  />
+                ),
                 children: (
                   <pre
                     style={{
@@ -519,7 +689,9 @@ function WarpTab() {
                       wordBreak: 'break-all',
                     }}
                   >
-                    {(installLogs ?? []).join('\n')}
+                    {logTab === 'install'
+                      ? (installLogs ?? []).join('\n') || (status?.installing ? '…' : '—')
+                      : (watchLogs ?? []).join('\n') || '—'}
                   </pre>
                 ),
               },
@@ -542,7 +714,7 @@ function WarpTab() {
             type="primary"
             icon={<DownloadOutlined />}
             loading={busy === 'install'}
-            onClick={() => void run('install')}
+            onClick={handleOpenInstall}
           >
             {t('pages.warp.installBtn')}
           </Button>
@@ -581,6 +753,13 @@ function WarpTab() {
                 {t('pages.warp.restartBtn')}
               </Button>
               <Button
+                icon={<SettingOutlined />}
+                loading={busy === 'settings'}
+                onClick={() => void handleOpenSettings()}
+              >
+                {t('pages.warp.settingsBtn')}
+              </Button>
+              <Button
                 icon={<SyncOutlined spin={status.rotating} />}
                 loading={busy === 'rotate'}
                 onClick={() => void run('rotate')}
@@ -591,38 +770,6 @@ function WarpTab() {
             </Space>
           </Card>
 
-          {/* Watch log */}
-          <Card variant="borderless" style={{ marginBottom: 16 }}>
-            <Collapse
-              onChange={(keys) => {
-                const open = (keys as string[]).includes('watchlog');
-                setLogsOpen(open);
-                if (open) void refetchWatchLogs();
-              }}
-              items={[
-                {
-                  key: 'watchlog',
-                  label: t('pages.warp.watchLogsTitle'),
-                  children: (
-                    <pre
-                      style={{
-                        margin: 0,
-                        maxHeight: 300,
-                        overflow: 'auto',
-                        fontSize: 12,
-                        fontFamily: 'monospace',
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-all',
-                      }}
-                    >
-                      {(watchLogs ?? []).join('\n') || '—'}
-                    </pre>
-                  ),
-                },
-              ]}
-            />
-          </Card>
-
           {/* Uninstall */}
           <Card title={t('pages.warp.uninstallBtn')} variant="borderless">
             <Button danger loading={busy === 'uninstall'} onClick={() => void run('uninstall')}>
@@ -631,6 +778,42 @@ function WarpTab() {
           </Card>
         </>
       )}
+
+      {/* Settings Modal */}
+      <Modal
+        title={isInstallMode ? t('pages.warp.installTitle') : t('pages.warp.settingsTitle')}
+        open={settingsModalOpen}
+        onCancel={() => setSettingsModalOpen(false)}
+        onOk={() => void handleSaveSettings()}
+        confirmLoading={busy === 'install' || busy === 'settings'}
+        okText={isInstallMode ? t('pages.warp.installBtn') : t('pages.warp.settingsSave')}
+      >
+        <Form form={settingsForm} layout="vertical">
+          <Alert
+            type="info"
+            showIcon
+            message={t('pages.warp.domainsRoutingNote')}
+            style={{ marginBottom: 16 }}
+          />
+          <Form.Item name="timeout" label={t('pages.warp.timeoutLabel')}>
+            <InputNumber min={1} max={60} placeholder="5" style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="checkInterval" label={t('pages.warp.checkIntervalLabel')}>
+            <InputNumber min={1} max={1440} placeholder="5" style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="checkUrl" label={t('pages.warp.checkUrlLabel')}>
+            <Input placeholder="https://api.telegram.org/" />
+          </Form.Item>
+          <Form.Item
+            name="autoRotate"
+            label={t('pages.warp.autoRotateLabel')}
+            extra={t('pages.warp.autoRotateHint')}
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   );
 }
