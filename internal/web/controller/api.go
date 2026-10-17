@@ -218,6 +218,7 @@ func (a *APIController) initRouter(g *gin.RouterGroup) {
 	NewZapretController(api)
 	NewWarpController(api)
 	NewHostsFileController(api)
+	NewDnsResolverController(api)
 
 	// Extra routes
 	api.POST("/backuptotgbot", a.BackuptoTgbot)

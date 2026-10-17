@@ -3028,6 +3028,35 @@ export const sections: readonly Section[] = [
         summary: 'Fetch the hosts content from a public URL and replace /etc/hosts with it.',
         body: '{\n  "url": "https://example.com/hosts"\n}',
       },
+      {
+        method: 'GET',
+        path: '/panel/api/dnsresolver/status',
+        summary: 'Read DNS resolver state, configuration and resolved domain IP entries.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnsresolver/settings',
+        summary: 'Update DNS resolver settings (enable/disable, DNS server, check interval).',
+        body: '{\n  "enabled": true,\n  "dnsServer": "https://dns.comss.one/dns-query",\n  "intervalHours": 12,\n  "domains": ["chatgpt.com"]\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnsresolver/domains',
+        summary: 'Update domain list to resolve via SmartDNS.',
+        body: '{\n  "domains": [\n    "chatgpt.com",\n    "api.openai.com"\n  ]\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnsresolver/resolve',
+        summary:
+          'Trigger immediate DNS resolution of configured domains and update /etc/hosts in background.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/dnsresolver/test',
+        summary: 'Test connectivity and latency to a SmartDNS server.',
+        body: '{\n  "dnsServer": "https://dns.comss.one/dns-query"\n}',
+      },
     ],
   },
 

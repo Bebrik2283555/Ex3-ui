@@ -120,6 +120,23 @@ _openapi:
     - depth: 2
       title: Fetch the hosts content from a public URL and replace /etc/hosts with it.
       url: '#fetch-the-hosts-content-from-a-public-url-and-replace-etchosts-with-it'
+    - depth: 2
+      title: Read DNS resolver state, configuration and resolved domain IP entries.
+      url: '#read-dns-resolver-state-configuration-and-resolved-domain-ip-entries'
+    - depth: 2
+      title: Update DNS resolver settings (enable/disable, DNS server, check
+        interval).
+      url: '#update-dns-resolver-settings-enabledisable-dns-server-check-interval'
+    - depth: 2
+      title: Update domain list to resolve via SmartDNS.
+      url: '#update-domain-list-to-resolve-via-smartdns'
+    - depth: 2
+      title: Trigger immediate DNS resolution of configured domains and update
+        /etc/hosts in background.
+      url: '#trigger-immediate-dns-resolution-of-configured-domains-and-update-etchosts-in-background'
+    - depth: 2
+      title: Test connectivity and latency to a SmartDNS server.
+      url: '#test-connectivity-and-latency-to-a-smartdns-server'
   structuredData:
     headings:
       - content: Which optimizations are already applied (BBR, TCP buffers, swap, DNS
@@ -206,6 +223,18 @@ _openapi:
       - content: Fetch the hosts content from a public URL and replace /etc/hosts with
           it.
         id: fetch-the-hosts-content-from-a-public-url-and-replace-etchosts-with-it
+      - content: Read DNS resolver state, configuration and resolved domain IP entries.
+        id: read-dns-resolver-state-configuration-and-resolved-domain-ip-entries
+      - content: Update DNS resolver settings (enable/disable, DNS server, check
+          interval).
+        id: update-dns-resolver-settings-enabledisable-dns-server-check-interval
+      - content: Update domain list to resolve via SmartDNS.
+        id: update-domain-list-to-resolve-via-smartdns
+      - content: Trigger immediate DNS resolution of configured domains and update
+          /etc/hosts in background.
+        id: trigger-immediate-dns-resolution-of-configured-domains-and-update-etchosts-in-background
+      - content: Test connectivity and latency to a SmartDNS server.
+        id: test-connectivity-and-latency-to-a-smartdns-server
     contents: []
 ---
 
@@ -216,7 +245,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/optimize/status","method":"get"},{"path":"/panel/api/optimize/apply","method":"post"},{"path":"/panel/api/optimize/revert","method":"post"},{"path":"/panel/api/zapret/status","method":"get"},{"path":"/panel/api/zapret/download","method":"post"},{"path":"/panel/api/zapret/uninstall","method":"post"},{"path":"/panel/api/zapret/start","method":"post"},{"path":"/panel/api/zapret/stop","method":"post"},{"path":"/panel/api/zapret/restart","method":"post"},{"path":"/panel/api/zapret/hosts","method":"get"},{"path":"/panel/api/zapret/hosts","method":"put"},{"path":"/panel/api/zapret/logs","method":"get"},{"path":"/panel/api/zapret/config","method":"get"},{"path":"/panel/api/zapret/config","method":"put"},{"path":"/panel/api/zapret/files","method":"get"},{"path":"/panel/api/zapret/file","method":"put"},{"path":"/panel/api/zapret/backup","method":"get"},{"path":"/panel/api/zapret/restore","method":"post"},{"path":"/panel/api/warp/status","method":"get"},{"path":"/panel/api/warp/settings","method":"get"},{"path":"/panel/api/warp/settings","method":"post"},{"path":"/panel/api/warp/install","method":"post"},{"path":"/panel/api/warp/uninstall","method":"post"},{"path":"/panel/api/warp/start","method":"post"},{"path":"/panel/api/warp/stop","method":"post"},{"path":"/panel/api/warp/restart","method":"post"},{"path":"/panel/api/warp/rotate","method":"post"},{"path":"/panel/api/warp/logs","method":"get"},{"path":"/panel/api/warp/install-logs","method":"get"},{"path":"/panel/api/hostsfile","method":"get"},{"path":"/panel/api/hostsfile","method":"put"},{"path":"/panel/api/hostsfile/download","method":"post"}]} showTitle />
+      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/optimize/status","method":"get"},{"path":"/panel/api/optimize/apply","method":"post"},{"path":"/panel/api/optimize/revert","method":"post"},{"path":"/panel/api/zapret/status","method":"get"},{"path":"/panel/api/zapret/download","method":"post"},{"path":"/panel/api/zapret/uninstall","method":"post"},{"path":"/panel/api/zapret/start","method":"post"},{"path":"/panel/api/zapret/stop","method":"post"},{"path":"/panel/api/zapret/restart","method":"post"},{"path":"/panel/api/zapret/hosts","method":"get"},{"path":"/panel/api/zapret/hosts","method":"put"},{"path":"/panel/api/zapret/logs","method":"get"},{"path":"/panel/api/zapret/config","method":"get"},{"path":"/panel/api/zapret/config","method":"put"},{"path":"/panel/api/zapret/files","method":"get"},{"path":"/panel/api/zapret/file","method":"put"},{"path":"/panel/api/zapret/backup","method":"get"},{"path":"/panel/api/zapret/restore","method":"post"},{"path":"/panel/api/warp/status","method":"get"},{"path":"/panel/api/warp/settings","method":"get"},{"path":"/panel/api/warp/settings","method":"post"},{"path":"/panel/api/warp/install","method":"post"},{"path":"/panel/api/warp/uninstall","method":"post"},{"path":"/panel/api/warp/start","method":"post"},{"path":"/panel/api/warp/stop","method":"post"},{"path":"/panel/api/warp/restart","method":"post"},{"path":"/panel/api/warp/rotate","method":"post"},{"path":"/panel/api/warp/logs","method":"get"},{"path":"/panel/api/warp/install-logs","method":"get"},{"path":"/panel/api/hostsfile","method":"get"},{"path":"/panel/api/hostsfile","method":"put"},{"path":"/panel/api/hostsfile/download","method":"post"},{"path":"/panel/api/dnsresolver/status","method":"get"},{"path":"/panel/api/dnsresolver/settings","method":"post"},{"path":"/panel/api/dnsresolver/domains","method":"post"},{"path":"/panel/api/dnsresolver/resolve","method":"post"},{"path":"/panel/api/dnsresolver/test","method":"post"}]} showTitle />
     </>
   );
 }

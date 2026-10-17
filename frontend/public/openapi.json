@@ -17151,6 +17151,203 @@
         }
       }
     },
+    "/panel/api/dnsresolver/status": {
+      "get": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Read DNS resolver state, configuration and resolved domain IP entries.",
+        "operationId": "get_panel_api_dnsresolver_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnsresolver/settings": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Update DNS resolver settings (enable/disable, DNS server, check interval).",
+        "operationId": "post_panel_api_dnsresolver_settings",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "enabled": true,
+                "dnsServer": "https://dns.comss.one/dns-query",
+                "intervalHours": 12,
+                "domains": [
+                  "chatgpt.com"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnsresolver/domains": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Update domain list to resolve via SmartDNS.",
+        "operationId": "post_panel_api_dnsresolver_domains",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "domains": [
+                  "chatgpt.com",
+                  "api.openai.com"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnsresolver/resolve": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Trigger immediate DNS resolution of configured domains and update /etc/hosts in background.",
+        "operationId": "post_panel_api_dnsresolver_resolve",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/dnsresolver/test": {
+      "post": {
+        "tags": [
+          "System Tools"
+        ],
+        "summary": "Test connectivity and latency to a SmartDNS server.",
+        "operationId": "post_panel_api_dnsresolver_test",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "dnsServer": "https://dns.comss.one/dns-query"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/{subPath}{subid}": {
       "get": {
         "tags": [

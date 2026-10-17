@@ -20,6 +20,7 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
+	"github.com/mhsanaei/3x-ui/v3/internal/dnsresolver"
 	"github.com/mhsanaei/3x-ui/v3/internal/eventbus"
 	"github.com/mhsanaei/3x-ui/v3/internal/extra"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -135,6 +136,7 @@ type Server struct {
 	bus                  *eventbus.Bus
 	cron                 *cron.Cron
 	discordNotifyEntryID cron.EntryID
+	dnsResolverEntryID   cron.EntryID
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -460,6 +462,41 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 			time.Sleep(time.Minute)
 			job.NewMemoryReleaseJob().Run()
 		}()
+	}
+
+	s.initDnsResolverCron()
+}
+
+func (s *Server) initDnsResolverCron() {
+	dnsresolver.RegisterCronUpdateHook(func(intervalHours int, enabled bool) {
+		if s.cron == nil {
+			return
+		}
+		if s.dnsResolverEntryID != 0 {
+			s.cron.Remove(s.dnsResolverEntryID)
+			s.dnsResolverEntryID = 0
+		}
+		if !enabled {
+			return
+		}
+		spec := fmt.Sprintf("@every %dh", intervalHours)
+		id, err := s.cron.AddFunc(spec, func() {
+			_ = dnsresolver.Resolve(context.Background())
+		})
+		if err == nil {
+			s.dnsResolverEntryID = id
+		}
+	})
+
+	st := dnsresolver.GetSettings()
+	if st.Enabled && s.cron != nil {
+		spec := fmt.Sprintf("@every %dh", st.IntervalHours)
+		id, err := s.cron.AddFunc(spec, func() {
+			_ = dnsresolver.Resolve(context.Background())
+		})
+		if err == nil {
+			s.dnsResolverEntryID = id
+		}
 	}
 }
 

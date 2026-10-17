@@ -366,6 +366,112 @@ export function useHostsFileMutations() {
   };
 }
 
+export interface DnsResolverEntry {
+  domain: string;
+  ip: string;
+  status: string;
+}
+
+export interface DnsResolverSettings {
+  enabled: boolean;
+  dnsServer: string;
+  intervalHours: number;
+  domains: string[];
+}
+
+export interface DnsTestResult {
+  success: boolean;
+  latencyMs: number;
+  ip?: string;
+  server?: string;
+  error?: string;
+}
+
+export interface DnsResolverStatus {
+  enabled: boolean;
+  dnsServer: string;
+  intervalHours: number;
+  domains: string[];
+  defaultDomains?: string[];
+  running: boolean;
+  lastRun: string;
+  lastResult: string;
+  lastError: string;
+  entries: DnsResolverEntry[];
+}
+
+export const EMPTY_DNS_RESOLVER_STATUS: DnsResolverStatus = {
+  enabled: false,
+  dnsServer: 'https://dns.comss.one/dns-query',
+  intervalHours: 12,
+  domains: [],
+  defaultDomains: [],
+  running: false,
+  lastRun: '',
+  lastResult: '',
+  lastError: '',
+  entries: [],
+};
+
+export function useDnsResolverStatus(refetchInterval?: number) {
+  return useQuery({
+    queryKey: ['dnsresolver', 'status'],
+    queryFn: async (): Promise<DnsResolverStatus> => {
+      const msg = await HttpUtil.get<DnsResolverStatus>(
+        '/panel/api/dnsresolver/status',
+        undefined,
+        {
+          silent: true,
+        },
+      );
+      if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch DNS resolver status');
+      return msg.obj ?? EMPTY_DNS_RESOLVER_STATUS;
+    },
+    refetchInterval,
+  });
+}
+
+export function useDnsResolverMutations() {
+  const queryClient = useQueryClient();
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['dnsresolver'] });
+    queryClient.invalidateQueries({ queryKey: ['hostsfile'] });
+  };
+
+  const saveSettings = useMutation({
+    mutationFn: (settings: DnsResolverSettings) =>
+      HttpUtil.post('/panel/api/dnsresolver/settings', settings, JSON_HEADERS),
+    onSuccess: () => invalidate(),
+  });
+
+  const saveDomains = useMutation({
+    mutationFn: (domains: string[]) =>
+      HttpUtil.post('/panel/api/dnsresolver/domains', { domains }, JSON_HEADERS),
+    onSuccess: () => invalidate(),
+  });
+
+  const resolve = useMutation({
+    mutationFn: () => HttpUtil.post('/panel/api/dnsresolver/resolve'),
+    onSuccess: () => invalidate(),
+  });
+
+  const testDns = useMutation({
+    mutationFn: (dnsServer: string) =>
+      HttpUtil.post<DnsTestResult>(
+        '/panel/api/dnsresolver/test',
+        { dnsServer },
+        { ...JSON_HEADERS, silent: true },
+      ),
+  });
+
+  return {
+    saveSettings: (settings: DnsResolverSettings) => saveSettings.mutateAsync(settings),
+    saveDomains: (domains: string[]) => saveDomains.mutateAsync(domains),
+    resolve: () => resolve.mutateAsync(),
+    testDns: (dnsServer: string) => testDns.mutateAsync(dnsServer),
+  };
+}
+
 export interface WarpStatus {
   installed: boolean;
   running: boolean;
