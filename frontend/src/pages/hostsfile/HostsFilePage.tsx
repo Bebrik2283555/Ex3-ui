@@ -166,7 +166,9 @@ function HostsFileTab() {
 
 // ─── DNS Resolver Tab ────────────────────────────────────────────────────────
 
-function DnsResolverTab() {
+type MessageApi = ReturnType<typeof message.useMessage>[0];
+
+function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState<string | null>(null);
   const [domainsModalOpen, setDomainsModalOpen] = useState(false);
@@ -201,9 +203,9 @@ function DnsResolverTab() {
       };
       setTestResult(data);
       if (res.success && data.success) {
-        message.success(t('pages.dnsresolver.testSuccess', { latency: data.latencyMs }));
+        messageApi.success(t('pages.dnsresolver.testSuccess', { latency: data.latencyMs }));
       } else {
-        message.error(data.error || t('pages.dnsresolver.testFailed'));
+        messageApi.error(data.error || t('pages.dnsresolver.testFailed'));
       }
     } catch (err: unknown) {
       const e = err as { message?: string };
@@ -213,7 +215,7 @@ function DnsResolverTab() {
         server: srv || '',
         error: e.message || 'Error',
       });
-      message.error(e.message || t('pages.dnsresolver.testFailed'));
+      messageApi.error(e.message || t('pages.dnsresolver.testFailed'));
     } finally {
       setTestingDns(false);
     }
@@ -553,7 +555,11 @@ export default function HostsFilePage() {
               ]}
               style={{ marginBottom: 16 }}
             />
-            {activeTab === 'hostsfile' ? <HostsFileTab /> : <DnsResolverTab />}
+            {activeTab === 'hostsfile' ? (
+              <HostsFileTab />
+            ) : (
+              <DnsResolverTab messageApi={messageApi} />
+            )}
           </Layout.Content>
         </Layout>
       </Layout>

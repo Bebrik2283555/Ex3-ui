@@ -209,16 +209,16 @@ func GetStatus() Status {
 	mu.Lock()
 	defer mu.Unlock()
 	return Status{
-		Enabled:       settings.Enabled,
-		DnsServer:     settings.DnsServer,
-		IntervalHours: settings.IntervalHours,
+		Enabled:        settings.Enabled,
+		DnsServer:      settings.DnsServer,
+		IntervalHours:  settings.IntervalHours,
 		Domains:        append([]string{}, settings.Domains...),
 		DefaultDomains: append([]string{}, defaultDomains...),
 		Running:        running,
-		LastRun:       lastRun,
-		LastResult:    lastResult,
-		LastError:     lastError,
-		Entries:       append([]ResolvedEntry{}, currentEntries...),
+		LastRun:        lastRun,
+		LastResult:     lastResult,
+		LastError:      lastError,
+		Entries:        append([]ResolvedEntry{}, currentEntries...),
 	}
 }
 

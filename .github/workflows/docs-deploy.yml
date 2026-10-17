@@ -30,6 +30,7 @@ defaults:
 
 jobs:
   build:
+    if: github.repository == 'mhsanaei/3x-ui'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
