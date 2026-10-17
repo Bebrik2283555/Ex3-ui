@@ -20,6 +20,7 @@ on:
 
 jobs:
   build:
+    if: github.repository == 'mhsanaei/3x-ui'
     permissions:
       contents: write
     strategy:
@@ -199,6 +200,7 @@ jobs:
   #  Windows Build
   # =================================
   build-windows:
+    if: github.repository == 'mhsanaei/3x-ui'
     name: Build for Windows
     permissions:
       contents: write
@@ -347,7 +349,7 @@ jobs:
   publish-dev:
     name: Publish rolling dev release
     needs: [build, build-windows]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.repository == 'mhsanaei/3x-ui' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
