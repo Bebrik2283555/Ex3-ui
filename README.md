@@ -21,6 +21,7 @@
   - [olcRTC](https://github.com/openlibrecommunity/olcrtc)
 - **zapret** — обход DPI-блокировок ([zapret-linux-easy](https://github.com/ImMALWARE/zapret-linux-easy), интегрирован в панель)
 - **hosts** — обход гео и DPI-блокировок для серверов в России (можно использовать свой список или [этот](https://info.dns.malw.link/hosts))
+- **SmartDNS** - резолвинг dns серверов для обхода гео блокировок и прописывания их в hosts
 - **Оптимизация под слабые VPS:**
   - установка системного DNS-сервера
   - включение BBR
