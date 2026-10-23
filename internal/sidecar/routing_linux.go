@@ -3,6 +3,7 @@
 package sidecar
 
 import (
+	"context"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -117,9 +118,9 @@ func ClearRouting(inst Instance) {
 	}
 	table := strconv.Itoa(inst.RouteTable)
 	for _, iface := range ifaces {
-		_ = exec.Command("ip", "rule", "del", "iif", iface, "lookup", table).Run()
+		_ = exec.CommandContext(context.Background(), "ip", "rule", "del", "iif", iface, "lookup", table).Run()
 	}
-	_ = exec.Command("ip", "route", "flush", "table", table).Run()
+	_ = exec.CommandContext(context.Background(), "ip", "route", "flush", "table", table).Run()
 }
 
 func waitLink(iface string, timeout time.Duration) {
@@ -133,11 +134,11 @@ func linkExists(iface string) bool {
 	if iface == "" {
 		return false
 	}
-	return exec.Command("ip", "link", "show", iface).Run() == nil
+	return exec.CommandContext(context.Background(), "ip", "link", "show", iface).Run() == nil
 }
 
 func ruleExists(iface string, table int) bool {
-	out, err := exec.Command("ip", "rule", "show", "iif", iface).Output()
+	out, err := exec.CommandContext(context.Background(), "ip", "rule", "show", "iif", iface).Output()
 	if err != nil {
 		return false
 	}
@@ -153,7 +154,7 @@ func ruleExists(iface string, table int) bool {
 func stripMasquerade(subnets ...string) {
 	for _, subnet := range subnets {
 		for i := 0; i < 4; i++ {
-			if err := exec.Command("iptables", "-t", "nat", "-D", "POSTROUTING",
+			if err := exec.CommandContext(context.Background(), "iptables", "-t", "nat", "-D", "POSTROUTING",
 				"-s", subnet, "-j", "MASQUERADE").Run(); err != nil {
 				break
 			}
@@ -164,7 +165,7 @@ func stripMasquerade(subnets ...string) {
 // stripManagedCSQTTNAT removes the NAT rules csqtt installs itself. In Xray
 // mode they must go, otherwise packets are SNATed before reaching the TUN.
 func stripManagedCSQTTNAT() bool {
-	out, err := exec.Command("iptables", "-t", "nat", "-S", "POSTROUTING").Output()
+	out, err := exec.CommandContext(context.Background(), "iptables", "-t", "nat", "-S", "POSTROUTING").Output()
 	if err != nil {
 		return false
 	}
@@ -235,7 +236,7 @@ func applyFirewall(rules ...firewallRule) {
 	runCmd("sysctl", "-qw", "net.ipv4.conf."+csqttIface+".rp_filter=2")
 	for _, r := range rules {
 		check := iptablesArgs(r.table, "-C", r.chain, r.spec...)
-		if exec.Command("iptables", check...).Run() == nil {
+		if exec.CommandContext(context.Background(), "iptables", check...).Run() == nil {
 			continue
 		}
 		// Prepend FORWARD rules so a later UFW reject cannot win.
@@ -258,7 +259,7 @@ func iptablesArgs(table, op, chain string, spec ...string) []string {
 }
 
 func runCmd(name string, args ...string) {
-	if out, err := exec.Command(name, args...).CombinedOutput(); err != nil {
+	if out, err := exec.CommandContext(context.Background(), name, args...).CombinedOutput(); err != nil {
 		logger.Warningf("sidecar routing: %s %s: %v\n%s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
 }
