@@ -11,9 +11,10 @@ All original 3x-ui code, and EX3-UI code that is not listed in section 2, remain
 under the **GNU General Public License v3.0**. See [`LICENSE`](LICENSE) and
 [`licenses/LICENSE-3x-ui-GPL-3.0.txt`](licenses/LICENSE-3x-ui-GPL-3.0.txt).
 
-## 2. EX3-UI components derived from LucX-UI — PolyForm Noncommercial 1.0.0
+## 2. EX3-UI components derived from [LucX-UI](https://github.com/AlexeyLCP/lucx-ui) — PolyForm Noncommercial 1.0.0
 
-The sidecar/core-management code adapted from LucX-UI is licensed under the
+The sidecar/core-management code adapted from
+[LucX-UI](https://github.com/AlexeyLCP/lucx-ui) is licensed under the
 **PolyForm Noncommercial License 1.0.0**. This currently covers:
 
 - `internal/sidecar/` — the sidecar manager and protocol adapters. See
@@ -52,7 +53,7 @@ authors.
 | TUIC (`bin/tuic-server*`) | GPL-3.0 | `licenses/LICENSE-tuic-GPL-3.0.txt` |
 | mtg (`bin/mtg-linux-*`) | MIT | `licenses/LICENSE-mtg-multi-MIT.txt` |
 | zapret | MIT | `licenses/LICENSE-zapret-linux-easy-MIT.txt` |
-| CSQTT (`bin/csqtt-linux-*`) | PolyForm Noncommercial 1.0.0 (amurcanov) | `licenses/LICENSE-csqtt-PolyForm-Noncommercial-1.0.0.txt` |
+| [CSQTT](https://github.com/amurcanov/csqtt) (`bin/csqtt-linux-*`) | PolyForm Noncommercial 1.0.0 (amurcanov) | `licenses/LICENSE-csqtt-PolyForm-Noncommercial-1.0.0.txt` |
 | Geo `.dat` files | Upstream dataset terms | See the dataset sources in `licenses/THIRD-PARTY-NOTICES.md` |
 
 CSQTT is a separate program by amurcanov. LucX-UI's commercial permission does

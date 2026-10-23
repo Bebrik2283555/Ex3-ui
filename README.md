@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/Bebrik2283555/Ex3-ui/releases"><img src="https://img.shields.io/github/v/release/Bebrik2283555/Ex3-ui?label=Release" alt="Release"></a>
-  <a href="https://www.gnu.org/licenses/gpl-3.0.en.html"><img src="https://img.shields.io/badge/license-GPL%20V3-blue?style=flat-square&longCache=true" alt="License"></a>
+  <a href="LICENSING.md"><img src="https://img.shields.io/badge/license-GPL--3.0%20%2B%20PolyForm%20NC-blue?style=flat-square&longCache=true" alt="License"></a>
   <img src="https://img.shields.io/badge/arch-amd64%20%7C%20arm64-blue?style=flat-square" alt="Arch">
 </p>
 
@@ -80,10 +80,21 @@ bash <(curl -Ls https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/inst
 | --- | --- | --- |
 | EX3-UI / 3x-ui панель | [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui) | GPL-3.0 |
 | xray-core | [XTLS/Xray-core](https://github.com/XTLS/Xray-core) | MPL-2.0 |
+| TUIC | [EAimTY/tuic](https://github.com/EAimTY/tuic) | GPL-3.0 |
 | mtg-multi (MTProto) | [mhsanaei/mtg-multi](https://github.com/mhsanaei/mtg-multi) | MIT |
 | qWDTT (fork WDTT) | [SpaceNeuroX/proxy-turn-vk-android](https://github.com/SpaceNeuroX/proxy-turn-vk-android) | GPL-3.0 |
 | WDTT | [amurcanov/proxy-turn-vk-android](https://github.com/amurcanov/proxy-turn-vk-android) | GPL-3.0 |
 | olcRTC | [openlibrecommunity/olcrtc](https://github.com/openlibrecommunity/olcrtc) | WTFPL-2.0 |
 | zapret | [ImMALWARE/zapret-linux-easy](https://github.com/ImMALWARE/zapret-linux-easy) | MIT |
+| CSQTT | [amurcanov/csqtt](https://github.com/amurcanov/csqtt) | PolyForm Noncommercial 1.0.0 |
+| LucX-UI (часть кода sidecar/Cores) | [AlexeyLCP/lucx-ui](https://github.com/AlexeyLCP/lucx-ui) | PolyForm Noncommercial 1.0.0 |
 
-Полные тексты лицензий — в каталоге [`licenses/`](licenses/) (в релизном архиве) и в исходниках соответствующих проектов.
+Проект использует смешанную модель: upstream 3x-ui и оригинальный код EX3-UI —
+GPL-3.0; часть кода sidecar/Cores адаптирована из LucX-UI и распространяется по
+PolyForm Noncommercial 1.0.0; CSQTT — отдельный компонент amurcanov под
+PolyForm Noncommercial 1.0.0. Коммерческое использование PolyForm-компонентов
+требует письменного разрешения соответствующих авторов.
+
+Полные тексты лицензий — в каталоге [`licenses/`](licenses/) (в релизном архиве)
+и в исходниках соответствующих проектов. Полная матрица — в
+[`LICENSING.md`](LICENSING.md).
