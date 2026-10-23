@@ -114,6 +114,19 @@ func migrateInboundExcludeFromSubColumn() error {
 	return migrator.AddColumn(&model.Inbound{}, "ExcludeFromSub")
 }
 
+// The fork exposes sidecar links through the qThrone feed, so profile names
+// follow the inbound remark instead of "remark-email". Only the old shipped
+// default is rewritten; custom templates stay untouched.
+func migrateDefaultRemarkTemplate() error {
+	const (
+		oldDefault = "{{INBOUND}}-{{EMAIL}}|📊{{TRAFFIC_LEFT}}|⏳{{DAYS_LEFT}}D"
+		newDefault = "{{INBOUND}}|📊{{TRAFFIC_LEFT}}|⏳{{DAYS_LEFT}}D"
+	)
+	return db.Model(&model.Setting{}).
+		Where("key = ? AND value = ?", "remarkTemplate", oldDefault).
+		Update("value", newDefault).Error
+}
+
 func initModels() error {
 	if err := migrateClientTrafficLastSubFetchColumn(); err != nil {
 		return err
@@ -137,6 +150,9 @@ func initModels() error {
 			log.Printf("Error auto migrating model: %v", err)
 			return err
 		}
+	}
+	if err := migrateDefaultRemarkTemplate(); err != nil {
+		return err
 	}
 	if err := dropLegacyInboundPortUnique(); err != nil {
 		return err
@@ -172,6 +188,9 @@ func initModels() error {
 		return err
 	}
 	if err := dedupeInboundSettingsClients(); err != nil {
+		return err
+	}
+	if err := backfillClientSidecarPasswords(); err != nil {
 		return err
 	}
 	if err := migrateLegacySocksInboundsToMixed(); err != nil {
@@ -1297,6 +1316,94 @@ func dedupeInboundSettingsClients() error {
 	}
 	if repaired > 0 {
 		log.Printf("Removed duplicate client entries from %d inbound(s)", repaired)
+	}
+	return nil
+}
+
+// backfillClientSidecarPasswords copies qWDTT/CSQTT credentials from inbound
+// settings into the shared client records. Older builds wrote the per-client
+// fields into settings only, while link generation and the client editor read
+// the normalized clients table — leaving every such client on the shared
+// fallback password. Only empty columns are filled, so the migration is
+// idempotent and never overwrites an operator-edited value.
+func backfillClientSidecarPasswords() error {
+	var records []model.ClientRecord
+	if err := db.Select("id", "email", "qwdtt_password", "csqtt_password").Find(&records).Error; err != nil {
+		return err
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	var inbounds []model.Inbound
+	if err := db.Select("id", "settings").Find(&inbounds).Error; err != nil {
+		return err
+	}
+	type sidecarCreds struct{ qwdtt, csqtt string }
+	byEmail := make(map[string]sidecarCreds)
+	for _, inbound := range inbounds {
+		if strings.TrimSpace(inbound.Settings) == "" {
+			continue
+		}
+		var settings map[string]any
+		if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+			continue
+		}
+		clients, _ := settings["clients"].([]any)
+		for _, raw := range clients {
+			cm, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			email, _ := cm["email"].(string)
+			email = strings.TrimSpace(email)
+			if email == "" {
+				continue
+			}
+			key := strings.ToLower(email)
+			cred := byEmail[key]
+			if q, _ := cm["qwdttPassword"].(string); cred.qwdtt == "" {
+				cred.qwdtt = strings.TrimSpace(q)
+			}
+			if c, _ := cm["csqttPassword"].(string); cred.csqtt == "" {
+				cred.csqtt = strings.TrimSpace(c)
+			}
+			byEmail[key] = cred
+		}
+	}
+
+	updated := int64(0)
+	err := db.Transaction(func(tx *gorm.DB) error {
+		for _, rec := range records {
+			cred, ok := byEmail[strings.ToLower(strings.TrimSpace(rec.Email))]
+			if !ok {
+				continue
+			}
+			if strings.TrimSpace(rec.QwdttPassword) == "" && cred.qwdtt != "" {
+				res := tx.Model(&model.ClientRecord{}).
+					Where("id = ? AND (qwdtt_password IS NULL OR qwdtt_password = '')", rec.Id).
+					Update("qwdtt_password", cred.qwdtt)
+				if res.Error != nil {
+					return res.Error
+				}
+				updated += res.RowsAffected
+			}
+			if strings.TrimSpace(rec.CsqttPassword) == "" && cred.csqtt != "" {
+				res := tx.Model(&model.ClientRecord{}).
+					Where("id = ? AND (csqtt_password IS NULL OR csqtt_password = '')", rec.Id).
+					Update("csqtt_password", cred.csqtt)
+				if res.Error != nil {
+					return res.Error
+				}
+				updated += res.RowsAffected
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if updated > 0 {
+		log.Printf("Backfilled %d sidecar password field(s) from inbound settings", updated)
 	}
 	return nil
 }

@@ -1,79 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { HttpUtil } from '@/utils';
-import { keys } from '@/api/queryKeys';
 
 const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } };
-
-export type CoreName = 'qwdtt' | 'olcrtc';
-
-export interface WDTTClient {
-  name: string;
-  subscriptionName: string;
-  subscriptionDescription: string;
-  password: string;
-  vkHashes: string;
-  enabled: boolean;
-  subUri: string;
-}
-
-export interface ExtraConfig {
-  enabled?: boolean;
-  autoStart?: boolean;
-  binaryPath?: string;
-  listenAddr?: string;
-  wgPort?: number;
-  password?: string;
-  dns?: string;
-  configDir?: string;
-  listenRaw?: string;
-  subToken?: string;
-  subHost?: string;
-  vkHashes?: string;
-  clients?: WDTTClient[];
-  adminId?: string;
-  botToken?: string;
-  configFile?: string;
-  dataDir?: string;
-  provider?: string;
-  roomId?: string;
-  cryptoKey?: string;
-  transport?: string;
-  olcrtcDns?: string;
-  vp8Fps?: number;
-  vp8Batch?: number;
-  ofConfigFile?: string;
-  ofTransport?: string;
-  ofMode?: string;
-  ofUrl?: string;
-  ofDirectListen?: string;
-  ofEncryptionKey?: string;
-  ofNegotiate?: boolean;
-  ofShareHost?: string;
-  ofCodec?: string;
-  ofMaxToken?: string;
-  ofMaxUid?: string;
-  ofTransports?: string;
-  ofYandexUrl?: string;
-  ofVyandexUrl?: string;
-  ofMailruUrl?: string;
-  ofCupsonlineUrl?: string;
-  debug?: boolean;
-  extraArgs?: string;
-}
-
-export interface ExtraStatus {
-  name: CoreName;
-  displayName: string;
-  enabled: boolean;
-  running: boolean;
-  binaryExists: boolean;
-  error?: string;
-  lastLog?: string;
-  logs?: string[];
-  config?: ExtraConfig;
-  connectUri?: string;
-}
 
 export interface OptimizeStatus {
   bbrEnabled: boolean;
@@ -100,6 +29,7 @@ export const EMPTY_OPTIMIZE_STATUS: OptimizeStatus = {
 
 export interface OptimizeApplyOptions {
   dns: boolean;
+  dnsResolvers?: string[];
   bbr: boolean;
   tcp: boolean;
   swap: boolean;
@@ -129,72 +59,6 @@ export interface ZapretHosts {
 export interface HostsFile {
   entries: { ip: string; domain: string }[];
   raw: string;
-}
-
-const queryKeys = keys as Record<string, unknown>;
-
-export function useExtrasStatus() {
-  return useQuery({
-    queryKey: ['extras', 'services'],
-    queryFn: async (): Promise<ExtraStatus[]> => {
-      const msg = await HttpUtil.get<ExtraStatus[]>('/panel/api/extra/services', undefined, {
-        silent: true,
-      });
-      if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch services');
-      return msg.obj ?? [];
-    },
-  });
-}
-
-export function useExtrasMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['extras'] });
-  void queryKeys;
-
-  const start = useMutation({
-    mutationFn: (name: CoreName) => HttpUtil.post(`/panel/api/extra/services/${name}/start`),
-    onSuccess: () => invalidate(),
-  });
-  const stop = useMutation({
-    mutationFn: (name: CoreName) => HttpUtil.post(`/panel/api/extra/services/${name}/stop`),
-    onSuccess: () => invalidate(),
-  });
-  const restart = useMutation({
-    mutationFn: (name: CoreName) => HttpUtil.post(`/panel/api/extra/services/${name}/restart`),
-    onSuccess: () => invalidate(),
-  });
-  const saveConfig = useMutation({
-    mutationFn: ({ name, cfg }: { name: CoreName; cfg: ExtraConfig }) =>
-      HttpUtil.put(`/panel/api/extra/services/${name}/config`, cfg, JSON_HEADERS),
-    onSuccess: () => invalidate(),
-  });
-  const uploadBinary = useMutation({
-    mutationFn: ({ name, file }: { name: CoreName; file: File }) => {
-      const form = new FormData();
-      form.append('file', file);
-      return HttpUtil.post(`/panel/api/extra/services/${name}/upload`, form);
-    },
-    onSuccess: () => invalidate(),
-  });
-  const downloadBinary = useMutation({
-    mutationFn: ({ name, url }: { name: CoreName; url: string }) =>
-      HttpUtil.post(`/panel/api/extra/services/${name}/download`, { url }, JSON_HEADERS),
-    onSuccess: () => invalidate(),
-  });
-  const deleteBinary = useMutation({
-    mutationFn: (name: CoreName) => HttpUtil.delete(`/panel/api/extra/services/${name}/binary`),
-    onSuccess: () => invalidate(),
-  });
-
-  return {
-    start: (name: CoreName) => start.mutateAsync(name),
-    stop: (name: CoreName) => stop.mutateAsync(name),
-    restart: (name: CoreName) => restart.mutateAsync(name),
-    saveConfig: (name: CoreName, cfg: ExtraConfig) => saveConfig.mutateAsync({ name, cfg }),
-    uploadBinary: (name: CoreName, file: File) => uploadBinary.mutateAsync({ name, file }),
-    downloadBinary: (name: CoreName, url: string) => downloadBinary.mutateAsync({ name, url }),
-    deleteBinary: (name: CoreName) => deleteBinary.mutateAsync(name),
-  };
 }
 
 export function useOptimizeStatus() {

@@ -582,7 +582,9 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 	// Apply to the running runtime after commit — outside the serialized writer
 	// so a slow node call can't stall traffic accounting.
 	if oldInbound.NodeID == nil {
-		if !push {
+		if model.IsSidecarProtocol(oldInbound.Protocol) {
+			inboundSvc.applyLocalSidecar(oldInbound.Id)
+		} else if !push {
 			needRestart = true
 		} else if oldInbound.Protocol == model.MTProto {
 			inboundSvc.applyLocalMtproto(oldInbound.Id)
@@ -1017,7 +1019,9 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	// serialized writer so a slow node call can't stall traffic accounting.
 	if len(oldEmail) > 0 {
 		if oldInbound.NodeID == nil {
-			if !push {
+			if model.IsSidecarProtocol(oldInbound.Protocol) {
+				inboundSvc.applyLocalSidecar(oldInbound.Id)
+			} else if !push {
 				needRestart = true
 			} else if oldInbound.Protocol == model.MTProto {
 				inboundSvc.applyLocalMtproto(oldInbound.Id)
@@ -1206,7 +1210,9 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 	// inbound's runtime even when the same email survives in another inbound.
 	if len(email) > 0 {
 		if oldInbound.NodeID == nil {
-			if oldInbound.Protocol == model.MTProto {
+			if model.IsSidecarProtocol(oldInbound.Protocol) {
+				inboundSvc.applyLocalSidecar(oldInbound.Id)
+			} else if oldInbound.Protocol == model.MTProto {
 				// mtg serves the full secret set, so any client delete re-applies
 				// it (removing the last client stops the sidecar) regardless of the
 				// client's enable state.

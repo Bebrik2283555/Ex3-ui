@@ -169,17 +169,20 @@ func TestUpdate_NoInbound_PreservesCredentialsWhenOmitted(t *testing.T) {
 
 func TestApplyClientRecordMerge_MirrorsSyncInboundRules(t *testing.T) {
 	row := &model.ClientRecord{
-		UUID:     "kept-uuid",
-		Password: "kept-pw",
-		Flow:     "kept-flow",
-		TotalGB:  9,
-		Group:    "kept-group",
-		Comment:  "kept-comment",
+		UUID:          "kept-uuid",
+		Password:      "kept-pw",
+		QwdttPassword: "kept-q",
+		CsqttPassword: "kept-c",
+		Flow:          "kept-flow",
+		TotalGB:       9,
+		Group:         "kept-group",
+		Comment:       "kept-comment",
 	}
 	incoming := &model.ClientRecord{
-		Password: "new-pw",
-		TotalGB:  0,
-		Comment:  "new-comment",
+		Password:      "new-pw",
+		QwdttPassword: "new-q",
+		TotalGB:       0,
+		Comment:       "new-comment",
 	}
 
 	applyClientRecordMerge(row, incoming)
@@ -189,6 +192,12 @@ func TestApplyClientRecordMerge_MirrorsSyncInboundRules(t *testing.T) {
 	}
 	if row.Password != "new-pw" {
 		t.Fatalf("non-empty incoming Password should overwrite, got %q", row.Password)
+	}
+	if row.QwdttPassword != "new-q" {
+		t.Fatalf("non-empty incoming QwdttPassword should overwrite, got %q", row.QwdttPassword)
+	}
+	if row.CsqttPassword != "kept-c" {
+		t.Fatalf("empty incoming CsqttPassword should preserve stored value, got %q", row.CsqttPassword)
 	}
 	if row.Flow != "" {
 		t.Fatalf("incoming Flow is unconditional and should overwrite with empty, got %q", row.Flow)

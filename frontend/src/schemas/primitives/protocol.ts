@@ -15,6 +15,9 @@ export const ProtocolSchema = z.enum([
   'amneziawg',
   'tuic',
   'masque',
+  'qwdtt',
+  'olcrtc',
+  'csqtt',
 ]);
 export type Protocol = z.infer<typeof ProtocolSchema>;
 
@@ -39,4 +42,7 @@ export const Protocols = Object.freeze({
   AMNEZIAWG: 'amneziawg',
   TUIC: 'tuic',
   MASQUE: 'masque',
+  QWDTT: 'qwdtt',
+  OLCRTC: 'olcrtc',
+  CSQTT: 'csqtt',
 });

@@ -402,6 +402,36 @@ export default function ClientInfoModal({
                     </td>
                   </tr>
                 )}
+                {client.qwdttPassword && (
+                  <tr>
+                    <td>{t('pages.clients.qwdttPassword')}</td>
+                    <td>
+                      <Tag className="info-large-tag">{client.qwdttPassword}</Tag>
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<CopyOutlined />}
+                        aria-label={t('copy')}
+                        onClick={() => copyValue(client.qwdttPassword!)}
+                      />
+                    </td>
+                  </tr>
+                )}
+                {client.csqttPassword && (
+                  <tr>
+                    <td>{t('pages.clients.csqttPassword')}</td>
+                    <td>
+                      <Tag className="info-large-tag">{client.csqttPassword}</Tag>
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<CopyOutlined />}
+                        aria-label={t('copy')}
+                        onClick={() => copyValue(client.csqttPassword!)}
+                      />
+                    </td>
+                  </tr>
+                )}
                 <tr>
                   <td>{t('pages.clients.flow')}</td>
                   <td>

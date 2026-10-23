@@ -21,6 +21,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/mtproto"
+	"github.com/mhsanaei/3x-ui/v3/internal/sidecar"
 	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/maskcompat"
@@ -1122,6 +1123,23 @@ func mtprotoRoutesThroughXray(inbound *model.Inbound) bool {
 	return parsed.RouteThroughXray
 }
 
+// sidecarRoutesThroughXray reports whether a sidecar inbound needs the Xray
+// egress bridge that is only generated when the core config is rebuilt.
+func sidecarRoutesThroughXray(inbound *model.Inbound) bool {
+	if inbound == nil || !model.IsSidecarProtocol(inbound.Protocol) {
+		return false
+	}
+	var parsed struct {
+		Sidecar struct {
+			RouteThroughXray bool `json:"routeThroughXray"`
+		} `json:"sidecar"`
+	}
+	if err := json.Unmarshal([]byte(inbound.Settings), &parsed); err != nil {
+		return false
+	}
+	return parsed.Sidecar.RouteThroughXray
+}
+
 func settingsRouteXrayPort(parsed map[string]any) int {
 	switch v := parsed["routeXrayPort"].(type) {
 	case float64:
@@ -1232,6 +1250,14 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	inbound.Id = 0
 	if err := normalizeTuicSettings(inbound); err != nil {
 		return inbound, false, err
+	}
+	if err := normalizeSidecarSettings(inbound); err != nil {
+		return inbound, false, err
+	}
+	if !s.FromNodeSync {
+		if err := validateSingletonSidecar(database.GetDB(), inbound, 0, true); err != nil {
+			return inbound, false, err
+		}
 	}
 	legacyShareAddr := legacyMtprotoShareAddr(inbound)
 	inbound.TrafficResetDay = normalizeTrafficResetDay(inbound.TrafficResetDay)
@@ -1376,6 +1402,27 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 			if client.Email == "" {
 				return inbound, false, common.NewError("empty client email")
 			}
+		case "qwdtt":
+			if client.Email == "" {
+				return inbound, false, common.NewError("empty client email")
+			}
+			if client.QwdttPassword == "" && client.Password == "" {
+				return inbound, false, common.NewError("qwdtt client requires a password")
+			}
+		case "csqtt":
+			if client.Email == "" {
+				return inbound, false, common.NewError("empty client email")
+			}
+			if client.CsqttPassword == "" {
+				return inbound, false, common.NewError("csqtt client requires a password")
+			}
+		case "olcrtc":
+			if client.Email == "" {
+				return inbound, false, common.NewError("empty client email")
+			}
+			if client.Password == "" {
+				return inbound, false, common.NewError("sidecar client requires a password")
+			}
 		default:
 			if client.ID == "" {
 				return inbound, false, common.NewError("empty client ID")
@@ -1496,7 +1543,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 				if push {
 					payload := inbound
 					pushable := true
-					if inbound.Protocol == model.MTProto || inbound.Protocol == model.TUIC {
+					if inbound.Protocol == model.MTProto || inbound.Protocol == model.TUIC || model.IsSidecarProtocol(inbound.Protocol) {
 						if built, bErr := s.buildInboundForLocalRuntime(tx, inbound); bErr == nil {
 							payload = built
 						} else {
@@ -1510,7 +1557,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 								logger.Debug("New inbound added on", rt.Name(), ":", inbound.Tag)
 							} else {
 								logger.Debug("Unable to add inbound on", rt.Name(), ":", err1)
-								if inbound.Protocol != model.MTProto && inbound.Protocol != model.TUIC {
+								if inbound.Protocol != model.MTProto && inbound.Protocol != model.TUIC && !model.IsSidecarProtocol(inbound.Protocol) {
 									needRestart = true
 								}
 							}
@@ -1531,10 +1578,10 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 		postCommitApply()
 	}
 
-	// A routed mtproto inbound is not an Xray inbound itself, so the runtime
-	// push above only (re)starts the mtg sidecar. The egress SOCKS bridge lives
-	// in the generated config, so force a regen to wire it in.
-	if mtprotoRoutesThroughXray(inbound) {
+	// A routed mtproto or sidecar inbound is not an Xray inbound itself, so the
+	// runtime push above only (re)starts the sidecar. The egress bridge lives in
+	// the generated config, so force a regen to wire it in.
+	if mtprotoRoutesThroughXray(inbound) || sidecarRoutesThroughXray(inbound) {
 		needRestart = true
 	}
 
@@ -1655,8 +1702,8 @@ func (s *InboundService) delInbound(id int) (bool, func(), error) {
 			}
 		}
 	}
-	// Drop the egress SOCKS bridge a routed mtproto inbound left in the config.
-	if mtprotoRoutesThroughXray(&ib) {
+	// Drop the egress bridge a routed mtproto or sidecar inbound left in the config.
+	if mtprotoRoutesThroughXray(&ib) || sidecarRoutesThroughXray(&ib) {
 		needRestart = true
 	}
 	return needRestart, nodePush, nil
@@ -1787,6 +1834,9 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 	// Enabling puts this row's ports into the running config, and the guards ran
 	// only if it was saved: a restored or hand-edited row reaches it unchecked.
 	if enable && inbound.NodeID == nil {
+		if err := validateSingletonSidecar(db, inbound, inbound.Id, true); err != nil {
+			return false, err
+		}
 		conflict, err := checkPortConflictTx(db, inbound, inbound.Id)
 		if err != nil {
 			return false, err
@@ -1829,7 +1879,7 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 		return false, nil
 	}
 
-	if mtprotoRoutesThroughXray(inbound) {
+	if mtprotoRoutesThroughXray(inbound) || sidecarRoutesThroughXray(inbound) {
 		needRestart = true
 	}
 
@@ -1840,7 +1890,9 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 	if err := rt.DelInbound(context.Background(), inbound); err != nil &&
 		!strings.Contains(err.Error(), "not found") {
 		logger.Debug("SetInboundEnable: DelInbound on", rt.Name(), "failed:", err)
-		needRestart = true
+		if !model.IsSidecarProtocol(inbound.Protocol) {
+			needRestart = true
+		}
 	}
 	if !enable {
 		return needRestart, nil
@@ -1853,7 +1905,9 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 	}
 	if err := rt.AddInbound(context.Background(), runtimeInbound); err != nil {
 		logger.Debug("SetInboundEnable: AddInbound on", rt.Name(), "failed:", err)
-		needRestart = true
+		if !model.IsSidecarProtocol(inbound.Protocol) {
+			needRestart = true
+		}
 	}
 	return needRestart, nil
 }
@@ -1923,6 +1977,14 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	if err := normalizeTuicSettings(inbound); err != nil {
 		return inbound, false, err
 	}
+	if err := normalizeSidecarSettings(inbound); err != nil {
+		return inbound, false, err
+	}
+	if !s.FromNodeSync {
+		if err := validateSingletonSidecar(database.GetDB(), inbound, inbound.Id, inbound.Enable); err != nil {
+			return inbound, false, err
+		}
+	}
 	if err := s.normalizeAmneziaWGSettings(inbound, oldInbound.Settings); err != nil {
 		return inbound, false, err
 	}
@@ -1950,6 +2012,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	// inbound keeps a stable egress port (reusing the one already stored).
 	oldProtocol := oldInbound.Protocol
 	oldRoutedMtproto := mtprotoRoutesThroughXray(oldInbound)
+	oldRoutedSidecar := sidecarRoutesThroughXray(oldInbound)
 	if err := s.normalizeMtprotoXrayPort(inbound, oldInbound.Settings); err != nil {
 		return inbound, false, err
 	}
@@ -2205,7 +2268,8 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		// (Re)generate the Xray config whenever routing was or is now enabled, so
 		// the egress SOCKS bridge is added, moved, or dropped to match the new
 		// settings.
-		if mtprotoRoutesThroughXray(inbound) || oldRoutedMtproto {
+		if mtprotoRoutesThroughXray(inbound) || oldRoutedMtproto ||
+			sidecarRoutesThroughXray(inbound) || oldRoutedSidecar {
 			needRestart = true
 		}
 		return nil
@@ -2233,7 +2297,51 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 // servedOutsideXray: these protocols run under their own manager, whose update
 // reconfigures in place where a Del+Add would drop every live session.
 func servedOutsideXray(protocol model.Protocol) bool {
-	return protocol == model.MTProto || protocol == model.TUIC || protocol == model.AmneziaWG
+	return protocol == model.MTProto || protocol == model.TUIC || protocol == model.AmneziaWG || model.IsSidecarProtocol(protocol)
+}
+
+// normalizeSidecarSettings fills secrets and validates the qWDTT/olcRTC/CSQTT
+// settings the external cores need. Sidecar inbounds live only on the panel
+// host: nodes run Xray, not these binaries.
+// validateSingletonSidecar enforces one qWDTT/CSQTT inbound per panel. Existing
+// duplicates stay editable while disabled so an operator can clean them up.
+func validateSingletonSidecar(db *gorm.DB, inbound *model.Inbound, ignoreID int, requireEnabled bool) error {
+	if inbound == nil || (inbound.Protocol != model.QWDTT && inbound.Protocol != model.CSQTT) || !requireEnabled {
+		return nil
+	}
+	var count int64
+	if err := db.Model(&model.Inbound{}).
+		Where("protocol = ? AND id <> ?", inbound.Protocol, ignoreID).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return common.NewError(fmt.Sprintf(
+			"%s supports only one inbound: disable or delete the other %s inbound first",
+			sidecar.DisplayName(inbound.Protocol), sidecar.DisplayName(inbound.Protocol)))
+	}
+	return nil
+}
+
+func normalizeSidecarSettings(inbound *model.Inbound) error {
+	if inbound == nil || !model.IsSidecarProtocol(inbound.Protocol) {
+		return nil
+	}
+	if inbound.NodeID != nil {
+		return common.NewError("qWDTT, olcRTC and CSQTT are available only on the local panel node")
+	}
+	if strings.TrimSpace(inbound.Listen) == "" {
+		inbound.Listen = "0.0.0.0"
+	}
+	normalized, err := sidecar.Normalize(inbound)
+	if err != nil {
+		return common.NewError(err.Error())
+	}
+	inbound.Settings = normalized
+	if err := sidecar.Validate(inbound); err != nil {
+		return common.NewError(err.Error())
+	}
+	return nil
 }
 
 // applyInboundUserOps reports whether per-user core ops moved running to next, so

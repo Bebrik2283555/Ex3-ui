@@ -71,13 +71,25 @@ export default function SubscriptionGeneralTab({
                   onChange={(v) => updateSetting({ subJsonEnable: v })}
                 />
               </SettingListItem>
+              <SettingListItem
+                paddings="small"
+                title={t('pages.settings.subThroneEnableTitle')}
+                description={t('pages.settings.subThroneEnableDesc')}
+              >
+                <Switch
+                  checked={allSetting.subThroneEnable}
+                  onChange={(v) => updateSetting({ subThroneEnable: v })}
+                />
+              </SettingListItem>
               <SettingListItem paddings="small" title={t('pages.settings.subClashEnableTitle')}>
                 <Switch
                   checked={allSetting.subClashEnable}
                   onChange={(v) => updateSetting({ subClashEnable: v })}
                 />
               </SettingListItem>
-              {(allSetting.subJsonEnable || allSetting.subClashEnable) && (
+              {(allSetting.subJsonEnable ||
+                allSetting.subThroneEnable ||
+                allSetting.subClashEnable) && (
                 <Alert
                   type="info"
                   showIcon

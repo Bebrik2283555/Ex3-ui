@@ -478,6 +478,15 @@ export const SCHEMAS: Record<string, unknown> = {
       "subThemeDir": {
         "type": "string"
       },
+      "subThroneEnable": {
+        "type": "boolean"
+      },
+      "subThronePath": {
+        "type": "string"
+      },
+      "subThroneURI": {
+        "type": "string"
+      },
       "subTitle": {
         "type": "string"
       },
@@ -722,6 +731,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subShowIdentityOnAllLinks",
       "subSupportUrl",
       "subThemeDir",
+      "subThroneEnable",
+      "subThronePath",
+      "subThroneURI",
       "subTitle",
       "subTrafficDepletedTemplate",
       "subURI",
@@ -1254,6 +1266,15 @@ export const SCHEMAS: Record<string, unknown> = {
       "subThemeDir": {
         "type": "string"
       },
+      "subThroneEnable": {
+        "type": "boolean"
+      },
+      "subThronePath": {
+        "type": "string"
+      },
+      "subThroneURI": {
+        "type": "string"
+      },
       "subTitle": {
         "type": "string"
       },
@@ -1506,6 +1527,9 @@ export const SCHEMAS: Record<string, unknown> = {
       "subShowIdentityOnAllLinks",
       "subSupportUrl",
       "subThemeDir",
+      "subThroneEnable",
+      "subThronePath",
+      "subThroneURI",
       "subTitle",
       "subTrafficDepletedTemplate",
       "subURI",
@@ -1683,6 +1707,10 @@ export const SCHEMAS: Record<string, unknown> = {
         "format": "int64",
         "type": "integer"
       },
+      "csqttPassword": {
+        "description": "CSQTT per-client password",
+        "type": "string"
+      },
       "email": {
         "description": "Client email identifier",
         "type": "string"
@@ -1732,6 +1760,10 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "string"
       },
       "publicKey": {
+        "type": "string"
+      },
+      "qwdttPassword": {
+        "description": "qWDTT per-client password",
         "type": "string"
       },
       "reset": {
@@ -1912,6 +1944,9 @@ export const SCHEMAS: Record<string, unknown> = {
         "format": "int64",
         "type": "integer"
       },
+      "csqttPassword": {
+        "type": "string"
+      },
       "email": {
         "type": "string"
       },
@@ -1953,6 +1988,9 @@ export const SCHEMAS: Record<string, unknown> = {
         "type": "string"
       },
       "publicKey": {
+        "type": "string"
+      },
+      "qwdttPassword": {
         "type": "string"
       },
       "reset": {
@@ -2005,6 +2043,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "auth",
       "comment",
       "createdAt",
+      "csqttPassword",
       "email",
       "enable",
       "expiryTime",
@@ -2019,6 +2058,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "preSharedKey",
       "privateKey",
       "publicKey",
+      "qwdttPassword",
       "reset",
       "resetDay",
       "resetMax",
@@ -3090,7 +3130,10 @@ export const SCHEMAS: Record<string, unknown> = {
           "mtproto",
           "amneziawg",
           "tuic",
-          "masque"
+          "masque",
+          "qwdtt",
+          "olcrtc",
+          "csqtt"
         ],
         "example": "vless",
         "type": "string"

@@ -92,6 +92,10 @@ func (s *InboundService) applyTrafficMutationBatch(b *trafficMutationBatch) bool
 	needRestart := false
 	for i := range b.localPlans {
 		plan := &b.localPlans[i]
+		if model.IsSidecarProtocol(plan.inbound.Protocol) {
+			s.applyLocalSidecar(plan.inbound.Id)
+			continue
+		}
 		if plan.inbound.Protocol == model.MTProto {
 			s.applyLocalMtproto(plan.inbound.Id)
 			continue

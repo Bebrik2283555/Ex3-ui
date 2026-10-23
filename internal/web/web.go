@@ -4,7 +4,6 @@ package web
 
 import (
 	"context"
-	"crypto/subtle"
 	"crypto/tls"
 	"embed"
 	"errors"
@@ -22,9 +21,9 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/dnsresolver"
 	"github.com/mhsanaei/3x-ui/v3/internal/eventbus"
-	"github.com/mhsanaei/3x-ui/v3/internal/extra"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/mtproto"
+	"github.com/mhsanaei/3x-ui/v3/internal/sidecar"
 	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/cronspec"
@@ -281,24 +280,6 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		c.JSON(http.StatusOK, gin.H{})
 	})
 
-	// Public qwdtt subscription file. The secret token in the path is the only
-	// gate (deliberately placed outside the authenticated /panel group so clients
-	// can fetch it without logging in), matching how the qWDTT Android app imports
-	// HTTPS JSON subscriptions. Each client has its own subscription.
-	engine.GET(basePath+"panel/qwdtt/sub/:token/:clientUri", func(c *gin.Context) {
-		mgr := extra.ManagerSingleton()
-		if mgr == nil || subtle.ConstantTimeCompare([]byte(mgr.SubscriptionToken(extra.WDTT)), []byte(c.Param("token"))) != 1 {
-			c.AbortWithStatus(http.StatusNotFound)
-			return
-		}
-		doc, err := mgr.ClientSubscription(extra.WDTT, c.Param("clientUri"))
-		if err != nil {
-			c.AbortWithStatus(http.StatusNotFound)
-			return
-		}
-		c.JSON(http.StatusOK, doc)
-	})
-
 	// Let unknown panel document routes fall back to the SPA shell, while every
 	// non-SPA miss still returns a hard 404.
 	engine.NoRoute(func(c *gin.Context) {
@@ -324,6 +305,7 @@ const (
 	cadenceMtproto        = "@every 10s"
 	cadenceAmneziaWG      = "@every 10s"
 	cadenceTuic           = "@every 10s"
+	cadenceSidecar        = "@every 10s"
 	cadenceExtraReconcile = "@every 10s"
 	cadenceClientIPScan   = "@every 10s"
 	cadenceNodeHeartbeat  = "@every 5s"
@@ -375,13 +357,20 @@ func (s *Server) startTask(restartXray bool, loc *time.Location) {
 	_, _ = s.cron.AddJob(cadenceTuic, tuicJob)
 	go tuicJob.Run()
 
-	// Reconcile the extra cores (qwdtt/olcRTC): auto-start enabled ones whose
-	// binary exists and are not running yet.
+	// Reconcile the qWDTT/olcRTC/CSQTT sidecars: enabled inbounds whose binary
+	// exists and whose process is not running are started again.
 	_, _ = s.cron.AddFunc(cadenceExtraReconcile, func() {
-		if mgr := extra.ManagerSingleton(); mgr != nil {
-			mgr.Reconcile()
+		inbounds, err := (&service.InboundService{}).GetAllInbounds()
+		if err != nil {
+			return
 		}
+		sidecar.GetManager().SyncAll(inbounds)
 	})
+
+	// Scrape qWDTT/CSQTT per-client counters and online sessions.
+	sidecarJob := job.NewSidecarJob()
+	_, _ = s.cron.AddJob(cadenceSidecar, sidecarJob)
+	go sidecarJob.Run()
 
 	// check client ips from log file every 10 sec
 	_, _ = s.cron.AddJob(cadenceClientIPScan, job.NewCheckClientIpJob())
@@ -622,6 +611,9 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		SetNeedRestart: func() { s.xrayService.SetToNeedRestart() },
 	}))
 	runtime.GetManager().SetNodeEgressResolver(&s.settingService)
+	// Move the pre-1.4.2 global qWDTT/olcRTC settings into regular sidecar
+	// inbounds before the first reconcile tick.
+	service.MigrateExtraServices()
 	// Supply the master client certificate for nodes in mtls mode. Issued lazily
 	// from the node CA on first use; runtime stays free of a service import.
 	runtime.SetMasterClientCertProvider(func() (tls.Certificate, error) {
@@ -839,9 +831,7 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 		amneziawgnet.GetManager().StopAll()
 		tuic.GetManager().StopAll()
 		amneziawgnet.GetOutboundManager().StopAll()
-		if mgr := extra.ManagerSingleton(); mgr != nil {
-			mgr.StopAll()
-		}
+		sidecar.GetManager().StopAll()
 	}
 	if s.cron != nil {
 		s.cron.Stop()

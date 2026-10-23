@@ -76,6 +76,7 @@ import {
   MixedFields,
   MtprotoFields,
   ShadowsocksFields,
+  SidecarFields,
   TuicFields,
   TunFields,
   TunnelFields,
@@ -106,6 +107,12 @@ import {
 
 import type { DBInbound } from '@/models/dbinbound';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
+
+const SIDECAR_PROTOCOLS: ReadonlySet<string> = new Set([
+  Protocols.QWDTT,
+  Protocols.OLCRTC,
+  Protocols.CSQTT,
+]);
 
 /* Render a field label with a hover tooltip icon instead of an `extra` help line below. */
 const labelWithHint = (label: string, hint: string) => (
@@ -634,6 +641,10 @@ export default function InboundFormModal({
             ],
           },
         });
+      } else if (SIDECAR_PROTOCOLS.has(next)) {
+        // Sidecar protocols are not part of the Xray config at all.
+        setV('streamSettings', undefined);
+        if (next === Protocols.OLCRTC) setV('port', 0);
       } else if (next === Protocols.MASQUE) {
         setV('streamSettings', {
           network: 'masque',
@@ -755,14 +766,16 @@ export default function InboundFormModal({
         <Select id="protocol" disabled={mode === 'edit'} options={PROTOCOL_OPTIONS} />
       </FormField>
 
-      <FormField
-        name="listen"
-        label={labelWithHint(t('pages.inbounds.address'), t('pages.inbounds.form.listenHelp'))}
-      >
-        <Input placeholder={t('pages.inbounds.monitorDesc')} />
-      </FormField>
+      {!SIDECAR_PROTOCOLS.has(protocol) && (
+        <FormField
+          name="listen"
+          label={labelWithHint(t('pages.inbounds.address'), t('pages.inbounds.form.listenHelp'))}
+        >
+          <Input placeholder={t('pages.inbounds.monitorDesc')} />
+        </FormField>
+      )}
 
-      {protocol !== Protocols.MTPROTO && (
+      {protocol !== Protocols.MTPROTO && !SIDECAR_PROTOCOLS.has(protocol) && (
         <>
           <FormField
             name="shareAddrStrategy"
@@ -834,13 +847,15 @@ export default function InboundFormModal({
         </FormField>
       )}
 
-      <FormField
-        name="port"
-        label={t('pages.inbounds.port')}
-        rules={{ validate: rhfZodValidate(InboundFormBaseSchema.shape.port) }}
-      >
-        <InputNumber min={isUdsListen ? 0 : 1} max={65535} />
-      </FormField>
+      {!SIDECAR_PROTOCOLS.has(protocol) && (
+        <FormField
+          name="port"
+          label={t('pages.inbounds.port')}
+          rules={{ validate: rhfZodValidate(InboundFormBaseSchema.shape.port) }}
+        >
+          <InputNumber min={isUdsListen ? 0 : 1} max={65535} />
+        </FormField>
+      )}
 
       <Form.Item
         label={
@@ -923,6 +938,8 @@ export default function InboundFormModal({
       {protocol === Protocols.TUIC && <TuicFields />}
 
       {protocol === Protocols.MASQUE && <MasqueSettingsFields />}
+
+      {SIDECAR_PROTOCOLS.has(protocol) && <SidecarFields />}
 
       {protocol === Protocols.TUN && <TunFields />}
 
@@ -1286,6 +1303,9 @@ export default function InboundFormModal({
                     Protocols.AMNEZIAWG,
                     Protocols.TUIC,
                     Protocols.MASQUE,
+                    Protocols.QWDTT,
+                    Protocols.OLCRTC,
+                    Protocols.CSQTT,
                   ] as string[]
                 ).includes(protocol) || isFallbackHost
                   ? [

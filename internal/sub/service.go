@@ -22,6 +22,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/sidecar"
 	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/maskcompat"
@@ -51,6 +52,9 @@ type SubService struct {
 	subInfoNodeEnable          bool
 	subCalendarExpireInclusive bool
 	calendarExpireLocation     *time.Location
+	// forceSidecars lets the qThrone feed carry sidecar links even when the
+	// regular subscription setting hides them.
+	forceSidecars              bool
 	subExpiredTemplate         string
 	subTrafficDepletedTemplate string
 	inboundService             service.InboundService
@@ -481,6 +485,10 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, xray.Clie
 	}
 
 	seenEmails := make(map[string]struct{})
+	var sidecarLinks []string
+	// The regular URI subscription carries Xray links only; qThrone and the
+	// panel QR view opt in via forceSidecars.
+	includeSidecars := s.forceSidecars
 	for _, inbound := range inbounds {
 		clients := s.matchingClients(inbound, subId)
 		if len(clients) == 0 {
@@ -489,6 +497,19 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, xray.Clie
 		if inbound.ExcludeFromSub {
 			if countHiddenClients(clients, seenEmails) {
 				hasEnabledClient = true
+			}
+			continue
+		}
+		if model.IsSidecarProtocol(inbound.Protocol) {
+			for _, client := range clients {
+				if client.Enable {
+					hasEnabledClient = true
+				}
+				emails = append(emails, client.Email)
+				seenEmails[client.Email] = struct{}{}
+				if includeSidecars {
+					sidecarLinks = append(sidecarLinks, sidecar.LinkFor(inbound, client.Email)...)
+				}
 			}
 			continue
 		}
@@ -531,6 +552,9 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, xray.Clie
 		}
 	}
 
+	result = append(result, sidecarLinks...)
+	result = uniqueLinks(result)
+
 	uniqueEmails := make([]string, 0, len(seenEmails))
 	for e := range seenEmails {
 		uniqueEmails = append(uniqueEmails, e)
@@ -550,6 +574,23 @@ func (s *SubService) getSubs(subId string) ([]string, []string, int64, xray.Clie
 	return result, emails, lastOnline, traffic, nil
 }
 
+// uniqueLinks drops byte-identical links, e.g. twin clients sharing one sidecar.
+func uniqueLinks(in []string) []string {
+	if len(in) < 2 {
+		return in
+	}
+	seen := make(map[string]struct{}, len(in))
+	out := in[:0]
+	for _, link := range in {
+		if _, ok := seen[link]; ok {
+			continue
+		}
+		seen[link] = struct{}{}
+		out = append(out, link)
+	}
+	return out
+}
+
 // inboundLinks builds the share links for every distinct client of one inbound
 // the same way getSubs does — managed Host endpoints win over the plain link so
 // {{HOST}} and per-host variants render — but across all clients rather than a
@@ -561,6 +602,22 @@ func (s *SubService) inboundLinks(inbound *model.Inbound) []string {
 	clients, err := s.clientsForLinkExport(inbound)
 	if err != nil {
 		return nil
+	}
+	if model.IsSidecarProtocol(inbound.Protocol) {
+		inst, err := sidecar.InstanceFromInbound(inbound)
+		if err != nil {
+			return nil
+		}
+		var links []string
+		for _, client := range clients {
+			links = append(links, inst.Links(client)...)
+		}
+		if len(links) == 0 && len(clients) == 0 {
+			// Sidecar credentials live on the inbound, so clientless inbounds
+			// still get one direct link for the Links tab / export action.
+			links = inst.Links(model.Client{Email: "client", Enable: true})
+		}
+		return links
 	}
 	s.primeLinkClients(inbound.Id, clients, true)
 	s.projectThroughFallbackMaster(inbound)
@@ -686,7 +743,7 @@ func (s *SubService) getInboundsBySubId(subId string) ([]*model.Inbound, error) 
 		JOIN client_inbounds ON client_inbounds.inbound_id = inbounds.id
 		JOIN clients ON clients.id = client_inbounds.client_id
 		WHERE
-			inbounds.protocol in ('vmess','vless','trojan','shadowsocks','hysteria','wireguard','amneziawg','mtproto','tuic','masque')
+			inbounds.protocol in ('vmess','vless','trojan','shadowsocks','hysteria','wireguard','amneziawg','mtproto','tuic','masque','qwdtt','olcrtc','csqtt')
 			AND clients.sub_id = ? AND inbounds.enable = ?
 	)`, subId, true).Order("sub_sort_index ASC").Order("id ASC").Find(&inbounds).Error
 	if err != nil {

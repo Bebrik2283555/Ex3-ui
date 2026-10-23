@@ -63,6 +63,7 @@ func (a *ServerController) initRouter(g *gin.RouterGroup) {
 	g.GET("/getUpdateStatus", a.getUpdateStatus)
 	g.GET("/getConfigJson", a.getConfigJson)
 	g.GET("/getDb", a.getDb)
+	g.GET("/getDbZip", a.getDbZip)
 	g.GET("/getMigration", a.getMigration)
 	g.GET("/getNewUUID", a.getNewUUID)
 	g.GET("/getWebCertFiles", a.getWebCertFiles)
@@ -370,6 +371,22 @@ func (a *ServerController) getDb(c *gin.Context) {
 	_, _ = c.Writer.Write(db)
 }
 
+// getDbZip downloads a full backup: database plus /root/cert and a manifest.
+func (a *ServerController) getDbZip(c *gin.Context) {
+	data, filename, err := a.serverService.FullBackup(c.Request.Host)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.index.getDatabaseError"), err)
+		return
+	}
+	if !filenameRegex.MatchString(filename) {
+		_ = c.AbortWithError(http.StatusBadRequest, fmt.Errorf("invalid filename"))
+		return
+	}
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	_, _ = c.Writer.Write(data)
+}
+
 // getMigration downloads a cross-engine migration file: a .dump on SQLite or a
 // .db SQLite database on PostgreSQL, so the data can seed the other backend.
 func (a *ServerController) getMigration(c *gin.Context) {
@@ -400,7 +417,7 @@ func (a *ServerController) importDB(c *gin.Context) {
 	// node identity: the safe default for the common case of moving a config to
 	// a new host. Send keepHostSettings=false to clone a machine wholesale.
 	keepHostSettings := c.Request.FormValue("keepHostSettings") != "false"
-	if err := a.serverService.ImportDB(file, keepHostSettings); err != nil {
+	if err := a.serverService.ImportBackup(file, keepHostSettings); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.index.importDatabaseError"), err)
 		return
 	}

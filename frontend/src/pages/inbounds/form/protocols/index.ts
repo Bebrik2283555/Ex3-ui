@@ -10,3 +10,4 @@ export { default as VlessFields } from './vless';
 export { default as AmneziawgFields } from './amneziawg';
 export { default as TuicFields } from './tuic';
 export { default as MasqueStreamFields, MasqueSettingsFields } from './masque';
+export { default as SidecarFields } from './sidecar';

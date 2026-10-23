@@ -142,6 +142,11 @@ func (s *SubJsonService) GetJson(subId string, host string, alwaysReturnArray bo
 		if len(clients) == 0 {
 			continue
 		}
+		if model.IsSidecarProtocol(inbound.Protocol) {
+			// qWDTT/olcRTC/CSQTT links are added to the URI subscription by
+			// SubService.GetSubs; JSON outbounds cannot express them.
+			continue
+		}
 		if inbound.ExcludeFromSub {
 			if countHiddenClients(clients, seenEmails) {
 				hasEnabledClient = true

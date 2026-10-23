@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { ConfigProvider, Tag, Tooltip, message } from 'antd';
+import { ConfigProvider, Tag, Tooltip, message, theme as antdTheme } from 'antd';
 import {
   ApiOutlined,
   ApartmentOutlined,
@@ -19,6 +19,7 @@ import {
   ExportOutlined,
   FileTextOutlined,
   GlobalOutlined,
+  HddOutlined,
   ImportOutlined,
   LoadingOutlined,
   MailOutlined,
@@ -26,7 +27,6 @@ import {
   MoonOutlined,
   PlusOutlined,
   ReloadOutlined,
-  RocketOutlined,
   SafetyCertificateOutlined,
   SafetyOutlined,
   SearchOutlined,
@@ -64,11 +64,13 @@ interface PaletteItem {
   };
 }
 
+type PaletteStyle = CSSProperties & Record<`--cp-${string}`, string>;
+
 export default function CommandPalette() {
   const { t } = useTranslation();
   const [messageApi, messageContextHolder] = message.useMessage();
   const navigate = useNavigate();
-  const { isDark, isUltra, toggleTheme, toggleUltra, antdThemeConfig } = useTheme();
+  const { isDark, isUltra, themeName, toggleTheme, toggleUltra, antdThemeConfig } = useTheme();
   const { isOpen, close } = useCommandPalette();
   const { allSetting } = useAllSettings();
   const { data: inbounds = [] } = useInboundOptions();
@@ -394,18 +396,6 @@ export default function CommandPalette() {
         icon: <GlobalOutlined />,
       },
       {
-        path: '/outbound',
-        title: t('menu.outbounds'),
-        keywords: ['outbounds', 'freedom', 'blackhole', 'socks', 'http', 'warp', 'nord', 'pia'],
-        icon: <ExportOutlined />,
-      },
-      {
-        path: '/routing',
-        title: t('menu.routing'),
-        keywords: ['routing', 'rules', 'geoip', 'geosite', 'direct', 'block'],
-        icon: <SwapOutlined />,
-      },
-      {
         path: '/settings',
         title: t('menu.settings'),
         keywords: ['settings', 'config', 'port', 'password', 'ssl', 'telegram'],
@@ -418,10 +408,10 @@ export default function CommandPalette() {
         icon: <ToolOutlined />,
       },
       {
-        path: '/extras',
-        title: t('menu.extras'),
-        keywords: ['extras', 'extra cores', 'qwdtt', 'olcrtc', 'core', 'tunnel', 'turn', 'webrtc'],
-        icon: <RocketOutlined />,
+        path: '/settings#cores',
+        title: t('menu.cores'),
+        keywords: ['cores', 'core', 'xray', 'qwdtt', 'olcrtc', 'csqtt', 'sidecar', 'binary'],
+        icon: <HddOutlined />,
       },
       {
         path: '/optimize',
@@ -676,6 +666,31 @@ export default function CommandPalette() {
   ]);
 
   const clampedActiveIndex = Math.min(activeIndex, Math.max(0, items.length - 1));
+  const isThemed = themeName === 'custom' || themeName === 'lane';
+
+  const paletteStyle = useMemo<PaletteStyle>(() => {
+    if (!isThemed) return {} as PaletteStyle;
+    // Palette renders outside the page ConfigProvider, so publish the computed
+    // tokens as local variables for its plain-DOM surfaces.
+    const token = antdTheme.getDesignToken(antdThemeConfig);
+    return {
+      '--cp-bg': token.colorBgElevated,
+      '--cp-bg-soft': token.colorBgContainer,
+      '--cp-border': token.colorBorderSecondary,
+      '--cp-border-strong': token.colorBorder,
+      '--cp-text': token.colorText,
+      '--cp-text-muted': token.colorTextSecondary,
+      '--cp-text-dim': token.colorTextTertiary,
+      '--cp-accent': token.colorPrimary,
+      '--cp-accent-hover': token.colorPrimaryHover,
+      '--cp-accent-bg': token.colorPrimaryBg,
+      '--cp-fill': token.colorFillTertiary,
+      '--cp-fill-strong': token.colorFillSecondary,
+      '--cp-shadow': isDark
+        ? '0 25px 60px rgba(0, 0, 0, 0.6), 0 4px 16px rgba(0, 0, 0, 0.4)'
+        : '0 20px 50px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.08)',
+    };
+  }, [isThemed, isDark, antdThemeConfig]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -711,14 +726,15 @@ export default function CommandPalette() {
     <ConfigProvider theme={antdThemeConfig}>
       {messageContextHolder}
       <div
-        className={`command-palette-backdrop ${themeModeClass}`}
+        className={`command-palette-backdrop ${themeModeClass}${isThemed ? ' themed' : ''}`}
         role="presentation"
+        style={paletteStyle}
         onClick={(e) => {
           if (e.target === e.currentTarget) close();
         }}
       >
         <div
-          className={`command-palette-modal ${themeModeClass}`}
+          className={`command-palette-modal ${themeModeClass}${isThemed ? ' themed' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-label={t('commandPalette.title')}

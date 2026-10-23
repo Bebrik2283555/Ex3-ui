@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawg"
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/mhsanaei/3x-ui/v3/internal/sidecar"
 	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 
@@ -29,6 +31,12 @@ func inboundTransports(protocol model.Protocol, streamSettings, settings string)
 	switch protocol {
 	case model.Hysteria, model.WireGuard, model.AmneziaWG, model.TUIC:
 		return transportUDP
+	case model.QWDTT, model.CSQTT:
+		return transportUDP
+	case model.OLCRTC:
+		// olcRTC connects out to a WebRTC room and never opens a local
+		// listener, so it cannot conflict with any port.
+		return 0
 	case model.MTProto:
 		return transportTCP
 	case model.MASQUE:
@@ -190,6 +198,12 @@ type portConflictDetail struct {
 	Tag       string
 	Listen    string
 	Port      int
+	// Role names the auxiliary listener (for example wgPort or routeXrayPort)
+	// when the conflict is not with an inbound's main port.
+	Role string
+	// CandidateRole names the listener being saved when it collides with an
+	// existing inbound's main port.
+	CandidateRole string
 	// Relay marks Port as an automatic loopback relay port, not a configured one.
 	Relay bool
 	// ForwardedBy is the peer whose port forward holds Port, when that is the
@@ -217,12 +231,19 @@ func (d *portConflictDetail) String() string {
 		listen = "*"
 	}
 	port := fmt.Sprintf("port %d", d.Port)
+	if d.Role != "" {
+		port = fmt.Sprintf("%s %d", d.Role, d.Port)
+	}
 	if d.Relay {
 		port = fmt.Sprintf("relay port %d", d.Port)
 	}
 	if d.ForwardedBy != "" {
 		return fmt.Sprintf("%s (%s) already forwarded on inbound %s on %s by its client %s",
 			port, transportTagSuffix(d.Transports), name, listen, d.ForwardedBy)
+	}
+	if d.CandidateRole != "" && d.Role == "" {
+		return fmt.Sprintf("%s %d (%s) conflicts with inbound %s on %s",
+			d.CandidateRole, d.Port, transportTagSuffix(d.Transports), name, listen)
 	}
 	return fmt.Sprintf("%s (%s) already used by inbound %s on %s",
 		port, transportTagSuffix(d.Transports), name, listen)
@@ -398,6 +419,235 @@ func checkPortConflictTx(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*po
 			Port:       c.Port,
 			Transports: shared,
 		}, nil
+	}
+	// The query above only sees inbound main ports. Sidecar auxiliary listeners
+	// and loopback bridges are extra sockets that would otherwise collide at
+	// runtime, where Xray can only log a warning and skip the bridge.
+	return checkAuxiliaryPortConflicts(db, inbound, ignoreId)
+}
+
+// auxiliaryPortBinding is a socket a sidecar or routed bridge binds besides
+// the inbound main port.
+type auxiliaryPortBinding struct {
+	port       int
+	listen     bindAddr
+	transports transportBits
+	role       string
+}
+
+func (b auxiliaryPortBinding) name() string {
+	if b.role == "" {
+		return "port"
+	}
+	return b.role
+}
+
+func auxiliaryPortsOverlap(a, b auxiliaryPortBinding) bool {
+	if a.port <= 0 || b.port <= 0 || a.port != b.port {
+		return false
+	}
+	if a.transports&b.transports == 0 {
+		return false
+	}
+	return listenOverlaps(a.listen, b.listen)
+}
+
+// splitListenAddr accepts host:port or a bare port.
+func splitListenAddr(raw string) (string, int) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", 0
+	}
+	if host, portStr, err := net.SplitHostPort(raw); err == nil {
+		port, _ := strconv.Atoi(portStr)
+		return host, port
+	}
+	if port, err := strconv.Atoi(raw); err == nil {
+		return "", port
+	}
+	return "", 0
+}
+
+// inboundAuxiliaryBindings returns the extra local sockets a sidecar or routed
+// mtproto inbound binds. Sidecars exist only on the local panel, so remote node
+// rows are ignored.
+func inboundAuxiliaryBindings(inbound *model.Inbound) []auxiliaryPortBinding {
+	if inbound == nil || inbound.NodeID != nil {
+		return nil
+	}
+	var out []auxiliaryPortBinding
+	add := func(port int, listen string, bits transportBits, role string) {
+		if port <= 0 || bits == 0 {
+			return
+		}
+		out = append(out, auxiliaryPortBinding{
+			port:       port,
+			listen:     bindAddr{listen: listen},
+			transports: bits,
+			role:       role,
+		})
+	}
+	switch inbound.Protocol {
+	case model.QWDTT, model.CSQTT, model.OLCRTC:
+		inst, err := sidecar.InstanceFromInbound(inbound)
+		if err != nil {
+			return nil
+		}
+		switch inbound.Protocol {
+		case model.QWDTT:
+			if cfg := inst.QWDTT; cfg != nil {
+				add(cfg.WGPort, "", transportUDP, "wgPort")
+				if host, port := splitListenAddr(cfg.ListenRaw); port > 0 {
+					add(port, host, transportUDP, "rawPort")
+				} else if cfg.RawPort > 0 {
+					add(cfg.RawPort, "", transportUDP, "rawPort")
+				}
+				if host, port := splitListenAddr(cfg.ListenDir); port > 0 {
+					add(port, host, transportUDP, "directPort")
+				}
+			}
+		case model.CSQTT:
+			if cfg := inst.CSQTT; cfg != nil {
+				add(cfg.WebPort, "", transportTCP, "webPort")
+			}
+		case model.OLCRTC:
+			if inst.RouteThroughXray {
+				add(inst.RouteXrayPort, "127.0.0.1", transportTCP, "routeXrayPort")
+			}
+		}
+	case model.MTProto:
+		var parsed struct {
+			RouteThroughXray bool `json:"routeThroughXray"`
+			RouteXrayPort    int  `json:"routeXrayPort"`
+		}
+		if json.Unmarshal([]byte(inbound.Settings), &parsed) != nil ||
+			!parsed.RouteThroughXray || parsed.RouteXrayPort <= 0 {
+			return nil
+		}
+		add(parsed.RouteXrayPort, "127.0.0.1", transportTCP, "routeXrayPort")
+	}
+	return out
+}
+
+// checkAuxiliaryPortConflicts validates every listener the saved inbound will
+// actually bind: sidecar wgPort/rawPort/directPort/webPort, and the loopback
+// bridge Xray creates for routed olcRTC/mtproto. A collision here used to be
+// logged and skipped at Xray start, leaving the inbound silently unrouted.
+func checkAuxiliaryPortConflicts(db *gorm.DB, inbound *model.Inbound, ignoreId int) (*portConflictDetail, error) {
+	if inbound == nil || inbound.NodeID != nil {
+		return nil, nil
+	}
+	extras := inboundAuxiliaryBindings(inbound)
+	candidate := make([]auxiliaryPortBinding, 0, len(extras)+1)
+	candidate = append(candidate, auxiliaryPortBinding{
+		port:       inbound.Port,
+		listen:     inboundBindAddr(inbound),
+		transports: inboundTransports(inbound.Protocol, inbound.StreamSettings, inbound.Settings),
+	})
+	candidate = append(candidate, extras...)
+
+	for i := range candidate {
+		for j := i + 1; j < len(candidate); j++ {
+			if !auxiliaryPortsOverlap(candidate[i], candidate[j]) {
+				continue
+			}
+			return nil, common.NewErrorf(
+				"%s %d overlaps this inbound's own %s %d",
+				candidate[i].name(), candidate[i].port,
+				candidate[j].name(), candidate[j].port)
+		}
+	}
+
+	// A forwarded AmneziaWG peer port binds every interface, so it can take an
+	// auxiliary sidecar port even though the main-port check already ran.
+	for _, b := range extras {
+		if b.port <= 0 {
+			continue
+		}
+		probe := *inbound
+		probe.Port = b.port
+		owner, err := amneziawgForwardedPortOwner(db, &probe, ignoreId)
+		if err != nil {
+			return nil, err
+		}
+		if owner != nil {
+			owner.Role = b.role
+			owner.Transports = b.transports
+			return owner, nil
+		}
+	}
+
+	// Loopback listeners Xray owns without a database row.
+	for _, b := range candidate {
+		if auxiliaryPortsOverlap(b, auxiliaryPortBinding{
+			port: reservedAPIPort(), listen: loopbackBind, transports: transportTCP,
+		}) {
+			return &portConflictDetail{
+				Tag: "api", Listen: "127.0.0.1", Port: reservedAPIPort(), Transports: transportTCP,
+				CandidateRole: b.role,
+			}, nil
+		}
+		if auxiliaryPortsOverlap(b, auxiliaryPortBinding{
+			port: amneziawgnet.EgressPort(), listen: loopbackBind, transports: transportTCP,
+		}) {
+			return &portConflictDetail{
+				Tag: "amneziawg-egress", Listen: "127.0.0.1", Port: amneziawgnet.EgressPort(), Transports: transportTCP,
+				CandidateRole: b.role,
+			}, nil
+		}
+	}
+
+	var rows []*model.Inbound
+	q := db.Model(model.Inbound{}).Where("node_id IS NULL")
+	if ignoreId > 0 {
+		q = q.Where("id != ?", ignoreId)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		existing := make([]auxiliaryPortBinding, 0, 4)
+		existing = append(existing, auxiliaryPortBinding{
+			port:       row.Port,
+			listen:     inboundBindAddr(row),
+			transports: inboundTransports(row.Protocol, row.StreamSettings, row.Settings),
+		})
+		existing = append(existing, inboundAuxiliaryBindings(row)...)
+		if row.Protocol == model.AmneziaWG {
+			existing = append(existing, auxiliaryPortBinding{
+				port:       amneziawgnet.SOCKSPortForInbound(row.Id),
+				listen:     loopbackBind,
+				transports: transportTCP,
+				role:       "WireGuard relay",
+			})
+		}
+		if row.Protocol == model.TUIC {
+			if _, ok := tuic.InstanceFromInbound(row); ok {
+				existing = append(existing, auxiliaryPortBinding{
+					port:       tuic.SOCKSPortForInbound(row.Id),
+					listen:     loopbackBind,
+					transports: transportTCP,
+					role:       "TUIC relay",
+				})
+			}
+		}
+		for _, have := range existing {
+			for _, want := range candidate {
+				if !auxiliaryPortsOverlap(want, have) {
+					continue
+				}
+				return &portConflictDetail{
+					InboundID:     row.Id,
+					Remark:        row.Remark,
+					Tag:           row.Tag,
+					Listen:        have.listen.listen,
+					Port:          have.port,
+					Role:          have.role,
+					CandidateRole: want.role,
+					Transports:    have.transports,
+				}, nil
+			}
+		}
 	}
 	return nil, nil
 }

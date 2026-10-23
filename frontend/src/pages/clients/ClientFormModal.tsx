@@ -66,6 +66,9 @@ const MULTI_CLIENT_PROTOCOLS = new Set([
   'amneziawg',
   'tuic',
   'masque',
+  'qwdtt',
+  'olcrtc',
+  'csqtt',
 ]);
 
 const CLIENT_FORM_MODAL_Z_INDEX = 1000;
@@ -148,6 +151,8 @@ const EMPTY: Values = {
   uuid: '',
   password: '',
   auth: '',
+  qwdttPassword: '',
+  csqttPassword: '',
   flow: '',
   security: 'auto',
   reverseTag: '',
@@ -275,6 +280,8 @@ export default function ClientFormModal({
   const subId = useWatch({ control: methods.control, name: 'subId' });
   const limitHwid = useWatch({ control: methods.control, name: 'limitHwid' });
   const auth = useWatch({ control: methods.control, name: 'auth' });
+  const qwdttPassword = useWatch({ control: methods.control, name: 'qwdttPassword' });
+  const csqttPassword = useWatch({ control: methods.control, name: 'csqttPassword' });
   const wgPrivateKey = useWatch({ control: methods.control, name: 'wgPrivateKey' });
   const limitIp = useWatch({ control: methods.control, name: 'limitIp' });
   const {
@@ -327,6 +334,22 @@ export default function ClientFormModal({
     return ids;
   }, [inbounds]);
 
+  const qwdttIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const row of inbounds || []) {
+      if (row && row.protocol === 'qwdtt') ids.add(row.id);
+    }
+    return ids;
+  }, [inbounds]);
+
+  const csqttIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const row of inbounds || []) {
+      if (row && row.protocol === 'csqtt') ids.add(row.id);
+    }
+    return ids;
+  }, [inbounds]);
+
   function addExternalLinkRow(kind: 'link' | 'subscription') {
     appendExternalLink({
       kind,
@@ -361,6 +384,12 @@ export default function ClientFormModal({
         uuid: client.uuid || '',
         password: client.password || '',
         auth: client.auth || '',
+        // Legacy qWDTT links used the generic password; show it here instead
+        // of minting a new credential and silently breaking the old link.
+        qwdttPassword:
+          client.qwdttPassword ||
+          (seedIds.some((id) => qwdttIds.has(id)) ? client.password || '' : ''),
+        csqttPassword: client.csqttPassword || '',
         flow: client.flow || '',
         security:
           !client.security || client.security === 'none' || client.security === 'zero'
@@ -509,6 +538,26 @@ export default function ClientFormModal({
     [inboundIds, mtprotoIds],
   );
 
+  const showQwdtt = useMemo(
+    () => (inboundIds || []).some((id) => qwdttIds.has(id)),
+    [inboundIds, qwdttIds],
+  );
+
+  const showCsqtt = useMemo(
+    () => (inboundIds || []).some((id) => csqttIds.has(id)),
+    [inboundIds, csqttIds],
+  );
+
+  const attachedQwdtt = useMemo(
+    () => (attachedIds || []).some((id) => qwdttIds.has(id)),
+    [attachedIds, qwdttIds],
+  );
+
+  const attachedCsqtt = useMemo(
+    () => (attachedIds || []).some((id) => csqttIds.has(id)),
+    [attachedIds, csqttIds],
+  );
+
   function regenerateWireguardKeys() {
     const kp = Wireguard.generateKeypair();
     methods.setValue('wgPrivateKey', kp.privateKey);
@@ -521,6 +570,14 @@ export default function ClientFormModal({
 
   function regenerateMtprotoSecret() {
     methods.setValue('secret', generateMtprotoSecret(mtprotoDomain));
+  }
+
+  function regenerateQwdttPassword() {
+    methods.setValue('qwdttPassword', RandomUtil.randomLowerAndNum(16));
+  }
+
+  function regenerateCsqttPassword() {
+    methods.setValue('csqttPassword', RandomUtil.randomLowerAndNum(16));
   }
 
   useEffect(() => {
@@ -553,6 +610,18 @@ export default function ClientFormModal({
       methods.setValue('secret', generateMtprotoSecret(mtprotoDomain));
     }
   }, [showMtproto, secret, mtprotoDomain, methods]);
+
+  useEffect(() => {
+    if (!open || !showQwdtt || qwdttPassword) return;
+    if (isEdit && attachedQwdtt) return;
+    methods.setValue('qwdttPassword', RandomUtil.randomLowerAndNum(16));
+  }, [open, showQwdtt, qwdttPassword, isEdit, attachedQwdtt, methods]);
+
+  useEffect(() => {
+    if (!open || !showCsqtt || csqttPassword) return;
+    if (isEdit && attachedCsqtt) return;
+    methods.setValue('csqttPassword', RandomUtil.randomLowerAndNum(16));
+  }, [open, showCsqtt, csqttPassword, isEdit, attachedCsqtt, methods]);
 
   const inboundOptions = useMemo(
     () =>
@@ -647,6 +716,8 @@ export default function ClientFormModal({
       uuid: values.uuid,
       password: values.password,
       auth: values.auth,
+      qwdttPassword: values.qwdttPassword,
+      csqttPassword: values.csqttPassword,
       flow: values.flow,
       security: values.security,
       reverseTag: values.reverseTag,
@@ -683,6 +754,8 @@ export default function ClientFormModal({
       uuid: values.uuid,
       password: values.password,
       auth: values.auth,
+      qwdttPassword: values.qwdttPassword,
+      csqttPassword: values.csqttPassword,
       flow: showFlow ? values.flow || '' : '',
       security: showSecurity ? values.security || 'auto' : 'auto',
       totalGB: totalBytes,
@@ -1174,6 +1247,46 @@ export default function ClientFormModal({
                           />
                         </Space.Compact>
                       </Form.Item>
+
+                      {showQwdtt && (
+                        <Form.Item
+                          label={t('pages.clients.qwdttPassword')}
+                          tooltip={t('pages.clients.qwdttPasswordDesc')}
+                        >
+                          <Space.Compact style={{ display: 'flex' }}>
+                            <Input
+                              value={qwdttPassword}
+                              style={{ flex: 1 }}
+                              onChange={(e) => methods.setValue('qwdttPassword', e.target.value)}
+                            />
+                            <Button
+                              aria-label={t('regenerate')}
+                              icon={<ReloadOutlined />}
+                              onClick={regenerateQwdttPassword}
+                            />
+                          </Space.Compact>
+                        </Form.Item>
+                      )}
+
+                      {showCsqtt && (
+                        <Form.Item
+                          label={t('pages.clients.csqttPassword')}
+                          tooltip={t('pages.clients.csqttPasswordDesc')}
+                        >
+                          <Space.Compact style={{ display: 'flex' }}>
+                            <Input
+                              value={csqttPassword}
+                              style={{ flex: 1 }}
+                              onChange={(e) => methods.setValue('csqttPassword', e.target.value)}
+                            />
+                            <Button
+                              aria-label={t('regenerate')}
+                              icon={<ReloadOutlined />}
+                              onClick={regenerateCsqttPassword}
+                            />
+                          </Space.Compact>
+                        </Form.Item>
+                      )}
 
                       {showFlow && (
                         <FormField name="flow" label={t('pages.clients.flow')}>

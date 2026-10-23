@@ -1,4 +1,4 @@
-.api-docs-page.is-dark {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) {
   --sw-bg: #1f2026;
   --sw-bg-soft: #25272e;
   --sw-bg-input: #15161a;
@@ -12,7 +12,7 @@
   color-scheme: dark;
 }
 
-.api-docs-page.is-dark.is-ultra {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed).is-ultra {
   --sw-bg: #0a0a0d;
   --sw-bg-soft: #131316;
   --sw-bg-input: #050507;
@@ -71,121 +71,180 @@
 }
 
 /* ──────────────────────────────────────────────────────────────────
-   Dark mode — Swagger UI does not ship a dark theme, so every visual
-   surface needs an explicit override. Method-color chips (GET / POST /
-   …) are left untouched because they carry meaning at a glance.
+   Dark and custom themes — Swagger UI does not ship a dark theme, so
+   every visual surface needs an explicit override. Method-color chips
+   (GET / POST / …) are left untouched because they carry meaning.
    ────────────────────────────────────────────────────────────────── */
 
-.api-docs-page.is-dark .swagger-ui,
-.api-docs-page.is-dark .swagger-ui .info .title,
-.api-docs-page.is-dark .swagger-ui .info .title small pre,
-.api-docs-page.is-dark .swagger-ui .info p,
-.api-docs-page.is-dark .swagger-ui .info li,
-.api-docs-page.is-dark .swagger-ui .info table,
-.api-docs-page.is-dark .swagger-ui .opblock-tag,
-.api-docs-page.is-dark .swagger-ui .opblock-tag small,
-.api-docs-page.is-dark .swagger-ui .opblock .opblock-summary-path,
-.api-docs-page.is-dark .swagger-ui .opblock .opblock-summary-path__deprecated,
-.api-docs-page.is-dark .swagger-ui .opblock .opblock-summary-description,
-.api-docs-page.is-dark .swagger-ui .opblock-description-wrapper p,
-.api-docs-page.is-dark .swagger-ui .opblock-external-docs-wrapper p,
-.api-docs-page.is-dark .swagger-ui .opblock-title_normal p,
-.api-docs-page.is-dark .swagger-ui table thead tr td,
-.api-docs-page.is-dark .swagger-ui table thead tr th,
-.api-docs-page.is-dark .swagger-ui table tbody tr td,
-.api-docs-page.is-dark .swagger-ui .parameter__name,
-.api-docs-page.is-dark .swagger-ui .parameter__type,
-.api-docs-page.is-dark .swagger-ui .parameter__in,
-.api-docs-page.is-dark .swagger-ui .parameter__extension,
-.api-docs-page.is-dark .swagger-ui .response-col_status,
-.api-docs-page.is-dark .swagger-ui .response-col_description,
-.api-docs-page.is-dark .swagger-ui .response-col_links,
-.api-docs-page.is-dark .swagger-ui .responses-inner h4,
-.api-docs-page.is-dark .swagger-ui .responses-inner h5,
-.api-docs-page.is-dark .swagger-ui label,
-.api-docs-page.is-dark .swagger-ui .tab li,
-.api-docs-page.is-dark .swagger-ui .tab li button,
-.api-docs-page.is-dark .swagger-ui .markdown,
-.api-docs-page.is-dark .swagger-ui .markdown p,
-.api-docs-page.is-dark .swagger-ui .markdown li,
-.api-docs-page.is-dark .swagger-ui .renderedmarkdown p,
-.api-docs-page.is-dark .swagger-ui .renderedmarkdown li,
-.api-docs-page.is-dark .swagger-ui .model-title,
-.api-docs-page.is-dark .swagger-ui .model,
-.api-docs-page.is-dark .swagger-ui .model-toggle:after,
-.api-docs-page.is-dark .swagger-ui section.models h4,
-.api-docs-page.is-dark .swagger-ui section.models h5,
-.api-docs-page.is-dark .swagger-ui .auth-container h4,
-.api-docs-page.is-dark .swagger-ui .auth-container h6,
-.api-docs-page.is-dark .swagger-ui .scopes h2,
-.api-docs-page.is-dark .swagger-ui .dialog-ux .modal-ux-header h3,
-.api-docs-page.is-dark .swagger-ui .dialog-ux .modal-ux-content h4,
-.api-docs-page.is-dark .swagger-ui .dialog-ux .modal-ux-content p,
-.api-docs-page.is-dark .swagger-ui .servers-title {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info .title,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info .title small pre,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info p,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info li,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info table,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-tag,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-tag small,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock .opblock-summary-path,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .opblock
+  .opblock-summary-path__deprecated,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .opblock
+  .opblock-summary-description,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-description-wrapper p,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .opblock-external-docs-wrapper
+  p,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-title_normal p,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui table thead tr td,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui table thead tr th,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui table tbody tr td,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .parameter__name,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .parameter__type,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .parameter__in,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .parameter__extension,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .response-col_status,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .response-col_description,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .response-col_links,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .responses-inner h4,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .responses-inner h5,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui label,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .tab li,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .tab li button,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .markdown,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .markdown p,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .markdown li,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .renderedmarkdown p,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .renderedmarkdown li,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .model-title,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .model,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .model-toggle:after,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui section.models h4,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui section.models h5,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .auth-container h4,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .auth-container h6,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .scopes h2,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .dialog-ux .modal-ux-header h3,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .dialog-ux
+  .modal-ux-content
+  h4,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .dialog-ux .modal-ux-content p,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .servers-title {
   color: var(--sw-text);
 }
 
-.api-docs-page.is-dark .swagger-ui .opblock-tag small,
-.api-docs-page.is-dark .swagger-ui .opblock-summary-description,
-.api-docs-page.is-dark .swagger-ui .parameter__in,
-.api-docs-page.is-dark .swagger-ui .parameter__type,
-.api-docs-page.is-dark .swagger-ui .parameter__extension,
-.api-docs-page.is-dark .swagger-ui .opblock-title_normal small,
-.api-docs-page.is-dark .swagger-ui .servers > label,
-.api-docs-page.is-dark .swagger-ui .servers > label span,
-.api-docs-page.is-dark .swagger-ui .response-control-media-type__accept-message {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-tag small,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-summary-description,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .parameter__in,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .parameter__type,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .parameter__extension,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-title_normal small,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .servers > label,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .servers > label span,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .response-control-media-type__accept-message {
   color: var(--sw-text-muted);
 }
 
-.api-docs-page.is-dark .swagger-ui .opblock-tag {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-body,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-description-wrapper,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .model-example,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .tab,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .body-param {
+  color: var(--sw-text);
+}
+
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-tag {
   border-bottom-color: var(--sw-border);
 }
 
-.api-docs-page.is-dark .swagger-ui .opblock {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock {
   background: var(--sw-bg-soft);
   border-color: var(--sw-border);
   box-shadow: none;
 }
 
-.api-docs-page.is-dark .swagger-ui .opblock .opblock-section-header {
-  background: rgba(255, 255, 255, 0.03);
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .opblock
+  .opblock-section-header {
+  background: var(--ant-color-fill-quaternary);
   box-shadow: inset 0 -1px 0 var(--sw-border);
 }
 
-.api-docs-page.is-dark .swagger-ui .opblock .opblock-section-header h4,
-.api-docs-page.is-dark .swagger-ui .opblock .opblock-section-header label {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .opblock
+  .opblock-section-header
+  h4,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .opblock
+  .opblock-section-header
+  label {
   color: var(--sw-text);
 }
 
-.api-docs-page.is-dark .swagger-ui .opblock .opblock-summary {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock .opblock-summary {
   border-bottom-color: var(--sw-border);
 }
 
-.api-docs-page.is-dark .swagger-ui .opblock-body pre.microlight,
-.api-docs-page.is-dark .swagger-ui .highlight-code,
-.api-docs-page.is-dark .swagger-ui .microlight,
-.api-docs-page.is-dark .swagger-ui pre.example,
-.api-docs-page.is-dark .swagger-ui code {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-body pre.microlight,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .highlight-code,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .microlight,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui pre.example,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui code {
   background: var(--sw-bg-code);
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--ant-color-text);
 }
 
-.api-docs-page.is-dark .swagger-ui .highlight-code .copy-to-clipboard {
-  background: rgba(255, 255, 255, 0.06);
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui pre.microlight {
+  background: var(--sw-code-block-bg) !important;
+  color: var(--sw-code-block-text) !important;
 }
 
-.api-docs-page.is-dark .swagger-ui input[type='text'],
-.api-docs-page.is-dark .swagger-ui input[type='password'],
-.api-docs-page.is-dark .swagger-ui input[type='search'],
-.api-docs-page.is-dark .swagger-ui input[type='email'],
-.api-docs-page.is-dark .swagger-ui input[type='file'],
-.api-docs-page.is-dark .swagger-ui textarea {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .highlight-code
+  .copy-to-clipboard,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .view-line-link.copy-to-clipboard {
+  background: var(--ant-color-fill-tertiary);
+  color: var(--sw-text-muted);
+}
+
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .view-line-link.copy-to-clipboard
+  svg {
+  fill: var(--sw-text-muted);
+}
+
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .view-line-link.copy-to-clipboard:hover {
+  background: var(--ant-color-fill-secondary);
+}
+
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui input[type='text'],
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui input[type='password'],
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui input[type='search'],
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui input[type='email'],
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui input[type='file'],
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui textarea {
   background: var(--sw-bg-input);
   color: var(--sw-text);
   border-color: var(--sw-border-strong);
 }
 
-.api-docs-page.is-dark .swagger-ui select {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui select {
   background-color: var(--sw-bg-input);
   background-image: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><path fill='%23b7bcbf' d='M13.418 7.859a.695.695 0 0 1 .978 0 .68.68 0 0 1 0 .969l-3.908 3.83a.697.697 0 0 1-.979 0l-3.908-3.83a.68.68 0 0 1 0-.969.695.695 0 0 1 .978 0L10 11z'/></svg>");
   background-position: right 10px center;
@@ -195,249 +254,300 @@
   border-color: var(--sw-border-strong);
 }
 
-.api-docs-page.is-dark .swagger-ui select option {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui select option {
   background-color: var(--sw-bg-input);
   color: var(--sw-text);
 }
 
-.api-docs-page.is-dark .swagger-ui textarea {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.api-docs-page.is-dark .swagger-ui input::placeholder,
-.api-docs-page.is-dark .swagger-ui textarea::placeholder {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui input::placeholder,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui textarea::placeholder {
   color: var(--sw-text-dim);
 }
 
-.api-docs-page.is-dark .swagger-ui .scheme-container {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .scheme-container {
   background: var(--sw-bg-soft);
   box-shadow: inset 0 -1px 0 var(--sw-border);
 }
 
-.api-docs-page.is-dark .swagger-ui .auth-wrapper .authorize {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .auth-wrapper .authorize {
   color: var(--sw-text);
   border-color: var(--sw-border-strong);
 }
 
-.api-docs-page.is-dark .swagger-ui .auth-wrapper .authorize svg {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .auth-wrapper .authorize svg {
   fill: var(--sw-text);
 }
 
-.api-docs-page.is-dark .swagger-ui .model-box,
-.api-docs-page.is-dark .swagger-ui section.models {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .model-box,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui section.models {
   background: var(--sw-bg-soft);
   border-color: var(--sw-border);
 }
 
-.api-docs-page.is-dark .swagger-ui section.models.is-open h4 {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui section.models.is-open h4 {
   border-bottom-color: var(--sw-border);
 }
 
-.api-docs-page.is-dark .swagger-ui section.models .model-container {
-  background: rgba(255, 255, 255, 0.02);
-  border-color: var(--sw-border);
-}
-
-.api-docs-page.is-dark .swagger-ui section.models .model-container:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.api-docs-page.is-dark .swagger-ui .prop-type,
-.api-docs-page.is-dark .swagger-ui .prop-format {
-  color: var(--sw-accent);
-}
-
-.api-docs-page.is-dark .swagger-ui .property.primitive {
-  color: var(--sw-text-muted);
-}
-
-.api-docs-page.is-dark .swagger-ui .opblock-title_normal h4 {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .model-box-control {
+  background: transparent;
   color: var(--sw-text);
   border-bottom-color: var(--sw-border);
 }
 
-.api-docs-page.is-dark .swagger-ui table.parameters,
-.api-docs-page.is-dark .swagger-ui table.responses-table,
-.api-docs-page.is-dark .swagger-ui table thead tr {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .model-box-control:hover {
+  background: var(--ant-color-fill-quaternary);
+}
+
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  section.models
+  .model-container {
+  background: var(--ant-color-fill-quaternary);
   border-color: var(--sw-border);
 }
 
-.api-docs-page.is-dark .swagger-ui table tbody tr td {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  section.models
+  .model-container:hover {
+  background: var(--ant-color-fill-tertiary);
+}
+
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .prop-type,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .prop-format {
+  color: var(--sw-accent);
+}
+
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .property.primitive {
+  color: var(--sw-text-muted);
+}
+
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-title_normal h4 {
+  color: var(--sw-text);
   border-bottom-color: var(--sw-border);
 }
 
-.api-docs-page.is-dark .swagger-ui table thead tr {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui table.parameters,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui table.responses-table,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui table thead tr {
+  border-color: var(--sw-border);
+}
+
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui table tbody tr td {
+  border-bottom-color: var(--sw-border);
+}
+
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui table thead tr {
   border-bottom-color: var(--sw-border-strong);
 }
 
-.api-docs-page.is-dark .swagger-ui .response-col_status {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .response-col_status {
   font-weight: 600;
 }
 
-.api-docs-page.is-dark .swagger-ui .btn {
-  background: rgba(255, 255, 255, 0.06);
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .btn {
+  background: var(--ant-color-fill-tertiary);
   color: var(--sw-text);
   border-color: var(--sw-border-strong);
   box-shadow: none;
 }
 
-.api-docs-page.is-dark .swagger-ui .btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .btn:hover {
+  background: var(--ant-color-fill-secondary);
 }
 
-.api-docs-page.is-dark .swagger-ui .btn.execute {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .btn.execute {
   background: var(--sw-accent);
-  color: #0d1117;
+  color: #fff;
   border-color: var(--sw-accent);
 }
 
-.api-docs-page.is-dark .swagger-ui .btn.execute:hover {
-  background: #79b9ff;
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .btn.execute:hover {
+  background: var(--ant-color-primary-hover);
 }
 
-.api-docs-page.is-dark .swagger-ui .btn.authorize {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .btn.authorize {
   color: #52c41a;
   border-color: rgba(82, 196, 26, 0.4);
   background: rgba(82, 196, 26, 0.08);
 }
 
-.api-docs-page.is-dark .swagger-ui .btn.authorize svg {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .btn.authorize svg {
   fill: #52c41a;
 }
 
-.api-docs-page.is-dark .swagger-ui .authorization__btn svg,
-.api-docs-page.is-dark .swagger-ui .expand-operation svg,
-.api-docs-page.is-dark .swagger-ui .opblock-control-arrow svg {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .authorization__btn svg,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .expand-operation svg,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-control-arrow svg {
   fill: var(--sw-text);
   opacity: 1;
 }
 
-.api-docs-page.is-dark .swagger-ui .authorization__btn .locked,
-.api-docs-page.is-dark .swagger-ui .authorization__btn .unlocked {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .authorization__btn .locked,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .authorization__btn .unlocked {
   opacity: 1;
 }
 
-.api-docs-page.is-dark .swagger-ui .btn.cancel {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .btn.cancel {
   color: #ff7875;
   border-color: rgba(255, 120, 117, 0.4);
   background: rgba(255, 120, 117, 0.08);
 }
 
-.api-docs-page.is-dark .swagger-ui .btn.btn-clear,
-.api-docs-page.is-dark .swagger-ui .btn-clear,
-.api-docs-page.is-dark .swagger-ui .try-out__btn {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .btn.btn-clear,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .btn-clear,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .try-out__btn {
   color: var(--sw-text);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--ant-color-fill-tertiary);
   border-color: var(--sw-border-strong);
 }
 
-.api-docs-page.is-dark .swagger-ui .btn.btn-clear:hover,
-.api-docs-page.is-dark .swagger-ui .btn-clear:hover,
-.api-docs-page.is-dark .swagger-ui .try-out__btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .btn.btn-clear:hover,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .btn-clear:hover,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .try-out__btn:hover {
+  background: var(--ant-color-fill-secondary);
 }
 
-.api-docs-page.is-dark .swagger-ui .filter .operation-filter-input {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .filter
+  .operation-filter-input {
   background: var(--sw-bg-input);
   border-color: var(--sw-border-strong);
   color: var(--sw-text);
 }
 
-.api-docs-page.is-dark .swagger-ui .dialog-ux .modal-ux {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .dialog-ux .modal-ux {
   background: var(--sw-bg);
   border-color: var(--sw-border-strong);
 }
 
-.api-docs-page.is-dark .swagger-ui .dialog-ux .modal-ux-header {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .dialog-ux .modal-ux-header {
   border-bottom-color: var(--sw-border);
 }
 
-.api-docs-page.is-dark .swagger-ui .dialog-ux .modal-ux-content {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .dialog-ux .modal-ux-content {
   color: var(--sw-text);
 }
 
-.api-docs-page.is-dark .swagger-ui .arrow,
-.api-docs-page.is-dark .swagger-ui svg.arrow {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .arrow,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui svg.arrow {
   fill: var(--sw-text-muted);
 }
 
-.api-docs-page.is-dark .swagger-ui .opblock-summary-control:focus {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .opblock-summary-control:focus {
   outline-color: var(--sw-accent);
 }
 
-.api-docs-page.is-dark .swagger-ui a,
-.api-docs-page.is-dark .swagger-ui .info a,
-.api-docs-page.is-dark .swagger-ui .info hgroup.main a,
-.api-docs-page.is-dark .swagger-ui .info .base-url,
-.api-docs-page.is-dark .swagger-ui .info__contact a,
-.api-docs-page.is-dark .swagger-ui .info__license a,
-.api-docs-page.is-dark .swagger-ui .info__tos a {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui a,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info a,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info hgroup.main a,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info .base-url,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info__contact a,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info__license a,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info__tos a {
   color: var(--sw-accent);
 }
 
-.api-docs-page.is-dark .swagger-ui a:hover {
-  color: #79b9ff;
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui a:hover {
+  color: var(--ant-color-primary-hover);
 }
 
-.api-docs-page.is-dark .swagger-ui .info .title small {
-  background: rgba(255, 255, 255, 0.08);
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info .title small {
+  background: var(--ant-color-fill-tertiary);
   color: var(--sw-text);
 }
 
-.api-docs-page.is-dark .swagger-ui .info .title small pre {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info .title small pre {
   color: var(--sw-text);
 }
 
-.api-docs-page.is-dark .swagger-ui .response-control-media-type--accept-controller select {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .response-control-media-type--accept-controller
+  select {
   border-color: rgba(82, 196, 26, 0.5);
 }
 
-.api-docs-page.is-dark .swagger-ui .loading-container .loading:before {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed)
+  .swagger-ui
+  .loading-container
+  .loading:before {
   border-color: var(--sw-accent) transparent transparent;
 }
 
-.api-docs-page.is-dark .swagger-ui .json-schema-form-item input,
-.api-docs-page.is-dark .swagger-ui .json-schema-form-item select {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .json-schema-form-item input,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .json-schema-form-item select {
   background: var(--sw-bg-input);
   color: var(--sw-text);
   border-color: var(--sw-border-strong);
 }
 
-.api-docs-page.is-dark .swagger-ui .topbar {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .topbar {
   background: var(--sw-bg);
 }
 
-.api-docs-page.is-dark .swagger-ui .information-container {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .information-container {
   background: transparent;
 }
 
-.api-docs-page.is-dark .swagger-ui .opblock-summary-method {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .opblock-summary-method {
   text-shadow: none;
 }
 
-.api-docs-page.is-dark .swagger-ui .auth-btn-wrapper {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .auth-btn-wrapper {
   border-top-color: var(--sw-border);
 }
 
-.api-docs-page.is-dark .swagger-ui .servers .computed-url,
-.api-docs-page.is-dark .swagger-ui .computed-url {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .servers .computed-url,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .computed-url {
   background: var(--sw-bg-code);
   color: var(--sw-text);
   border: 1px solid var(--sw-border);
 }
 
-.api-docs-page.is-dark .swagger-ui .computed-url code,
-.api-docs-page.is-dark .swagger-ui .servers .computed-url code {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .computed-url code,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .servers .computed-url code {
   background: transparent;
   color: var(--sw-text);
 }
 
-.api-docs-page.is-dark .swagger-ui .errors-wrapper {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .errors-wrapper {
   background: rgba(255, 77, 79, 0.08);
   border-color: rgba(255, 77, 79, 0.3);
 }
 
-.api-docs-page.is-dark .swagger-ui .errors-wrapper .errors h4,
-.api-docs-page.is-dark .swagger-ui .errors-wrapper .errors small {
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .errors-wrapper .errors h4,
+:is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .errors-wrapper .errors small {
   color: var(--sw-text);
+}
+
+/* Themed pages (Lane and Custom): Swagger surfaces follow the panel tokens.
+   This block is last so it wins over the shared dark defaults. */
+.api-docs-page.theme-themed {
+  --sw-bg: var(--ant-color-bg-container);
+  --sw-bg-soft: var(--ant-color-bg-elevated);
+  --sw-bg-input: var(--ant-color-bg-container);
+  --sw-bg-code: var(--ant-color-fill-tertiary);
+  --sw-border: var(--ant-color-border-secondary);
+  --sw-border-strong: var(--ant-color-border);
+  --sw-text: var(--ant-color-text);
+  --sw-text-muted: var(--ant-color-text-secondary);
+  --sw-text-dim: var(--ant-color-text-tertiary);
+  --sw-accent: var(--ant-color-primary);
+  --sw-code-block-bg: color-mix(in srgb, var(--ant-color-text) 88%, var(--ant-color-bg-container));
+  --sw-code-block-text: var(--ant-color-bg-container);
+  color-scheme: light;
+}
+
+body.dark .api-docs-page.theme-themed {
+  --sw-code-block-bg: #111214;
+  --sw-code-block-text: #f5f5f5;
+  color-scheme: dark;
 }

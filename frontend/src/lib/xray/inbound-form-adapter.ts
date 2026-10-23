@@ -11,6 +11,7 @@ import {
   MasqueClientSchema,
   MtprotoClientSchema,
   ShadowsocksClientSchema,
+  SidecarClientSchema,
   TrojanClientSchema,
   TuicClientSchema,
   VlessClientSchema,
@@ -293,6 +294,10 @@ function clientSchemaForProtocol(protocol: string): z.ZodType | null {
       return TuicClientSchema;
     case 'masque':
       return MasqueClientSchema;
+    case 'qwdtt':
+    case 'olcrtc':
+    case 'csqtt':
+      return SidecarClientSchema;
     default:
       return null;
   }

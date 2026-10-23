@@ -623,3 +623,126 @@ body.dark .sidebar-command-trigger:hover .sidebar-command-kbd {
   border-color: rgba(255, 255, 255, 0.25);
   color: #ffffff;
 }
+
+/* --------------------------------------------------------------------------
+   Themed palettes (Lane and Custom)
+   The palette is rendered outside the page ConfigProvider, so its colours
+   arrive as --cp-* variables from the computed antd token set.
+   -------------------------------------------------------------------------- */
+
+.command-palette-backdrop.themed {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+body.dark .command-palette-backdrop.themed {
+  background: rgba(0, 0, 0, 0.58);
+}
+
+body:is(.theme-custom, .theme-lane) .command-palette-modal {
+  background: var(--cp-bg);
+  color: var(--cp-text);
+  border: 1px solid var(--cp-border-strong);
+  box-shadow: var(--cp-shadow);
+}
+
+.command-palette-modal.themed .command-palette-header {
+  border-bottom-color: var(--cp-border);
+}
+
+.command-palette-modal.themed .command-palette-search-icon,
+.command-palette-modal.themed .command-palette-search-icon.spinning {
+  color: var(--cp-accent);
+}
+
+.command-palette-modal.themed .command-palette-input {
+  color: var(--cp-text);
+}
+
+.command-palette-modal.themed .command-palette-input::placeholder {
+  color: var(--cp-text-dim);
+}
+
+.command-palette-modal.themed .command-palette-body {
+  scrollbar-color: var(--cp-border-strong) transparent;
+}
+
+.command-palette-modal.themed .command-palette-body::-webkit-scrollbar-thumb {
+  background: var(--cp-border-strong);
+  border-radius: 3px;
+}
+
+.command-palette-modal.themed .command-palette-body::-webkit-scrollbar-thumb:hover {
+  background: var(--cp-text-dim);
+}
+
+.command-palette-modal.themed .command-palette-group-title {
+  color: var(--cp-text-dim);
+}
+
+.command-palette-modal.themed .command-palette-item.active {
+  background: var(--cp-accent-bg);
+  color: var(--cp-accent);
+}
+
+body.dark .command-palette-modal.themed .command-palette-item.active {
+  color: var(--cp-text);
+}
+
+.command-palette-modal.themed .command-palette-item.active .command-palette-item-subtitle {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.command-palette-modal.themed .command-palette-item-subtitle,
+.command-palette-modal.themed .command-palette-empty {
+  color: var(--cp-text-muted);
+}
+
+.command-palette-modal.themed .command-palette-action-btn {
+  color: var(--cp-text-dim);
+}
+
+.command-palette-modal.themed .command-palette-action-btn:hover {
+  color: var(--cp-accent);
+  background: var(--cp-fill);
+}
+
+.command-palette-modal.themed .command-palette-footer {
+  background: var(--cp-bg-soft);
+  border-top-color: var(--cp-border);
+  color: var(--cp-text-dim);
+}
+
+.command-palette-modal.themed .command-palette-kbd {
+  background: var(--cp-bg-soft);
+  border: 1px solid var(--cp-border-strong);
+  color: var(--cp-text-muted);
+  box-shadow: none;
+}
+
+body.theme-custom .sidebar-command-trigger,
+html[data-theme='lane'] body .sidebar-command-trigger {
+  background: var(--ant-color-fill-tertiary, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.08));
+  color: var(--ant-color-text-secondary, #595959);
+}
+
+body.theme-custom .sidebar-command-trigger:hover,
+html[data-theme='lane'] body .sidebar-command-trigger:hover {
+  background: var(--ant-color-fill-secondary, rgba(0, 0, 0, 0.08));
+  border-color: var(--ant-color-border, rgba(0, 0, 0, 0.15));
+  color: var(--ant-color-text, #1f1f1f);
+}
+
+body.theme-custom .sidebar-command-trigger .sidebar-command-kbd,
+html[data-theme='lane'] body .sidebar-command-trigger .sidebar-command-kbd {
+  background: var(--ant-color-bg-container, rgba(0, 0, 0, 0.06));
+  border: 1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.12));
+  color: var(--ant-color-text-secondary, #595959);
+}
+
+body.theme-custom .sidebar-command-trigger:hover .sidebar-command-kbd,
+html[data-theme='lane'] body .sidebar-command-trigger:hover .sidebar-command-kbd {
+  border-color: var(--ant-color-border, rgba(0, 0, 0, 0.2));
+  color: var(--ant-color-text, #1f1f1f);
+}

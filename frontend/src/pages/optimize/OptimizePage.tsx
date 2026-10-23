@@ -11,6 +11,7 @@ import {
   Result,
   Row,
   Col,
+  Select,
   Space,
   Spin,
   Typography,
@@ -42,7 +43,10 @@ export default function OptimizePage() {
   const [tcp, setTcp] = useState(true);
   const [swap, setSwap] = useState(false);
   const [swapSize, setSwapSize] = useState(1024);
+  const [dnsResolvers, setDnsResolvers] = useState<string[]>(['1.1.1.1', '1.0.0.1']);
   const [busy, setBusy] = useState<string | null>(null);
+
+  const allApplied = !!status && status.bbrEnabled && status.tcpBufferTuned && status.dnsSet;
 
   const pageClass = useMemo(() => {
     const c = ['optimize-page'];
@@ -54,7 +58,7 @@ export default function OptimizePage() {
   const runApply = async () => {
     setBusy('apply');
     try {
-      await apply({ dns, bbr, tcp, swap, swapSize });
+      await apply({ dns, bbr, tcp, swap, swapSize, dnsResolvers });
     } finally {
       setBusy(null);
       await refetch();
@@ -128,50 +132,79 @@ export default function OptimizePage() {
               <Card
                 title={
                   <>
-                    <ThunderboltOutlined /> {t('pages.optimize.applyTitle')}
+                    <ThunderboltOutlined />{' '}
+                    {allApplied ? t('pages.optimize.allApplied') : t('pages.optimize.applyTitle')}
                   </>
                 }
                 variant="borderless"
                 style={{ marginBottom: 16 }}
               >
-                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                  <Checkbox checked={dns} onChange={(e) => setDns(e.target.checked)}>
-                    {t('pages.optimize.dnsOption')}
-                  </Checkbox>
-                  <Checkbox checked={bbr} onChange={(e) => setBbr(e.target.checked)}>
-                    {t('pages.optimize.bbrOption')}
-                  </Checkbox>
-                  <Checkbox checked={tcp} onChange={(e) => setTcp(e.target.checked)}>
-                    {t('pages.optimize.tcpOption')}
-                  </Checkbox>
-                  <Space>
-                    <Checkbox checked={swap} onChange={(e) => setSwap(e.target.checked)}>
-                      {t('pages.optimize.swapOption')}
+                {allApplied ? (
+                  <Result
+                    status="success"
+                    title={t('pages.optimize.allApplied')}
+                    subTitle={t('pages.optimize.allAppliedDesc')}
+                    extra={
+                      <Button danger loading={busy === 'revert'} onClick={() => void runRevert()}>
+                        {t('pages.optimize.revert')}
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    <Checkbox checked={dns} onChange={(e) => setDns(e.target.checked)}>
+                      {t('pages.optimize.dnsOption')}
                     </Checkbox>
-                    {swap && (
-                      <InputNumber
-                        min={64}
-                        step={128}
-                        value={swapSize}
-                        onChange={(v) => setSwapSize(Number(v) || 0)}
-                        addonAfter="MiB"
+                    {dns && (
+                      <Select
+                        mode="tags"
+                        style={{ width: '100%', maxWidth: 420 }}
+                        value={dnsResolvers}
+                        placeholder="1.1.1.1, 1.0.0.1"
+                        onChange={(values: string[]) => setDnsResolvers(values.slice(0, 3))}
+                        options={[
+                          { value: '1.1.1.1', label: '1.1.1.1' },
+                          { value: '1.0.0.1', label: '1.0.0.1' },
+                          { value: '8.8.8.8', label: '8.8.8.8' },
+                          { value: '8.8.4.4', label: '8.8.4.4' },
+                        ]}
                       />
                     )}
+                    <Checkbox checked={bbr} onChange={(e) => setBbr(e.target.checked)}>
+                      {t('pages.optimize.bbrOption')}
+                    </Checkbox>
+                    <Checkbox checked={tcp} onChange={(e) => setTcp(e.target.checked)}>
+                      {t('pages.optimize.tcpOption')}
+                    </Checkbox>
+                    <Space>
+                      <Checkbox checked={swap} onChange={(e) => setSwap(e.target.checked)}>
+                        {t('pages.optimize.swapOption')}
+                      </Checkbox>
+                      {swap && (
+                        <InputNumber
+                          min={64}
+                          step={128}
+                          value={swapSize}
+                          onChange={(v) => setSwapSize(Number(v) || 0)}
+                          addonAfter="MiB"
+                        />
+                      )}
+                    </Space>
+                    <Divider style={{ margin: '8px 0' }} />
+                    <Space>
+                      <Button
+                        type="primary"
+                        loading={busy === 'apply'}
+                        onClick={() => void runApply()}
+                      >
+                        {t('pages.optimize.apply')}
+                      </Button>
+                      <Button danger loading={busy === 'revert'} onClick={() => void runRevert()}>
+                        {t('pages.optimize.revert')}
+                      </Button>
+                    </Space>
                   </Space>
-                  <Divider style={{ margin: '8px 0' }} />
-                  <Space>
-                    <Button
-                      type="primary"
-                      loading={busy === 'apply'}
-                      onClick={() => void runApply()}
-                    >
-                      {t('pages.optimize.apply')}
-                    </Button>
-                    <Button danger loading={busy === 'revert'} onClick={() => void runRevert()}>
-                      {t('pages.optimize.revert')}
-                    </Button>
-                  </Space>
-                </Space>
+                )}
               </Card>
             </Spin>
           </Layout.Content>

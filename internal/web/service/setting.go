@@ -38,7 +38,7 @@ const (
 	DefaultSubClashUserAgentRegex     = `(?i)(clash|mihomo)`
 	DefaultExternalSubUserAgent       = "v2rayNG/1.8.5"
 	DefaultSubJsonUserAgentRegex      = ``
-	DefaultRemarkTemplate             = "{{INBOUND}}-{{EMAIL}}|📊{{TRAFFIC_LEFT}}|⏳{{DAYS_LEFT}}D"
+	DefaultRemarkTemplate             = "{{INBOUND}}|📊{{TRAFFIC_LEFT}}|⏳{{DAYS_LEFT}}D"
 	DefaultSubExpiredTemplate         = "⛔ {{EMAIL}} | Expired: {{EXPIRE_DATE}}"
 	DefaultSubTrafficDepletedTemplate = "🚫 {{EMAIL}} | Traffic Depleted | {{TRAFFIC_USED}}/{{TRAFFIC_TOTAL}}"
 	DefaultTrustedProxyCIDRs          = "127.0.0.1/32,::1/128"
@@ -181,6 +181,9 @@ var defaultValueMap = map[string]string{
 	"subURI":                      "",
 	"subJsonPath":                 "/json/",
 	"subJsonURI":                  "",
+	"subThroneEnable":             "false",
+	"subThronePath":               "/throne/",
+	"subThroneURI":                "",
 	"subClashEnable":              "false",
 	"subClashPath":                "/clash/",
 	"subClashURI":                 "",
@@ -400,6 +403,7 @@ func (s *SettingService) ResetSettings() error {
 			{Key: "subPath", Value: "/" + random.NumLower(16) + "/"},
 			{Key: "subJsonPath", Value: "/" + random.NumLower(16) + "/"},
 			{Key: "subClashPath", Value: "/" + random.NumLower(16) + "/"},
+			{Key: "subThronePath", Value: "/" + random.NumLower(16) + "/"},
 		}
 		return tx.Create(&paths).Error
 	})
@@ -1187,6 +1191,18 @@ func (s *SettingService) GetSubJsonPath() (string, error) {
 	return s.getString("subJsonPath")
 }
 
+func (s *SettingService) GetSubThroneEnable() (bool, error) {
+	return s.getBool("subThroneEnable")
+}
+
+func (s *SettingService) GetSubThronePath() (string, error) {
+	return s.getString("subThronePath")
+}
+
+func (s *SettingService) GetSubThroneURI() (string, error) {
+	return s.getString("subThroneURI")
+}
+
 func (s *SettingService) GetSubDomain() (string, error) {
 	return s.getString("subDomain")
 }
@@ -1953,10 +1969,12 @@ func (s *SettingService) GetDefaultSettings(host string) (any, error) {
 		"happLinkEnable":   func() (any, error) { return s.GetHappLinkEnable() },
 		"subEnable":        func() (any, error) { return s.GetSubEnable() },
 		"subJsonEnable":    func() (any, error) { return s.GetSubJsonEnable() },
+		"subThroneEnable":  func() (any, error) { return s.GetSubThroneEnable() },
 		"subClashEnable":   func() (any, error) { return s.GetSubClashEnable() },
 		"subTitle":         func() (any, error) { return s.GetSubTitle() },
 		"subURI":           func() (any, error) { return s.GetSubURI() },
 		"subJsonURI":       func() (any, error) { return s.GetSubJsonURI() },
+		"subThroneURI":     func() (any, error) { return s.GetSubThroneURI() },
 		"subClashURI":      func() (any, error) { return s.GetSubClashURI() },
 		"datepicker":       func() (any, error) { return s.GetDatepicker() },
 		"ipLimitEnable":    func() (any, error) { return s.GetIpLimitEnable() },
@@ -1990,12 +2008,19 @@ func (s *SettingService) GetDefaultSettings(host string) (any, error) {
 			subClashEnable = b
 		}
 	}
-	if (subEnable && result["subURI"].(string) == "") || (subJsonEnable && result["subJsonURI"].(string) == "") || (subClashEnable && result["subClashURI"].(string) == "") {
+	subThroneEnable := false
+	if v, ok := result["subThroneEnable"]; ok {
+		if b, ok2 := v.(bool); ok2 {
+			subThroneEnable = b
+		}
+	}
+	if (subEnable && result["subURI"].(string) == "") || (subJsonEnable && result["subJsonURI"].(string) == "") || (subClashEnable && result["subClashURI"].(string) == "") || (subThroneEnable && result["subThroneURI"].(string) == "") {
 		subURI := s.BuildSubURIBase(host)
 		subTitle, _ := s.GetSubTitle()
 		subPath, _ := s.GetSubPath()
 		subJsonPath, _ := s.GetSubJsonPath()
 		subClashPath, _ := s.GetSubClashPath()
+		subThronePath, _ := s.GetSubThronePath()
 		if subEnable && result["subURI"].(string) == "" {
 			result["subURI"] = subURI + subPath
 		}
@@ -2007,6 +2032,9 @@ func (s *SettingService) GetDefaultSettings(host string) (any, error) {
 		}
 		if subClashEnable && result["subClashURI"].(string) == "" {
 			result["subClashURI"] = subURI + subClashPath
+		}
+		if subThroneEnable && result["subThroneURI"].(string) == "" {
+			result["subThroneURI"] = subURI + subThronePath
 		}
 	}
 

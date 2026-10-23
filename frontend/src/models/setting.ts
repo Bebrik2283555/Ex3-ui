@@ -17,7 +17,7 @@ export class AllSetting {
   pageSize = 25;
   expireDiff = 0;
   trafficDiff = 0;
-  remarkTemplate = '{{INBOUND}}-{{EMAIL}}|📊{{TRAFFIC_LEFT}}|⏳{{DAYS_LEFT}}D';
+  remarkTemplate = '{{INBOUND}}|📊{{TRAFFIC_LEFT}}|⏳{{DAYS_LEFT}}D';
   subShowIdentityOnAllLinks = false;
   subInfoNodeEnable = false;
   subCalendarExpireInclusive = false;
@@ -58,6 +58,8 @@ export class AllSetting {
   subPort = 2096;
   subPath = '/sub/';
   subJsonPath = '/json/';
+  subThroneEnable = false;
+  subThronePath = '/throne/';
   subClashEnable = false;
   subClashPath = '/clash/';
   subDomain = '';
@@ -71,6 +73,7 @@ export class AllSetting {
   subEncrypt = true;
   subURI = '';
   subJsonURI = '';
+  subThroneURI = '';
   subClashURI = '';
   subClashEnableRouting = false;
   subClashRules = '';

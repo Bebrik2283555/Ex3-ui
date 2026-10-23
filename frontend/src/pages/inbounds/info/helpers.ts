@@ -16,8 +16,20 @@ const LINK_PROTOCOLS: ReadonlySet<string> = new Set([
   Protocols.TUIC,
 ]);
 
+const SIDECAR_PROTOCOLS: ReadonlySet<string> = new Set([
+  Protocols.QWDTT,
+  Protocols.OLCRTC,
+  Protocols.CSQTT,
+]);
+
 export function hasShareLink(protocol: string): boolean {
   return LINK_PROTOCOLS.has(protocol);
+}
+
+// Sidecar links are built by the backend because they embed per-client
+// passwords/hashes and the server's public endpoint.
+export function isSidecarProtocol(protocol: string): boolean {
+  return SIDECAR_PROTOCOLS.has(protocol);
 }
 
 function readHeader(headers: unknown, name: string): string {

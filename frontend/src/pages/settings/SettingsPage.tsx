@@ -31,6 +31,7 @@ import DiscordTab from './DiscordTab';
 import SubscriptionGeneralTab from './SubscriptionGeneralTab';
 import SubscriptionFormatsTab from './SubscriptionFormatsTab';
 import SubscriptionBalancersTab from './SubscriptionBalancersTab';
+import CoresTab from './CoresTab';
 import './SettingsPage.css';
 
 interface ApiMsg {
@@ -46,6 +47,7 @@ const tabSlugs = [
   'subscription',
   'subscription-formats',
   'subscription-balancers',
+  'cores',
 ];
 
 function isIp(h: string): boolean {
@@ -195,6 +197,19 @@ export default function SettingsPage() {
         out.push(t('pages.settings.warnDefaultJsonPath'));
       }
     }
+    if (allSetting.subThroneEnable) {
+      let p = allSetting.subThronePath;
+      if (allSetting.subThroneURI) {
+        try {
+          p = new URL(allSetting.subThroneURI).pathname;
+        } catch {
+          /* noop */
+        }
+      }
+      if (p === '/throne/') {
+        out.push(t('pages.settings.warnDefaultThronePath'));
+      }
+    }
     return out;
   }, [allSetting, t]);
 
@@ -227,6 +242,8 @@ export default function SettingsPage() {
         return <SubscriptionFormatsTab allSetting={allSetting} updateSetting={updateSetting} />;
       case 'subscription-balancers':
         return <SubscriptionBalancersTab allSetting={allSetting} updateSetting={updateSetting} />;
+      case 'cores':
+        return <CoresTab />;
       default:
         return <GeneralTab allSetting={allSetting} updateSetting={updateSetting} />;
     }

@@ -297,6 +297,40 @@ uninstall() {
         fi
     fi
 
+    # --- Remove WARP (usque service, watchdog, binaries, state, routes) ---
+    if command -v systemctl > /dev/null 2>&1; then
+        systemctl stop warp-watch.timer warp-watch.service usque.service 2>/dev/null
+        systemctl disable warp-watch.timer warp-watch.service usque.service 2>/dev/null
+        rm -f /etc/systemd/system/usque.service \
+            /etc/systemd/system/warp-watch.service \
+            /etc/systemd/system/warp-watch.timer
+        systemctl daemon-reload >/dev/null 2>&1
+    fi
+    rm -f /usr/local/bin/usque /usr/local/bin/warp-rotate.sh /usr/local/bin/warp-watch.sh
+    rm -rf /etc/usque
+    rm -f /var/log/warp-watch.log /var/log/warp-install.log
+    rm -f /run/warp-watch.state /run/warp-watch.lock /run/warp-rotate.lock /run/warp-install.lock
+    if command -v crontab > /dev/null 2>&1; then
+        (crontab -l 2>/dev/null | grep -v 'warp-watch.sh' | crontab - 2>/dev/null) || true
+    fi
+    # Drop the policy routing / NAT state the usque hooks installed.
+    if command -v ip > /dev/null 2>&1; then
+        ip link del dev warp 2>/dev/null || true
+        while ip rule del table 10000 2>/dev/null; do :; done
+        ip route flush table 10000 2>/dev/null || true
+        while ip -6 rule del table 10000 2>/dev/null; do :; done
+        ip -6 route flush table 10000 2>/dev/null || true
+    fi
+    if command -v iptables > /dev/null 2>&1; then
+        iptables -t nat -D POSTROUTING -o warp -j MASQUERADE 2>/dev/null || true
+        iptables -t mangle -D POSTROUTING -o warp -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
+    fi
+    if command -v ip6tables > /dev/null 2>&1; then
+        ip6tables -t nat -D POSTROUTING -o warp -j MASQUERADE 2>/dev/null || true
+        ip6tables -D OUTPUT -m mark --mark 10000 ! -o warp -j REJECT 2>/dev/null || true
+    fi
+    sed -i '/api\.cloudflareclient\.com/d' /etc/hosts 2>/dev/null || true
+
     # --- Undo the optimization tab (DNS / sysctl / swap) ---
     if command -v chattr > /dev/null 2>&1; then
         chattr -i /etc/resolv.conf 2>/dev/null
@@ -344,6 +378,10 @@ uninstall() {
     rm /etc/x-ui/ -rf
     rm ${xui_folder}/ -rf
     rm -f "$db_env_file"
+    # Remove the CLI copy and files the panel created outside its folders, so a
+    # later install cannot pick up a stale CLI, logs or a bin snapshot.
+    rm -f /usr/bin/x-ui /usr/bin/x-ui-temp.* /etc/x-ui-dns-managed
+    rm -rf /usr/local/x-ui-bin-backup.* /var/log/x-ui /var/backups/x-ui
 
     if [[ "$panel_used_postgres" == "true" ]] && postgresql_installed; then
         purge_postgresql

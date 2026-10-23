@@ -31,6 +31,8 @@ interface SubSettings {
   subURI: string;
   subJsonURI: string;
   subJsonEnable: boolean;
+  subThroneURI?: string;
+  subThroneEnable?: boolean;
   publicHost?: string;
 }
 
@@ -211,6 +213,8 @@ const DEFAULT_SUB: SubSettings = {
   subURI: '',
   subJsonURI: '',
   subJsonEnable: false,
+  subThroneURI: '',
+  subThroneEnable: false,
   publicHost: '',
 };
 
@@ -246,6 +250,10 @@ function ClientQrModalContent({
   const subJsonLink =
     subId && subEnabled && subSettings?.subJsonEnable && subSettings?.subJsonURI
       ? subSettings.subJsonURI + subId
+      : '';
+  const qThroneLink =
+    subId && subEnabled && subSettings?.subThroneEnable && subSettings?.subThroneURI
+      ? subSettings.subThroneURI + subId
       : '';
   const clientId = client?.id;
   const clientSubId = subId ?? '';
@@ -380,18 +388,27 @@ function ClientQrModalContent({
   const hasAnything =
     !!subLink ||
     !!subJsonLink ||
+    !!qThroneLink ||
     wgConfigs.length > 0 ||
     awgConfigs.length > 0 ||
     tuicConfigs.length > 0 ||
     links.length > 0;
 
+  // A client does not need a subscription to show its per-inbound links:
+  // fall back to the direct client link endpoint when subId is missing.
+  const directLinksPath = client?.subId
+    ? `/panel/api/clients/subLinks/${encodeURIComponent(client.subId)}`
+    : client?.email
+      ? `/panel/api/clients/links/${encodeURIComponent(client.email)}`
+      : '';
+
   // The reset runs during render so the effect only carries the request.
-  const openSubId = open ? (client?.subId ?? '') : '';
-  const [syncedSubId, setSyncedSubId] = useState(openSubId);
-  if (openSubId !== syncedSubId) {
-    setSyncedSubId(openSubId);
+  const openLinksPath = open ? directLinksPath : '';
+  const [syncedLinksPath, setSyncedLinksPath] = useState(openLinksPath);
+  if (openLinksPath !== syncedLinksPath) {
+    setSyncedLinksPath(openLinksPath);
     setLinks([]);
-    setLoading(!!openSubId);
+    setLoading(!!openLinksPath);
     setVariant('standard');
     setHappLink('');
     setHappLoading(false);
@@ -399,13 +416,11 @@ function ClientQrModalContent({
   }
 
   useEffect(() => {
-    if (!open || !client?.subId) return;
+    if (!open || !directLinksPath) return;
     let cancelled = false;
     (async () => {
       try {
-        const msg = (await HttpUtil.get(
-          `/panel/api/clients/subLinks/${encodeURIComponent(client.subId!)}`,
-        )) as ApiMsg<string[]>;
+        const msg = (await HttpUtil.get(directLinksPath)) as ApiMsg<string[]>;
         if (!cancelled) {
           setLinks(msg?.success && Array.isArray(msg.obj) ? msg.obj : []);
         }
@@ -416,7 +431,7 @@ function ClientQrModalContent({
     return () => {
       cancelled = true;
     };
-  }, [open, client?.subId]);
+  }, [open, directLinksPath]);
 
   const [activeKey, setActiveKey] = useState<string[]>([]);
 
@@ -447,6 +462,13 @@ function ClientQrModalContent({
         key: 'subJson',
         label: `${t('subscription.title')} (JSON)`,
         children: <QrPanel value={subJsonLink} remark={`${client?.email || ''} — JSON`} />,
+      });
+    }
+    if (qThroneLink) {
+      out.push({
+        key: 'qthrone',
+        label: `${t('subscription.title')} (qThrone)`,
+        children: <QrPanel value={qThroneLink} remark={`${client?.email || ''} — qThrone`} />,
       });
     }
     links.forEach((link, idx) => {
@@ -530,6 +552,7 @@ function ClientQrModalContent({
   }, [
     subLink,
     subJsonLink,
+    qThroneLink,
     variant,
     happLink,
     happLoading,
@@ -564,7 +587,7 @@ function ClientQrModalContent({
       onCancel={() => onOpenChange(false)}
     >
       <Spin spinning={loading}>
-        {!client?.subId && !loading && (
+        {!directLinksPath && !loading && (
           <div style={{ padding: 24, textAlign: 'center', opacity: 0.6 }}>
             {t('pages.clients.noSubId')}
           </div>

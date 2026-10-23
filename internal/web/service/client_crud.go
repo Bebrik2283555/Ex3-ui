@@ -201,6 +201,12 @@ func (s *ClientService) Create(inboundSvc *InboundService, payload *ClientCreate
 		if client.Password == "" {
 			client.Password = existing.Password
 		}
+		if client.QwdttPassword == "" {
+			client.QwdttPassword = existing.QwdttPassword
+		}
+		if client.CsqttPassword == "" {
+			client.CsqttPassword = existing.CsqttPassword
+		}
 		if client.Auth == "" {
 			client.Auth = existing.Auth
 		}
@@ -434,6 +440,18 @@ func (s *ClientService) fillProtocolDefaults(c *model.Client, ib *model.Inbound)
 		}
 		if c.Password == "" {
 			c.Password = strings.ReplaceAll(uuid.NewString(), "-", "")
+		}
+	case model.QWDTT:
+		// Keep the legacy generic password working for existing clients; only
+		// mint a protocol-specific credential when there is nothing to fall back on.
+		if c.QwdttPassword == "" && c.Password == "" {
+			c.QwdttPassword = strings.ReplaceAll(uuid.NewString(), "-", "")
+		}
+	case model.CSQTT:
+		// CSQTT does not fall back to the generic password, so every client
+		// needs its own credential.
+		if c.CsqttPassword == "" {
+			c.CsqttPassword = strings.ReplaceAll(uuid.NewString(), "-", "")
 		}
 	}
 	return nil
@@ -670,6 +688,12 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 	if updated.Password == "" {
 		updated.Password = existing.Password
 	}
+	if updated.QwdttPassword == "" {
+		updated.QwdttPassword = existing.QwdttPassword
+	}
+	if updated.CsqttPassword == "" {
+		updated.CsqttPassword = existing.CsqttPassword
+	}
 	if updated.Auth == "" {
 		updated.Auth = existing.Auth
 	}
@@ -789,6 +813,8 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 				"uuid":              merged.UUID,
 				"password":          merged.Password,
 				"auth":              merged.Auth,
+				"qwdtt_password":    merged.QwdttPassword,
+				"csqtt_password":    merged.CsqttPassword,
 				"secret":            merged.Secret,
 				"flow":              merged.Flow,
 				"security":          merged.Security,

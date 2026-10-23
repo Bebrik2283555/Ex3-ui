@@ -70,6 +70,7 @@ type SUBController struct {
 	subPath            string
 	subJsonPath        string
 	subClashPath       string
+	subThronePath      string
 	subClashAutoDetect bool
 	clashUserAgent     *regexp.Regexp
 	jsonAutoDetect     bool
@@ -77,6 +78,7 @@ type SUBController struct {
 	jsonAlwaysArray    bool
 	jsonEnabled        bool
 	clashEnabled       bool
+	throneEnabled      bool
 	subEncrypt         bool
 	updateInterval     string
 
@@ -92,9 +94,10 @@ type SUBController struct {
 }
 
 type subControllerConfig struct {
-	subPath      string
-	subJsonPath  string
-	subClashPath string
+	subPath       string
+	subJsonPath   string
+	subClashPath  string
+	subThronePath string
 
 	subClashAutoDetect     bool
 	subClashUserAgentRegex string
@@ -103,6 +106,7 @@ type subControllerConfig struct {
 	subJsonAlwaysArray     bool
 	subJsonEnabled         bool
 	subClashEnabled        bool
+	subThroneEnabled       bool
 
 	subEncrypt     bool
 	remarkTemplate string
@@ -144,6 +148,14 @@ func WithSUBJsonPath(value string) SUBControllerOption {
 
 func WithSUBClashPath(value string) SUBControllerOption {
 	return func(config *subControllerConfig) { config.subClashPath = value }
+}
+
+func WithSUBThronePath(value string) SUBControllerOption {
+	return func(config *subControllerConfig) { config.subThronePath = value }
+}
+
+func WithSUBThroneEnabled(value bool) SUBControllerOption {
+	return func(config *subControllerConfig) { config.subThroneEnabled = value }
 }
 
 func WithSUBClashAutoDetect(value bool) SUBControllerOption {
@@ -271,6 +283,7 @@ func defaultSUBControllerConfig() subControllerConfig {
 		subPath:        "/sub/",
 		subJsonPath:    "/json/",
 		subClashPath:   "/clash/",
+		subThronePath:  "/throne/",
 		subEncrypt:     true,
 		remarkTemplate: service.DefaultRemarkTemplate,
 		updateInterval: "12",
@@ -308,6 +321,7 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 		subPath:            config.subPath,
 		subJsonPath:        config.subJsonPath,
 		subClashPath:       config.subClashPath,
+		subThronePath:      config.subThronePath,
 		subClashAutoDetect: config.subClashAutoDetect,
 		clashUserAgent:     compileUserAgentRegex("Clash/Mihomo", config.subClashUserAgentRegex, service.DefaultSubClashUserAgentRegex),
 		jsonAutoDetect:     config.subJsonAutoDetect,
@@ -315,6 +329,7 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 		jsonAlwaysArray:    config.subJsonAlwaysArray,
 		jsonEnabled:        config.subJsonEnabled,
 		clashEnabled:       config.subClashEnabled,
+		throneEnabled:      config.subThroneEnabled,
 		subEncrypt:         config.subEncrypt,
 		updateInterval:     config.updateInterval,
 
@@ -341,6 +356,11 @@ func (a *SUBController) initRouter(g *gin.RouterGroup) {
 		gJson := g.Group(a.subJsonPath, a.subLimiter.middleware())
 		gJson.GET(":subid", a.subJsons)
 		gJson.HEAD(":subid", a.subJsons)
+	}
+	if a.throneEnabled {
+		gThrone := g.Group(a.subThronePath, a.subLimiter.middleware())
+		gThrone.GET(":subid", a.subThrones)
+		gThrone.HEAD(":subid", a.subThrones)
 	}
 	if a.clashEnabled {
 		gClash := g.Group(a.subClashPath, a.subLimiter.middleware())
@@ -378,6 +398,9 @@ func (a *SUBController) configuredSubscriptionPathOwner(candidate string) string
 	}
 	if a.clashEnabled && sameSubscriptionPath(candidate, a.subClashPath) {
 		return "Clash subscription"
+	}
+	if a.throneEnabled && sameSubscriptionPath(candidate, a.subThronePath) {
+		return "qThrone subscription"
 	}
 	return ""
 }
@@ -525,6 +548,37 @@ func (a *SUBController) subs(c *gin.Context) {
 		}
 		a.recordSubscriptionFetch(c)
 	}
+}
+
+// subThrones serves the qThrone feed: a base64 list of every Xray link plus
+// all qWDTT/olcRTC/CSQTT links, regardless of the generic sidecar toggle.
+func (a *SUBController) subThrones(c *gin.Context) {
+	userAgent := c.GetHeader("User-Agent")
+	if !a.enforceHwid(c) {
+		return
+	}
+	subId := c.Param("subid")
+	scheme, host, hostWithPort, _ := a.subService.ResolveRequest(c)
+	subReq := a.subService.ForRequest(host)
+	subReq.subscriptionBody = true
+	subReq.forceSidecars = true
+	subs, _, _, traffic, err := subReq.getSubs(subId)
+	if err != nil || subs == nil {
+		writeSubError(c, err)
+		return
+	}
+	var body strings.Builder
+	for _, sub := range subs {
+		body.WriteString(sub)
+		body.WriteString("\n")
+	}
+	header := subReq.subscriptionUserinfo(traffic)
+	metadata := a.metadataForSubRequest(func() *SubService { return subReq }, subId, builtinProfileURL(c, scheme, hostWithPort))
+	a.ApplyCommonHeaders(c, header, a.updateInterval, metadata.Title, metadata.SupportURL, metadata.ProfileURL, metadata.Announce, a.subEnableRouting, a.subRoutingRules, a.subHideSettings)
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.String(http.StatusOK, base64.StdEncoding.EncodeToString([]byte(body.String())))
+	a.recordSubscriptionFetch(c)
+	logSubscriptionRoute(userAgent, "throne")
 }
 
 func (a *SUBController) recordSubscriptionFetch(c *gin.Context) {

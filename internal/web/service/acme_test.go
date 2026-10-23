@@ -1,11 +1,20 @@
 package service
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestAcmeCommandErrorIncludesOutput(t *testing.T) {
+	err := acmeCommandError("acme issue failed", errors.New("exit status 1"), []byte("HTTP-01 challenge failed"))
+	msg := err.Error()
+	if !strings.Contains(msg, "exit status 1") || !strings.Contains(msg, "HTTP-01 challenge failed") {
+		t.Fatalf("error = %q, want exit status and acme output", msg)
+	}
+}
 
 func TestValidateDomainName(t *testing.T) {
 	valid := []string{

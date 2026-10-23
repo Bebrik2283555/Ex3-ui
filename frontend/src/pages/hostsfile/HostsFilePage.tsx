@@ -181,12 +181,14 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
   const [testingDns, setTestingDns] = useState(false);
 
   useEffect(() => {
-    if (status) {
-      settingsForm.setFieldsValue({
-        dnsServer: status.dnsServer,
-        intervalHours: status.intervalHours,
-      });
-    }
+    if (!status) return;
+    // The status endpoint is polled; never overwrite values the operator is
+    // editing, especially after disabling auto-update.
+    if (settingsForm.isFieldsTouched()) return;
+    settingsForm.setFieldsValue({
+      dnsServer: status.dnsServer,
+      intervalHours: status.intervalHours,
+    });
   }, [status, settingsForm]);
 
   const onTestDns = async () => {
@@ -233,8 +235,8 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
     try {
       const payload: DnsResolverSettings = {
         enabled,
-        dnsServer: status.dnsServer,
-        intervalHours: status.intervalHours,
+        dnsServer: String(settingsForm.getFieldValue('dnsServer') ?? '').trim() || status.dnsServer,
+        intervalHours: Number(settingsForm.getFieldValue('intervalHours')) || status.intervalHours,
         domains: status.domains,
       };
       await saveSettings(payload);

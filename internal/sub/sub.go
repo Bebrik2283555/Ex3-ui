@@ -79,6 +79,16 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		return nil, err
 	}
 
+	ThronePath, err := s.settingService.GetSubThronePath()
+	if err != nil {
+		return nil, err
+	}
+
+	subThroneEnable, err := s.settingService.GetSubThroneEnable()
+	if err != nil {
+		return nil, err
+	}
+
 	subJsonEnable, err := s.settingService.GetSubJsonEnable()
 	if err != nil {
 		return nil, err
@@ -343,6 +353,8 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		WithSUBPath(LinksPath),
 		WithSUBJsonPath(JsonPath),
 		WithSUBClashPath(ClashPath),
+		WithSUBThronePath(ThronePath),
+		WithSUBThroneEnabled(subThroneEnable),
 		WithSUBClashAutoDetect(subClashAutoDetect),
 		WithSUBClashUserAgentRegex(subClashUserAgentRegex),
 		WithSUBJsonAutoDetect(subJsonAutoDetect),

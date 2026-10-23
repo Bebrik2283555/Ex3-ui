@@ -7,6 +7,11 @@ import { MasqueInboundSettingsSchema } from './masque';
 import { MixedInboundSettingsSchema } from './mixed';
 import { MtprotoInboundSettingsSchema } from './mtproto';
 import { ShadowsocksInboundSettingsSchema } from './shadowsocks';
+import {
+  CsqttInboundSettingsSchema,
+  OlcrtcInboundSettingsSchema,
+  QwdttInboundSettingsSchema,
+} from './sidecar';
 import { TrojanInboundSettingsSchema } from './trojan';
 import { TuicInboundSettingsSchema } from './tuic';
 import { TunInboundSettingsSchema } from './tun';
@@ -22,6 +27,7 @@ export * from './masque';
 export * from './mixed';
 export * from './mtproto';
 export * from './shadowsocks';
+export * from './sidecar';
 export * from './trojan';
 export * from './tuic';
 export * from './tun';
@@ -50,5 +56,8 @@ export const InboundSettingsSchema = z.discriminatedUnion('protocol', [
   z.object({ protocol: z.literal('amneziawg'), settings: AmneziawgInboundSettingsSchema }),
   z.object({ protocol: z.literal('tuic'), settings: TuicInboundSettingsSchema }),
   z.object({ protocol: z.literal('masque'), settings: MasqueInboundSettingsSchema }),
+  z.object({ protocol: z.literal('qwdtt'), settings: QwdttInboundSettingsSchema }),
+  z.object({ protocol: z.literal('olcrtc'), settings: OlcrtcInboundSettingsSchema }),
+  z.object({ protocol: z.literal('csqtt'), settings: CsqttInboundSettingsSchema }),
 ]);
 export type InboundSettings = z.infer<typeof InboundSettingsSchema>;

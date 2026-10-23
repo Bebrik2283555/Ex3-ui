@@ -85,7 +85,7 @@ describe('generated OpenAPI request bodies', () => {
     expect(multipart.schema.properties?.db).toEqual({
       type: 'string',
       format: 'binary',
-      description: 'Database backup or migration file to upload.',
+      description: 'Full backup ZIP, database backup or migration file to upload.',
     });
     expect(multipart.schema.properties).toHaveProperty('keepHostSettings');
     expect(multipart.schema.properties?.keepHostSettings?.default).toBe(true);

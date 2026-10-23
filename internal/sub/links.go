@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/mhsanaei/3x-ui/v3/internal/sidecar"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 )
 
@@ -24,6 +25,8 @@ func (p *LinkProvider) build(host string) *SubService {
 
 func (p *LinkProvider) SubLinksForSubId(host, subId string) ([]string, error) {
 	svc := p.build(host)
+	// The panel's QR view always shows sidecar links for the client.
+	svc.forceSidecars = true
 	links, _, _, _, err := svc.GetSubs(subId, host)
 	if err != nil {
 		return nil, err
@@ -36,6 +39,9 @@ func (p *LinkProvider) SubLinksForSubId(host, subId string) ([]string, error) {
 }
 
 func (p *LinkProvider) LinksForClient(host string, inbound *model.Inbound, email string) []string {
+	if model.IsSidecarProtocol(inbound.Protocol) {
+		return sidecar.LinkFor(inbound, email)
+	}
 	svc := p.build(host)
 	svc.projectThroughFallbackMaster(inbound)
 	if endpoints := svc.hostEndpoints(inbound, "raw"); len(endpoints) > 0 {

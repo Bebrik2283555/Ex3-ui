@@ -35,7 +35,17 @@ const (
 	AmneziaWG   Protocol = "amneziawg"
 	TUIC        Protocol = "tuic"
 	MASQUE      Protocol = "masque"
+	// Sidecar protocols are served by their own binaries next to Xray.
+	QWDTT  Protocol = "qwdtt"
+	OLCRTC Protocol = "olcrtc"
+	CSQTT  Protocol = "csqtt"
 )
+
+// IsSidecarProtocol reports whether p is handled by the sidecar manager
+// instead of Xray.
+func IsSidecarProtocol(p Protocol) bool {
+	return p == QWDTT || p == OLCRTC || p == CSQTT
+}
 
 // User represents a user account in the 3x-ui panel.
 type User struct {
@@ -65,7 +75,7 @@ type Inbound struct {
 	// Xray configuration fields
 	Listen            string   `json:"listen" form:"listen"`
 	Port              int      `json:"port" form:"port" validate:"gte=0,lte=65535" example:"443"`
-	Protocol          Protocol `json:"protocol" form:"protocol" validate:"required,oneof=vmess vless trojan shadowsocks wireguard hysteria http mixed tunnel tun mtproto amneziawg tuic masque" example:"vless"`
+	Protocol          Protocol `json:"protocol" form:"protocol" validate:"required,oneof=vmess vless trojan shadowsocks wireguard hysteria http mixed tunnel tun mtproto amneziawg tuic masque qwdtt olcrtc csqtt" example:"vless"`
 	Settings          string   `json:"settings" form:"settings"`
 	StreamSettings    string   `json:"streamSettings" form:"streamSettings"`
 	Tag               string   `json:"tag" form:"tag" gorm:"unique" example:"in-443-tcp"`
@@ -919,15 +929,17 @@ type ClientReverse struct {
 
 // Client represents a client configuration for Xray inbounds with traffic limits and settings.
 type Client struct {
-	ID         string         `json:"id,omitempty"`       // Unique client identifier
-	Security   string         `json:"security"`           // Security method (e.g., "auto", "aes-128-gcm")
-	Password   string         `json:"password,omitempty"` // Client password
-	Flow       string         `json:"flow,omitempty"`     // Flow control (XTLS)
-	Reverse    *ClientReverse `json:"reverse,omitempty"`  // VLESS simple reverse proxy settings
-	Auth       string         `json:"auth,omitempty"`     // Auth password (Hysteria)
-	PrivateKey string         `json:"privateKey,omitempty"`
-	PublicKey  string         `json:"publicKey,omitempty"`
-	AllowedIPs []string       `json:"allowedIPs,omitempty"`
+	ID            string         `json:"id,omitempty"`            // Unique client identifier
+	Security      string         `json:"security"`                // Security method (e.g., "auto", "aes-128-gcm")
+	Password      string         `json:"password,omitempty"`      // Client password
+	Flow          string         `json:"flow,omitempty"`          // Flow control (XTLS)
+	Reverse       *ClientReverse `json:"reverse,omitempty"`       // VLESS simple reverse proxy settings
+	Auth          string         `json:"auth,omitempty"`          // Auth password (Hysteria)
+	QwdttPassword string         `json:"qwdttPassword,omitempty"` // qWDTT per-client password
+	CsqttPassword string         `json:"csqttPassword,omitempty"` // CSQTT per-client password
+	PrivateKey    string         `json:"privateKey,omitempty"`
+	PublicKey     string         `json:"publicKey,omitempty"`
+	AllowedIPs    []string       `json:"allowedIPs,omitempty"`
 	// AllowedIPsByInbound optionally overrides AllowedIPs on a per-inbound
 	// basis, keyed by inbound id. Lets one identity attached to both
 	// WireGuard and AmneziaWG carry two genuinely different addresses in a
@@ -968,6 +980,8 @@ type ClientRecord struct {
 	UUID            string `json:"uuid" gorm:"column:uuid"`
 	Password        string `json:"password"`
 	Auth            string `json:"auth"`
+	QwdttPassword   string `json:"qwdttPassword" gorm:"column:qwdtt_password"`
+	CsqttPassword   string `json:"csqttPassword" gorm:"column:csqtt_password"`
 	Flow            string `json:"flow"`
 	Security        string `json:"security"`
 	Reverse         string `json:"reverse" gorm:"column:reverse"`
@@ -1191,6 +1205,8 @@ func (c *Client) ToRecord() *ClientRecord {
 		UUID:            c.ID,
 		Password:        c.Password,
 		Auth:            c.Auth,
+		QwdttPassword:   c.QwdttPassword,
+		CsqttPassword:   c.CsqttPassword,
 		Flow:            c.Flow,
 		Security:        c.Security,
 		LimitIP:         c.LimitIP,
@@ -1250,6 +1266,8 @@ func (r *ClientRecord) ToClient() *Client {
 		SubID:           r.SubID,
 		Password:        r.Password,
 		Auth:            r.Auth,
+		QwdttPassword:   r.QwdttPassword,
+		CsqttPassword:   r.CsqttPassword,
 		Flow:            r.Flow,
 		Security:        r.Security,
 		LimitIP:         r.LimitIP,
@@ -1361,6 +1379,18 @@ func MergeClientRecord(existing *ClientRecord, incoming *ClientRecord) []ClientM
 		if incomingNewer || existing.Auth == "" {
 			existing.Auth = incoming.Auth
 			keepSecret("auth")
+		}
+	}
+	if existing.QwdttPassword != incoming.QwdttPassword && incoming.QwdttPassword != "" {
+		if incomingNewer || existing.QwdttPassword == "" {
+			existing.QwdttPassword = incoming.QwdttPassword
+			keepSecret("qwdttPassword")
+		}
+	}
+	if existing.CsqttPassword != incoming.CsqttPassword && incoming.CsqttPassword != "" {
+		if incomingNewer || existing.CsqttPassword == "" {
+			existing.CsqttPassword = incoming.CsqttPassword
+			keepSecret("csqttPassword")
 		}
 	}
 	if existing.Flow != incoming.Flow && incoming.Flow != "" {

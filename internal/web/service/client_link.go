@@ -32,6 +32,14 @@ func applyClientRecordMerge(row *model.ClientRecord, incoming *model.ClientRecor
 	if incoming.Auth != "" {
 		row.Auth = incoming.Auth
 	}
+	// Sidecar credentials live on the shared client record so link generation
+	// (which reads client_inbounds) sees the same value the inbound settings do.
+	if incoming.QwdttPassword != "" {
+		row.QwdttPassword = incoming.QwdttPassword
+	}
+	if incoming.CsqttPassword != "" {
+		row.CsqttPassword = incoming.CsqttPassword
+	}
 	if incoming.Secret != "" {
 		row.Secret = incoming.Secret
 	}

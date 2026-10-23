@@ -96,6 +96,8 @@ export default function DomainSetupModal({ open, onClose, onDone }: DomainSetupM
   const busy = checking || issuing;
   const dnsOk = resolve?.matched === true;
   const serverIp = resolve?.serverIp && resolve.serverIp !== 'N/A' ? resolve.serverIp : '';
+  const dnsHint = t('pages.inbounds.form.templateDnsHint');
+  const [dnsHintBefore, ...dnsHintAfter] = dnsHint.split('dnsexit.com');
 
   return (
     <Modal
@@ -127,10 +129,12 @@ export default function DomainSetupModal({ open, onClose, onDone }: DomainSetupM
                 <Tooltip
                   title={
                     <span>
-                      {t('pages.inbounds.form.templateDnsHint')}{' '}
+                      {dnsHintBefore}
+                      {dnsHintAfter.length === 0 && ' '}
                       <a href="https://dnsexit.com" target="_blank" rel="noreferrer">
                         dnsexit.com
                       </a>
+                      {dnsHintAfter.join('dnsexit.com')}
                     </span>
                   }
                 >

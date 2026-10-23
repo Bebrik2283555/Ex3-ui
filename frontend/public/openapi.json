@@ -504,6 +504,15 @@
           "subThemeDir": {
             "type": "string"
           },
+          "subThroneEnable": {
+            "type": "boolean"
+          },
+          "subThronePath": {
+            "type": "string"
+          },
+          "subThroneURI": {
+            "type": "string"
+          },
           "subTitle": {
             "type": "string"
           },
@@ -748,6 +757,9 @@
           "subShowIdentityOnAllLinks",
           "subSupportUrl",
           "subThemeDir",
+          "subThroneEnable",
+          "subThronePath",
+          "subThroneURI",
           "subTitle",
           "subTrafficDepletedTemplate",
           "subURI",
@@ -1280,6 +1292,15 @@
           "subThemeDir": {
             "type": "string"
           },
+          "subThroneEnable": {
+            "type": "boolean"
+          },
+          "subThronePath": {
+            "type": "string"
+          },
+          "subThroneURI": {
+            "type": "string"
+          },
           "subTitle": {
             "type": "string"
           },
@@ -1532,6 +1553,9 @@
           "subShowIdentityOnAllLinks",
           "subSupportUrl",
           "subThemeDir",
+          "subThroneEnable",
+          "subThronePath",
+          "subThroneURI",
           "subTitle",
           "subTrafficDepletedTemplate",
           "subURI",
@@ -1709,6 +1733,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "csqttPassword": {
+            "description": "CSQTT per-client password",
+            "type": "string"
+          },
           "email": {
             "description": "Client email identifier",
             "type": "string"
@@ -1758,6 +1786,10 @@
             "type": "string"
           },
           "publicKey": {
+            "type": "string"
+          },
+          "qwdttPassword": {
+            "description": "qWDTT per-client password",
             "type": "string"
           },
           "reset": {
@@ -1938,6 +1970,9 @@
             "format": "int64",
             "type": "integer"
           },
+          "csqttPassword": {
+            "type": "string"
+          },
           "email": {
             "type": "string"
           },
@@ -1979,6 +2014,9 @@
             "type": "string"
           },
           "publicKey": {
+            "type": "string"
+          },
+          "qwdttPassword": {
             "type": "string"
           },
           "reset": {
@@ -2031,6 +2069,7 @@
           "auth",
           "comment",
           "createdAt",
+          "csqttPassword",
           "email",
           "enable",
           "expiryTime",
@@ -2045,6 +2084,7 @@
           "preSharedKey",
           "privateKey",
           "publicKey",
+          "qwdttPassword",
           "reset",
           "resetDay",
           "resetMax",
@@ -3116,7 +3156,10 @@
               "mtproto",
               "amneziawg",
               "tuic",
-              "masque"
+              "masque",
+              "qwdtt",
+              "olcrtc",
+              "csqtt"
             ],
             "example": "vless",
             "type": "string"
@@ -4866,12 +4909,12 @@
       "description": "Client-side balancers for the JSON subscription: each enabled balancer is emitted as one extra config document whose members are the proxy outbounds of the selected inbounds (routing.balancers + burstObservatory). Managed in Settings → Sub Balancers."
     },
     {
-      "name": "Extra Cores",
-      "description": "Manage the bundled sidecar cores (qwdtt and olcRTC) that run outside Xray as separate processes, including their configs and binary updates."
+      "name": "Cores",
+      "description": "Manage the sidecar cores (qWDTT, olcRTC, CSQTT) that run outside Xray: status and process control."
     },
     {
       "name": "System Tools",
-      "description": "One-shot tuning for weak VPSes (DNS, BBR/sysctl, swap), the transparent zapret DPI-bypass service, and the /etc/hosts file used by the extra cores."
+      "description": "One-shot tuning for weak VPSes (DNS, BBR/sysctl, swap), the transparent zapret DPI-bypass service, and the system hosts file."
     },
     {
       "name": "Subscription Server",
@@ -5363,6 +5406,141 @@
                     "vless://uuid@host:443?security=reality&...#Germany-alice",
                     "vmess://eyJ2IjoyLC..."
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/inbounds/links/{id}": {
+      "get": {
+        "tags": [
+          "Inbounds"
+        ],
+        "summary": "Return the direct share links for one inbound and all of its clients, including qWDTT (qwdtt://), olcRTC (olcrtc://), and CSQTT (csqtt://). Use this for per-inbound copy/QR actions; it does not require a subscription URL.",
+        "operationId": "get_panel_api_inbounds_links_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Inbound ID.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": [
+                    "qwdtt://config?peer=host:56000&..."
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/inbounds/sidecarLinks/{id}": {
+      "get": {
+        "tags": [
+          "Inbounds"
+        ],
+        "summary": "Return structured sidecar links for one inbound: modern qwdtt://, csqtt:// or olcrtc:// links grouped by client, the legacy wdtt:// URI and the qWDTT subJson payload.",
+        "operationId": "get_panel_api_inbounds_sidecarLinks_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Inbound ID.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {
+                      "type": "object",
+                      "properties": {
+                        "inboundId": {
+                          "type": "number"
+                        },
+                        "remark": {
+                          "type": "string"
+                        },
+                        "protocol": {
+                          "type": "string"
+                        },
+                        "links": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "legacyUri": {
+                          "type": "string"
+                        },
+                        "subJson": {
+                          "type": "string"
+                        },
+                        "clients": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "inboundId": 3,
+                    "protocol": "qwdtt",
+                    "links": [
+                      "qwdtt://config?..."
+                    ]
+                  }
                 }
               }
             }
@@ -6802,8 +6980,38 @@
         "tags": [
           "Server"
         ],
-        "summary": "Stream a full database backup as an attachment: the SQLite .db file on SQLite panels, or a pg_dump custom-format archive (.dump) on PostgreSQL panels. Use as a manual backup.",
+        "summary": "Stream a database-only backup as an attachment: the SQLite .db file on SQLite panels, or a pg_dump custom-format archive (.dump) on PostgreSQL panels. Stays compatible with older panels.",
         "operationId": "get_panel_api_server_getDb",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/getDbZip": {
+      "get": {
+        "tags": [
+          "Server"
+        ],
+        "summary": "Stream a full backup ZIP: the database under db/, every certificate under /root/cert under cert/, and manifest.json. Restore through importDB.",
+        "operationId": "get_panel_api_server_getDbZip",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -7818,7 +8026,7 @@
         "tags": [
           "Server"
         ],
-        "summary": "Restore the panel DB from an uploaded backup (multipart form, field name \"db\"). SQLite panels accept a SQLite database (.db) or a SQLite migration dump (.dump); PostgreSQL panels accept a pg_dump archive (.dump), a SQLite database (.db), or a SQLite migration dump. The panel restarts after restore. Destructive.",
+        "summary": "Restore the panel from an uploaded backup (multipart form, field name \"db\"). Accepts the full ZIP from getDbZip (database plus certificates) or a database-only file. SQLite panels accept a SQLite database (.db) or a SQLite migration dump (.dump); PostgreSQL panels accept a pg_dump archive (.dump), a SQLite database (.db), or a SQLite migration dump. The panel restarts after restore. Destructive.",
         "operationId": "post_panel_api_server_importDB",
         "requestBody": {
           "required": true,
@@ -7830,7 +8038,7 @@
                   "db": {
                     "type": "string",
                     "format": "binary",
-                    "description": "Database backup or migration file to upload."
+                    "description": "Full backup ZIP, database backup or migration file to upload."
                   },
                   "keepHostSettings": {
                     "type": "boolean",
@@ -15505,13 +15713,13 @@
         }
       }
     },
-    "/panel/api/extra/services": {
+    "/panel/api/cores": {
       "get": {
         "tags": [
-          "Extra Cores"
+          "Cores"
         ],
-        "summary": "List every extra core with its status (enabled, running, binary present) and effective config.",
-        "operationId": "get_panel_api_extra_services",
+        "summary": "List every sidecar core with install/enabled/running state, inbound counts and binary metadata.",
+        "operationId": "get_panel_api_cores",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -15528,22 +15736,6 @@
                     },
                     "obj": {}
                   }
-                },
-                "example": {
-                  "success": true,
-                  "obj": [
-                    {
-                      "name": "qwdtt",
-                      "displayName": "qWDTT",
-                      "enabled": true,
-                      "running": true,
-                      "binaryExists": true,
-                      "config": {
-                        "listenAddr": "0.0.0.0:56000",
-                        "wgPort": 56001
-                      }
-                    }
-                  ]
                 }
               }
             }
@@ -15551,19 +15743,19 @@
         }
       }
     },
-    "/panel/api/extra/services/{name}/status": {
+    "/panel/api/cores/{name}/details": {
       "get": {
         "tags": [
-          "Extra Cores"
+          "Cores"
         ],
-        "summary": "Status of a single extra core.",
-        "operationId": "get_panel_api_extra_services_name_status",
+        "summary": "Return the core snapshot plus its supervised inbounds, live logs, generated links and qWDTT subJson.",
+        "operationId": "get_panel_api_cores_name_details",
         "parameters": [
           {
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt or olcrtc.",
+            "description": "Core name: qwdtt, olcrtc or csqtt.",
             "schema": {
               "type": "string"
             }
@@ -15592,81 +15784,24 @@
         }
       }
     },
-    "/panel/api/extra/services/{name}/config": {
+    "/panel/api/cores/{name}/logs": {
       "get": {
         "tags": [
-          "Extra Cores"
+          "Cores"
         ],
-        "summary": "Current stored configuration of an extra core.",
-        "operationId": "get_panel_api_extra_services_name_config",
+        "summary": "Alias of /details focused on the per-inbound log buffers.",
+        "operationId": "get_panel_api_cores_name_logs",
         "parameters": [
           {
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt or olcrtc.",
+            "description": "Core name: qwdtt, olcrtc or csqtt.",
             "schema": {
               "type": "string"
             }
           }
         ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "Extra Cores"
-        ],
-        "summary": "Update the configuration of an extra core and apply it (restarts the process when its settings changed).",
-        "operationId": "put_panel_api_extra_services_name_config",
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "description": "Core name: qwdtt or olcrtc.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              },
-              "example": {
-                "enabled": true,
-                "autoStart": true,
-                "listenAddr": "0.0.0.0:56000",
-                "wgPort": 56001,
-                "password": "secret",
-                "dns": "8.8.8.8"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful response",
@@ -15690,19 +15825,19 @@
         }
       }
     },
-    "/panel/api/extra/services/{name}/start": {
+    "/panel/api/cores/{name}/start": {
       "post": {
         "tags": [
-          "Extra Cores"
+          "Cores"
         ],
-        "summary": "Start an extra core process.",
-        "operationId": "post_panel_api_extra_services_name_start",
+        "summary": "Start every enabled inbound of the core without touching other cores.",
+        "operationId": "post_panel_api_cores_name_start",
         "parameters": [
           {
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt or olcrtc.",
+            "description": "Core name: qwdtt, olcrtc or csqtt.",
             "schema": {
               "type": "string"
             }
@@ -15731,19 +15866,19 @@
         }
       }
     },
-    "/panel/api/extra/services/{name}/stop": {
+    "/panel/api/cores/{name}/stop": {
       "post": {
         "tags": [
-          "Extra Cores"
+          "Cores"
         ],
-        "summary": "Stop an extra core process.",
-        "operationId": "post_panel_api_extra_services_name_stop",
+        "summary": "Stop every process belonging to the core.",
+        "operationId": "post_panel_api_cores_name_stop",
         "parameters": [
           {
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt or olcrtc.",
+            "description": "Core name: qwdtt, olcrtc or csqtt.",
             "schema": {
               "type": "string"
             }
@@ -15772,231 +15907,19 @@
         }
       }
     },
-    "/panel/api/extra/services/{name}/restart": {
+    "/panel/api/cores/{name}/restart": {
       "post": {
         "tags": [
-          "Extra Cores"
+          "Cores"
         ],
-        "summary": "Restart an extra core process.",
-        "operationId": "post_panel_api_extra_services_name_restart",
+        "summary": "Stop the core and restart every enabled inbound that uses it.",
+        "operationId": "post_panel_api_cores_name_restart",
         "parameters": [
           {
             "name": "name",
             "in": "path",
             "required": true,
-            "description": "Core name: qwdtt or olcrtc.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/extra/services/{name}/logs": {
-      "get": {
-        "tags": [
-          "Extra Cores"
-        ],
-        "summary": "Recent output lines of an extra core process.",
-        "operationId": "get_panel_api_extra_services_name_logs",
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "description": "Core name: qwdtt or olcrtc.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "lines",
-            "in": "query",
-            "required": false,
-            "description": "How many lines to return (default 200).",
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/extra/services/{name}/upload": {
-      "post": {
-        "tags": [
-          "Extra Cores"
-        ],
-        "summary": "Replace the binary of an extra core (multipart form field \"file\"). Saved to bin/extra-<name>.",
-        "operationId": "post_panel_api_extra_services_name_upload",
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "description": "Core name: qwdtt or olcrtc.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "file": {
-                    "type": "string",
-                    "format": "binary",
-                    "description": "The new binary."
-                  }
-                },
-                "required": [
-                  "file"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/extra/services/{name}/download": {
-      "post": {
-        "tags": [
-          "Extra Cores"
-        ],
-        "summary": "Fetch the binary of an extra core from a public URL (file host, Google Drive, CDN) and save it to bin/extra-<name>.",
-        "operationId": "post_panel_api_extra_services_name_download",
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "description": "Core name: qwdtt or olcrtc.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "url": {
-                    "type": "string",
-                    "description": "Direct download link to the core binary."
-                  }
-                },
-                "required": [
-                  "url"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "msg": {
-                      "type": "string"
-                    },
-                    "obj": {}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/panel/api/extra/services/{name}/binary": {
-      "delete": {
-        "tags": [
-          "Extra Cores"
-        ],
-        "summary": "Stop an extra core and delete its binary from disk.",
-        "operationId": "delete_panel_api_extra_services_name_binary",
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "description": "Core name: qwdtt or olcrtc.",
+            "description": "Core name: qwdtt, olcrtc or csqtt.",
             "schema": {
               "type": "string"
             }
@@ -17070,7 +16993,7 @@
         "tags": [
           "System Tools"
         ],
-        "summary": "Replace the system hosts file. Useful to pin domains for the extra cores.",
+        "summary": "Replace the system hosts file. Useful to pin domains for sidecar cores.",
         "operationId": "put_panel_api_hostsfile",
         "requestBody": {
           "required": true,

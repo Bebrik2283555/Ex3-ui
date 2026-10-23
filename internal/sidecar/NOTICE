@@ -1,0 +1,10 @@
+Portions of this package are adapted from LucX-UI:
+https://github.com/AlexeyLCP/lucx-ui
+
+Copyright (c) 2025-2026 LucX-UI Project.
+Licensed under the PolyForm Noncommercial License 1.0.0.
+See LICENSE in this directory, ../../LICENSING.md, and
+licenses/THIRD-PARTY-NOTICES.md.
+
+The PolyForm Noncommercial components are not sublicensed under GPL-3.0.
+Commercial use requires explicit written permission from the LucX-UI author.

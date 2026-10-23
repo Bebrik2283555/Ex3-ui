@@ -14,7 +14,6 @@ const TITLE_KEYS: Record<string, string> = {
   '/outbound': 'menu.outbounds',
   '/routing': 'menu.routing',
   '/api-docs': 'menu.apiDocs',
-  '/extras': 'menu.extras',
   '/optimize': 'menu.optimize',
   '/zapret': 'menu.zapret',
   '/hostsfile': 'menu.hostsFile',

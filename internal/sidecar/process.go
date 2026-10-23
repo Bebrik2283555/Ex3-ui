@@ -1,4 +1,4 @@
-package extra
+package sidecar
 
 import (
 	"context"
@@ -85,16 +85,10 @@ func (w *logWriter) Write(p []byte) (int, error) {
 
 func (w *logWriter) push(line string) {
 	w.ring.push(line)
-	w.forward(line)
-}
-
-// forward mirrors a core line into the panel logger, skipping per-packet
-// trace/debug spam so journalctl stays readable.
-func (w *logWriter) forward(line string) {
 	if line == "" || strings.Contains(line, "] TRACE:") || strings.Contains(line, "] DEBUG:") {
 		return
 	}
-	logger.Infof("extra[%s]: %s", w.name, line)
+	logger.Infof("sidecar[%s]: %s", w.name, line)
 }
 
 func (w *logWriter) flush() {
@@ -106,9 +100,9 @@ func (w *logWriter) flush() {
 	}
 }
 
-// Proc supervises one extra-core process.
+// Proc supervises one sidecar process.
 type Proc struct {
-	name Name
+	name string
 
 	startMu sync.Mutex
 	mu      sync.RWMutex
@@ -121,12 +115,12 @@ type Proc struct {
 	intentionalStop atomic.Bool
 }
 
-// NewProc returns an idle supervised process for the given core.
-func NewProc(name Name) *Proc {
+// NewProc returns an idle supervised process for the given label.
+func NewProc(name string) *Proc {
 	lines := &ring{}
 	return &Proc{
 		name:  name,
-		log:   &logWriter{ring: lines, name: string(name)},
+		log:   &logWriter{ring: lines, name: name},
 		lines: lines,
 	}
 }
@@ -172,8 +166,7 @@ func (p *Proc) Signal(sig syscall.Signal) error {
 	return nil
 }
 
-// Start launches the binary with the given arguments. Serialized so concurrent
-// callers (restart + reconcile + manual start) cannot double-launch.
+// Start launches the binary with the given arguments.
 func (p *Proc) Start(bin string, args []string) error {
 	p.startMu.Lock()
 	defer p.startMu.Unlock()
@@ -197,7 +190,7 @@ func (p *Proc) Start(bin string, args []string) error {
 		p.mu.Unlock()
 		return err
 	}
-	logger.Infof("extra: %s started (pid %d)", p.name, cmd.Process.Pid)
+	logger.Infof("sidecar: %s started (pid %d)", p.name, cmd.Process.Pid)
 	go p.wait(cmd, done)
 	return nil
 }
@@ -209,15 +202,7 @@ func (p *Proc) wait(cmd *exec.Cmd, done chan struct{}) {
 	if err == nil || p.intentionalStop.Load() {
 		return
 	}
-	if runtime.GOOS == "windows" && strings.Contains(strings.ToLower(err.Error()), "exit status 1") {
-		p.setExitErr(err)
-		return
-	}
-	logger.Errorf("extra: %s process exited: %v", p.name, err)
-	p.setExitErr(err)
-}
-
-func (p *Proc) setExitErr(err error) {
+	logger.Errorf("sidecar: %s process exited: %v", p.name, err)
 	p.mu.Lock()
 	p.exitErr = err
 	p.mu.Unlock()
@@ -250,11 +235,11 @@ func (p *Proc) Stop() error {
 		return err
 	}
 	if err := waitForExit(done, gracefulStopTimeout); err == nil {
-		logger.Infof("extra: %s stopped", p.name)
+		logger.Infof("sidecar: %s stopped", p.name)
 		return nil
 	}
 
-	logger.Warningf("extra: %s did not stop after SIGTERM, killing", p.name)
+	logger.Warningf("sidecar: %s did not stop after SIGTERM, killing", p.name)
 	if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		return err
 	}

@@ -77,6 +77,8 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.GET("/list/slim", a.getInboundsSlim)
 	g.GET("/options", a.getInboundOptions)
 	g.GET("/allLinks", a.getAllInboundLinks)
+	g.GET("/links/:id", a.getInboundLinks)
+	g.GET("/sidecarLinks/:id", a.getSidecarLinks)
 	g.GET("/get/:id", a.getInbound)
 	g.GET("/:id/fallbacks", a.getFallbacks)
 
@@ -123,6 +125,36 @@ func (a *InboundController) getInboundsSlim(c *gin.Context) {
 func (a *InboundController) getAllInboundLinks(c *gin.Context) {
 	user := session.GetLoginUser(c)
 	links, err := a.inboundService.GetAllInboundLinks(resolveHost(c), user.Id)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
+		return
+	}
+	jsonObj(c, links, nil)
+}
+
+// getInboundLinks returns the direct links (including qWDTT/olcRTC/CSQTT)
+// for one inbound so the info modal can copy or scan them without a subscription.
+func (a *InboundController) getInboundLinks(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "get"), err)
+		return
+	}
+	links, err := a.inboundService.GetInboundLinks(resolveHost(c), id)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
+		return
+	}
+	jsonObj(c, links, nil)
+}
+
+func (a *InboundController) getSidecarLinks(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "get"), err)
+		return
+	}
+	links, err := a.inboundService.GetSidecarLinkSet(id)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return

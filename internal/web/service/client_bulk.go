@@ -830,6 +830,9 @@ func (s *ClientService) bulkAdjustInboundClients(
 			}
 		}
 	} else {
+		if oldInbound.NodeID == nil && model.IsSidecarProtocol(oldInbound.Protocol) {
+			inboundSvc.applyLocalSidecar(oldInbound.Id)
+		}
 		if adTagChanged && oldInbound.Protocol == model.MTProto && oldInbound.NodeID == nil {
 			inboundSvc.applyLocalMtproto(oldInbound.Id)
 		}

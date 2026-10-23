@@ -43,6 +43,17 @@ _openapi:
         Used by the panel’s "Export all inbound links" action.
       url: '#return-every-protocol-url-vless-vmess-trojan-ss-hysteria-mtproto-across-all-inbounds-and-all-of-their-clients-links-are-rendered-through-the-subscription-engine-so-the-configured-remark-template-name-only-display-part-is-applied-per-client--the-same-output-the-client-infoqr-pages-use-protocols-without-a-url-form-socks-http-mixed-wireguard-dokodemo-tunnel-contribute-nothing-used-by-the-panels-export-all-inbound-links-action'
     - depth: 2
+      title: Return the direct share links for one inbound and all of its clients,
+        including qWDTT (qwdtt://), olcRTC (olcrtc://), and CSQTT (csqtt://).
+        Use this for per-inbound copy/QR actions; it does not require a
+        subscription URL.
+      url: '#return-the-direct-share-links-for-one-inbound-and-all-of-its-clients-including-qwdtt-qwdtt-olcrtc-olcrtc-and-csqtt-csqtt-use-this-for-per-inbound-copyqr-actions-it-does-not-require-a-subscription-url'
+    - depth: 2
+      title: 'Return structured sidecar links for one inbound: modern qwdtt://,
+        csqtt:// or olcrtc:// links grouped by client, the legacy wdtt:// URI
+        and the qWDTT subJson payload.'
+      url: '#return-structured-sidecar-links-for-one-inbound-modern-qwdtt-csqtt-or-olcrtc-links-grouped-by-client-the-legacy-wdtt-uri-and-the-qwdtt-subjson-payload'
+    - depth: 2
       title: Fetch a single inbound by numeric ID.
       url: '#fetch-a-single-inbound-by-numeric-id'
     - depth: 2
@@ -139,6 +150,15 @@ _openapi:
           (socks, http, mixed, wireguard, dokodemo, tunnel) contribute nothing.
           Used by the panel’s "Export all inbound links" action.
         id: return-every-protocol-url-vless-vmess-trojan-ss-hysteria-mtproto-across-all-inbounds-and-all-of-their-clients-links-are-rendered-through-the-subscription-engine-so-the-configured-remark-template-name-only-display-part-is-applied-per-client--the-same-output-the-client-infoqr-pages-use-protocols-without-a-url-form-socks-http-mixed-wireguard-dokodemo-tunnel-contribute-nothing-used-by-the-panels-export-all-inbound-links-action
+      - content: Return the direct share links for one inbound and all of its clients,
+          including qWDTT (qwdtt://), olcRTC (olcrtc://), and CSQTT (csqtt://).
+          Use this for per-inbound copy/QR actions; it does not require a
+          subscription URL.
+        id: return-the-direct-share-links-for-one-inbound-and-all-of-its-clients-including-qwdtt-qwdtt-olcrtc-olcrtc-and-csqtt-csqtt-use-this-for-per-inbound-copyqr-actions-it-does-not-require-a-subscription-url
+      - content: 'Return structured sidecar links for one inbound: modern qwdtt://,
+          csqtt:// or olcrtc:// links grouped by client, the legacy wdtt:// URI
+          and the qWDTT subJson payload.'
+        id: return-structured-sidecar-links-for-one-inbound-modern-qwdtt-csqtt-or-olcrtc-links-grouped-by-client-the-legacy-wdtt-uri-and-the-qwdtt-subjson-payload
       - content: Fetch a single inbound by numeric ID.
         id: fetch-a-single-inbound-by-numeric-id
       - content: Create a new inbound. Send the full inbound payload (protocol, port,
@@ -201,7 +221,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/inbounds/list","method":"get"},{"path":"/panel/api/inbounds/list/slim","method":"get"},{"path":"/panel/api/inbounds/options","method":"get"},{"path":"/panel/api/inbounds/allLinks","method":"get"},{"path":"/panel/api/inbounds/get/{id}","method":"get"},{"path":"/panel/api/inbounds/add","method":"post"},{"path":"/panel/api/inbounds/del/{id}","method":"post"},{"path":"/panel/api/inbounds/bulkDel","method":"post"},{"path":"/panel/api/inbounds/update/{id}","method":"post"},{"path":"/panel/api/inbounds/setEnable/{id}","method":"post"},{"path":"/panel/api/inbounds/{id}/subSortIndex","method":"post"},{"path":"/panel/api/inbounds/{id}/resetTraffic","method":"post"},{"path":"/panel/api/inbounds/{id}/delAllClients","method":"post"},{"path":"/panel/api/inbounds/resetAllTraffics","method":"post"},{"path":"/panel/api/inbounds/import","method":"post"},{"path":"/panel/api/inbounds/pushClientTraffics","method":"post"},{"path":"/panel/api/inbounds/{id}/fallbacks","method":"get"},{"path":"/panel/api/inbounds/{id}/fallbacks","method":"post"}]} showTitle />
+      <OpenAPIPage document="./public/openapi.json" webhooks={[]} operations={[{"path":"/panel/api/inbounds/list","method":"get"},{"path":"/panel/api/inbounds/list/slim","method":"get"},{"path":"/panel/api/inbounds/options","method":"get"},{"path":"/panel/api/inbounds/allLinks","method":"get"},{"path":"/panel/api/inbounds/links/{id}","method":"get"},{"path":"/panel/api/inbounds/sidecarLinks/{id}","method":"get"},{"path":"/panel/api/inbounds/get/{id}","method":"get"},{"path":"/panel/api/inbounds/add","method":"post"},{"path":"/panel/api/inbounds/del/{id}","method":"post"},{"path":"/panel/api/inbounds/bulkDel","method":"post"},{"path":"/panel/api/inbounds/update/{id}","method":"post"},{"path":"/panel/api/inbounds/setEnable/{id}","method":"post"},{"path":"/panel/api/inbounds/{id}/subSortIndex","method":"post"},{"path":"/panel/api/inbounds/{id}/resetTraffic","method":"post"},{"path":"/panel/api/inbounds/{id}/delAllClients","method":"post"},{"path":"/panel/api/inbounds/resetAllTraffics","method":"post"},{"path":"/panel/api/inbounds/import","method":"post"},{"path":"/panel/api/inbounds/pushClientTraffics","method":"post"},{"path":"/panel/api/inbounds/{id}/fallbacks","method":"get"},{"path":"/panel/api/inbounds/{id}/fallbacks","method":"post"}]} showTitle />
     </>
   );
 }

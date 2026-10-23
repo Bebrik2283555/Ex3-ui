@@ -17,6 +17,7 @@ import {
   ExportOutlined,
   GithubOutlined,
   GlobalOutlined,
+  HddOutlined,
   HeartOutlined,
   ImportOutlined,
   LogoutOutlined,
@@ -28,7 +29,6 @@ import {
   PushpinFilled,
   PushpinOutlined,
   ReadOutlined,
-  RocketOutlined,
   SafetyCertificateOutlined,
   SafetyOutlined,
   SearchOutlined,
@@ -43,9 +43,10 @@ import {
 
 import { HttpUtil } from '@/utils';
 import { formatPanelVersion } from '@/lib/panel-version';
-import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
+import { useTheme } from '@/hooks/useTheme';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import { useCommandPalette } from '@/components/command-palette/useCommandPalette';
+import ThemePickerModal from '@/components/ui/ThemePickerModal';
 import './AppSidebar.css';
 
 const DONATE_URL = 'https://donate.sanaei.dev/';
@@ -72,9 +73,6 @@ type IconName =
   | 'hosts'
   | 'logout'
   | 'apidocs'
-  | 'outbound'
-  | 'routing'
-  | 'extras'
   | 'optimize'
   | 'zapret'
   | 'hostsfile';
@@ -90,9 +88,6 @@ const iconByName: Record<IconName, ComponentType> = {
   hosts: GlobalOutlined,
   logout: LogoutOutlined,
   apidocs: ApiOutlined,
-  outbound: ExportOutlined,
-  routing: SwapOutlined,
-  extras: RocketOutlined,
   optimize: ThunderboltOutlined,
   zapret: SafetyCertificateOutlined,
   hostsfile: CloudServerOutlined,
@@ -150,13 +145,13 @@ function ThemeCycleButton({
   id,
   isDark,
   isUltra,
-  onCycle,
+  onOpen,
   ariaLabel,
 }: {
   id: string;
   isDark: boolean;
   isUltra: boolean;
-  onCycle: () => void;
+  onOpen: () => void;
   ariaLabel: string;
 }) {
   const icon = !isDark ? <SunOutlined /> : !isUltra ? <MoonOutlined /> : <MoonFilled />;
@@ -167,7 +162,7 @@ function ThemeCycleButton({
       className="sidebar-theme-cycle"
       aria-label={ariaLabel}
       title={ariaLabel}
-      onClick={onCycle}
+      onClick={onOpen}
     >
       {icon}
     </button>
@@ -190,17 +185,22 @@ function saveSidebarPinned(pinned: boolean) {
 
 export default function AppSidebar() {
   const { t } = useTranslation();
-  const { isDark, isUltra, toggleTheme, toggleUltra } = useTheme();
+  const { isDark, isUltra } = useTheme();
   const { open: openCommandPalette } = useCommandPalette();
   const navigate = useNavigate();
   const { pathname, hash } = useLocation();
   const { allSetting } = useAllSettings();
-  const showSubFormats = !!(allSetting.subJsonEnable || allSetting.subClashEnable);
+  const showSubFormats = !!(
+    allSetting.subJsonEnable ||
+    allSetting.subClashEnable ||
+    allSetting.subThroneEnable
+  );
   const showSubBalancers = !!allSetting.subJsonEnable;
 
   const [hovered, setHovered] = useState(() => hoveredAcrossRemounts);
   const [pinned, setPinned] = useState(readSidebarPinned);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
   const railCollapsed = !hovered && !pinned;
   const railStyle = useMemo(
     () => ({ '--sider-rail': `${pinned ? SIDER_WIDTH : RAIL_WIDTH}px` }) as CSSProperties,
@@ -238,11 +238,8 @@ export default function AppSidebar() {
       { key: '/groups', icon: 'groups', title: t('menu.groups') },
       { key: '/nodes', icon: 'cluster', title: t('menu.nodes') },
       { key: '/hosts', icon: 'hosts', title: t('menu.hosts') },
-      { key: '/outbound', icon: 'outbound', title: t('menu.outbounds') },
-      { key: '/routing', icon: 'routing', title: t('menu.routing') },
       { key: '/settings', icon: 'setting', title: t('menu.settings') },
       { key: '/xray', icon: 'tool', title: t('menu.xray') },
-      { key: '/extras', icon: 'extras', title: t('menu.extras') },
       { key: '/optimize', icon: 'optimize', title: t('menu.optimize') },
       { key: '/zapret', icon: 'zapret', title: t('menu.zapret') },
       { key: '/hostsfile', icon: 'hostsfile', title: t('menu.hostsFile') },
@@ -298,12 +295,15 @@ export default function AppSidebar() {
         label: t('pages.settings.subBalancers.menu'),
       });
     }
+    children.push({ key: '/settings#cores', icon: <HddOutlined />, label: t('menu.cores') });
     return children;
   }, [t, showSubFormats, showSubBalancers]);
 
   const xrayChildren = useMemo<NonNullable<MenuProps['items']>>(
     () => [
       { key: '/xray#basic', icon: <SettingOutlined />, label: t('pages.xray.basicTemplate') },
+      { key: '/xray#outbound', icon: <ExportOutlined />, label: t('menu.outbounds') },
+      { key: '/xray#routing', icon: <SwapOutlined />, label: t('menu.routing') },
       { key: '/xray#balancer', icon: <ClusterOutlined />, label: t('pages.xray.Balancers') },
       { key: '/xray#dns', icon: <DatabaseOutlined />, label: 'DNS' },
       { key: '/xray#advanced', icon: <CodeOutlined />, label: t('pages.xray.advancedTemplate') },
@@ -361,22 +361,6 @@ export default function AppSidebar() {
     [openLink],
   );
 
-  const cycleTheme = useCallback(
-    (id: string) => {
-      pauseAnimationsUntilLeave(id);
-      if (!isDark) {
-        toggleTheme();
-        if (isUltra) toggleUltra();
-      } else if (!isUltra) {
-        toggleUltra();
-      } else {
-        toggleUltra();
-        toggleTheme();
-      }
-    },
-    [isDark, isUltra, toggleTheme, toggleUltra],
-  );
-
   return (
     <div
       ref={rootRef}
@@ -413,7 +397,7 @@ export default function AppSidebar() {
                 id="theme-cycle"
                 isDark={isDark}
                 isUltra={isUltra}
-                onCycle={() => cycleTheme('theme-cycle')}
+                onOpen={() => setThemePickerOpen(true)}
                 ariaLabel={t('menu.theme')}
               />
             </div>
@@ -490,7 +474,7 @@ export default function AppSidebar() {
               id="theme-cycle-drawer"
               isDark={isDark}
               isUltra={isUltra}
-              onCycle={() => cycleTheme('theme-cycle-drawer')}
+              onOpen={() => setThemePickerOpen(true)}
               ariaLabel={t('menu.theme')}
             />
             <button
@@ -561,6 +545,7 @@ export default function AppSidebar() {
           <MenuOutlined />
         </button>
       )}
+      <ThemePickerModal open={themePickerOpen} onClose={() => setThemePickerOpen(false)} />
     </div>
   );
 }

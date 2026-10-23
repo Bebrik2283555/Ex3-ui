@@ -51,6 +51,28 @@
   --bg-card: #101013;
 }
 
+/* Themed shells: Lane and Custom follow the chosen background instead of the
+   fixed light/dark page variables. */
+body:is(.theme-custom, .theme-lane)
+  :is(
+    .index-page,
+    .clients-page,
+    .inbounds-page,
+    .xray-page,
+    .settings-page,
+    .nodes-page,
+    .groups-page,
+    .api-docs-page,
+    .hosts-page,
+    .extras-page,
+    .optimize-page,
+    .zapret-page,
+    .hostsfile-page
+  ) {
+  --bg-page: var(--ant-color-bg-layout);
+  --bg-card: var(--ant-color-bg-container);
+}
+
 .index-page .ant-layout,
 .index-page .ant-layout-content,
 .clients-page .ant-layout,

@@ -70,15 +70,16 @@ const sectionTabsPlugin = {
 };
 
 export default function ApiDocsPage() {
-  const { isDark, isUltra, antdThemeConfig } = useTheme();
+  const { isDark, isUltra, themeName, antdThemeConfig } = useTheme();
   const { t } = useTranslation();
 
   const pageClass = useMemo(() => {
     const classes = ['api-docs-page'];
     if (isDark) classes.push('is-dark');
     if (isUltra) classes.push('is-ultra');
+    if (themeName === 'custom' || themeName === 'lane') classes.push('theme-themed');
     return classes.join(' ');
-  }, [isDark, isUltra]);
+  }, [isDark, isUltra, themeName]);
 
   return (
     <ConfigProvider theme={antdThemeConfig}>

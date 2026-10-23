@@ -103,7 +103,7 @@ func (s *ServerService) IssueCertificate(domain string) (map[string]any, error) 
 	cmd.Env = env
 	if out, err := cmd.CombinedOutput(); err != nil {
 		logger.Warning("acme issue failed for", domain, ":", strings.TrimSpace(string(out)))
-		return nil, fmt.Errorf("acme issue failed: %w", err)
+		return nil, acmeCommandError("acme issue failed", err, out)
 	}
 
 	keyFile := filepath.Join("/root", "cert", domain, "privkey.pem")
@@ -125,7 +125,7 @@ func (s *ServerService) IssueCertificate(domain string) (map[string]any, error) 
 		// files are already in place — verify the files, not the exit code.
 		if !certPairExists(certDir) {
 			logger.Warning("acme install-cert failed for", domain, ":", strings.TrimSpace(string(out)))
-			return nil, fmt.Errorf("acme install-cert failed: %w", err)
+			return nil, acmeCommandError("acme install-cert failed", err, out)
 		}
 		logger.Warning("acme install-cert reloadcmd failed for", domain, ", cert files already in place:", strings.TrimSpace(string(out)))
 	}
@@ -135,6 +135,19 @@ func (s *ServerService) IssueCertificate(domain string) (map[string]any, error) 
 		"certFile": fullchain,
 		"keyFile":  keyFile,
 	}, nil
+}
+
+// acmeCommandError surfaces acme.sh's own diagnostics instead of only the
+// opaque "exit status 1", keeping the API response bounded.
+func acmeCommandError(prefix string, err error, out []byte) error {
+	msg := strings.TrimSpace(string(out))
+	if len(msg) > 4000 {
+		msg = "..." + msg[len(msg)-4000:]
+	}
+	if msg == "" {
+		return fmt.Errorf("%s: %w", prefix, err)
+	}
+	return fmt.Errorf("%s: %w: %s", prefix, err, msg)
 }
 
 // ensureAcmeSh returns the path to acme.sh, installing it (curl | sh, same as

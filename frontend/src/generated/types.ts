@@ -159,6 +159,9 @@ export interface AllSetting {
   subShowIdentityOnAllLinks: boolean;
   subSupportUrl: string;
   subThemeDir: string;
+  subThroneEnable: boolean;
+  subThronePath: string;
+  subThroneURI: string;
   subTitle: string;
   subTrafficDepletedTemplate: string;
   subURI: string;
@@ -347,6 +350,9 @@ export interface AllSettingView {
   subShowIdentityOnAllLinks: boolean;
   subSupportUrl: string;
   subThemeDir: string;
+  subThroneEnable: boolean;
+  subThronePath: string;
+  subThroneURI: string;
   subTitle: string;
   subTrafficDepletedTemplate: string;
   subURI: string;
@@ -409,6 +415,7 @@ export interface Client {
   auth?: string;
   comment: string;
   created_at?: number;
+  csqttPassword?: string;
   email: string;
   enable: boolean;
   expiryTime: number;
@@ -422,6 +429,7 @@ export interface Client {
   preSharedKey?: string;
   privateKey?: string;
   publicKey?: string;
+  qwdttPassword?: string;
   reset: number;
   resetDay: number;
   resetMax: number;
@@ -460,6 +468,7 @@ export interface ClientRecord {
   auth: string;
   comment: string;
   createdAt: number;
+  csqttPassword: string;
   email: string;
   enable: boolean;
   expiryTime: number;
@@ -474,6 +483,7 @@ export interface ClientRecord {
   preSharedKey: string;
   privateKey: string;
   publicKey: string;
+  qwdttPassword: string;
   reset: number;
   resetDay: number;
   resetMax: number;

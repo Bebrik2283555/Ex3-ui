@@ -48,8 +48,13 @@ ProtectSystem=full
 # grant /usr or /etc to accommodate it.
 # ReadWritePaths= requires systemd >= 231; ReadWriteDirectories= is the deprecated
 # alias for older systemd, needed so ProtectSystem=full keeps /etc/x-ui writable.
-ReadWritePaths=-/etc/x-ui -/usr/local/x-ui -/var/log/x-ui
-ReadWriteDirectories=-/etc/x-ui -/usr/local/x-ui -/var/log/x-ui
+#
+# The panel's tools also write outside its stores: zapret and WARP create
+# systemd units, the optimizer rewrites resolv.conf/sysctl/fstab, SmartDNS
+# updates /etc/hosts, and WARP installs helper scripts under /usr/local/bin.
+# These are still narrow, named paths rather than all of /etc.
+ReadWritePaths=-/etc/x-ui -/usr/local/x-ui -/var/log/x-ui -/etc/systemd/system -/etc/resolv.conf -/etc/x-ui-dns-managed -/etc/sysctl.d -/etc/fstab -/etc/hosts -/etc/usque -/usr/local/bin -/root/cert -/root/.acme.sh
+ReadWriteDirectories=-/etc/x-ui -/usr/local/x-ui -/var/log/x-ui -/etc/systemd/system -/etc/resolv.conf -/etc/x-ui-dns-managed -/etc/sysctl.d -/etc/fstab -/etc/hosts -/etc/usque -/usr/local/bin -/root/cert -/root/.acme.sh
 # A kernel-TUN WireGuard outbound zeroes net.ipv{4,6}.conf.*.rp_filter as Xray starts
 # (#6796). Reopen only /proc/sys/net: kernel.* (core_pattern among them) stays read-only.
 # No ReadWriteDirectories alias needed: ProtectKernelTunables itself requires systemd 232.
@@ -59,8 +64,8 @@ ProtectKernelModules=yes
 ProtectKernelLogs=yes
 ProtectClock=yes
 ProtectHostname=yes
-# read-only rather than yes: installs keep TLS certs under /root/cert, and the
-# panel must still be able to read them.
+# read-only rather than yes: TLS certificates and ACME live under /root.
+# ReadWritePaths above reopens only /root/cert and /root/.acme.sh for issuance.
 ProtectHome=read-only
 LockPersonality=yes
 RestrictRealtime=yes

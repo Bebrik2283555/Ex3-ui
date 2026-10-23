@@ -294,6 +294,37 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'GET',
+        path: '/panel/api/inbounds/links/:id',
+        summary:
+          'Return the direct share links for one inbound and all of its clients, including qWDTT (qwdtt://), olcRTC (olcrtc://), and CSQTT (csqtt://). Use this for per-inbound copy/QR actions; it does not require a subscription URL.',
+        params: [{ name: 'id', in: 'path', type: 'number', desc: 'Inbound ID.' }],
+        responseObjectSchema: { type: 'array', nullable: true, items: { type: 'string' } },
+        response:
+          '{\n  "success": true,\n  "obj": [\n    "qwdtt://config?peer=host:56000&..."\n  ]\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/inbounds/sidecarLinks/:id',
+        summary:
+          'Return structured sidecar links for one inbound: modern qwdtt://, csqtt:// or olcrtc:// links grouped by client, the legacy wdtt:// URI and the qWDTT subJson payload.',
+        params: [{ name: 'id', in: 'path', type: 'number', desc: 'Inbound ID.' }],
+        responseObjectSchema: {
+          type: 'object',
+          properties: {
+            inboundId: { type: 'number' },
+            remark: { type: 'string' },
+            protocol: { type: 'string' },
+            links: { type: 'array', items: { type: 'string' } },
+            legacyUri: { type: 'string' },
+            subJson: { type: 'string' },
+            clients: { type: 'array', items: { type: 'object' } },
+          },
+        },
+        response:
+          '{\n  "success": true,\n  "obj": {\n    "inboundId": 3,\n    "protocol": "qwdtt",\n    "links": ["qwdtt://config?..."]\n  }\n}',
+      },
+      {
+        method: 'GET',
         path: '/panel/api/inbounds/get/:id',
         summary: 'Fetch a single inbound by numeric ID.',
         params: [{ name: 'id', in: 'path', type: 'number', desc: 'Inbound ID.' }],
@@ -600,7 +631,13 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/server/getDb',
         summary:
-          'Stream a full database backup as an attachment: the SQLite .db file on SQLite panels, or a pg_dump custom-format archive (.dump) on PostgreSQL panels. Use as a manual backup.',
+          'Stream a database-only backup as an attachment: the SQLite .db file on SQLite panels, or a pg_dump custom-format archive (.dump) on PostgreSQL panels. Stays compatible with older panels.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/server/getDbZip',
+        summary:
+          'Stream a full backup ZIP: the database under db/, every certificate under /root/cert under cert/, and manifest.json. Restore through importDB.',
       },
       {
         method: 'GET',
@@ -860,13 +897,13 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/server/importDB',
         summary:
-          'Restore the panel DB from an uploaded backup (multipart form, field name "db"). SQLite panels accept a SQLite database (.db) or a SQLite migration dump (.dump); PostgreSQL panels accept a pg_dump archive (.dump), a SQLite database (.db), or a SQLite migration dump. The panel restarts after restore. Destructive.',
+          'Restore the panel from an uploaded backup (multipart form, field name "db"). Accepts the full ZIP from getDbZip (database plus certificates) or a database-only file. SQLite panels accept a SQLite database (.db) or a SQLite migration dump (.dump); PostgreSQL panels accept a pg_dump archive (.dump), a SQLite database (.db), or a SQLite migration dump. The panel restarts after restore. Destructive.',
         params: [
           {
             name: 'db',
             in: 'body (multipart)',
             type: 'file',
-            desc: 'Database backup or migration file to upload.',
+            desc: 'Full backup ZIP, database backup or migration file to upload.',
           },
           {
             name: 'keepHostSettings',
@@ -2720,102 +2757,57 @@ export const sections: readonly Section[] = [
   },
 
   {
-    id: 'extra-cores',
-    title: 'Extra Cores',
+    id: 'cores',
+    title: 'Cores',
     description:
-      'Manage the bundled sidecar cores (qwdtt and olcRTC) that run outside Xray as separate processes, including their configs and binary updates.',
+      'Manage the sidecar cores (qWDTT, olcRTC, CSQTT) that run outside Xray: status and process control.',
     endpoints: [
       {
         method: 'GET',
-        path: '/panel/api/extra/services',
+        path: '/panel/api/cores',
         summary:
-          'List every extra core with its status (enabled, running, binary present) and effective config.',
-        response:
-          '{\n  "success": true,\n  "obj": [\n    { "name": "qwdtt", "displayName": "qWDTT", "enabled": true, "running": true, "binaryExists": true, "config": { "listenAddr": "0.0.0.0:56000", "wgPort": 56001 } }\n  ]\n}',
+          'List every sidecar core with install/enabled/running state, inbound counts and binary metadata.',
       },
       {
         method: 'GET',
-        path: '/panel/api/extra/services/:name/status',
-        summary: 'Status of a single extra core.',
-        params: [{ name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' }],
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/extra/services/:name/config',
-        summary: 'Current stored configuration of an extra core.',
-        params: [{ name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' }],
-      },
-      {
-        method: 'PUT',
-        path: '/panel/api/extra/services/:name/config',
+        path: '/panel/api/cores/:name/details',
         summary:
-          'Update the configuration of an extra core and apply it (restarts the process when its settings changed).',
-        params: [{ name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' }],
-        body: '{\n  "enabled": true,\n  "autoStart": true,\n  "listenAddr": "0.0.0.0:56000",\n  "wgPort": 56001,\n  "password": "secret",\n  "dns": "8.8.8.8"\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/extra/services/:name/start',
-        summary: 'Start an extra core process.',
-        params: [{ name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' }],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/extra/services/:name/stop',
-        summary: 'Stop an extra core process.',
-        params: [{ name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' }],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/extra/services/:name/restart',
-        summary: 'Restart an extra core process.',
-        params: [{ name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' }],
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/extra/services/:name/logs',
-        summary: 'Recent output lines of an extra core process.',
+          'Return the core snapshot plus its supervised inbounds, live logs, generated links and qWDTT subJson.',
         params: [
-          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
-          {
-            name: 'lines',
-            in: 'query',
-            type: 'integer',
-            optional: true,
-            desc: 'How many lines to return (default 200).',
-          },
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or csqtt.' },
+        ],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/cores/:name/logs',
+        summary: 'Alias of /details focused on the per-inbound log buffers.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or csqtt.' },
         ],
       },
       {
         method: 'POST',
-        path: '/panel/api/extra/services/:name/upload',
-        summary:
-          'Replace the binary of an extra core (multipart form field "file"). Saved to bin/extra-<name>.',
+        path: '/panel/api/cores/:name/start',
+        summary: 'Start every enabled inbound of the core without touching other cores.',
         params: [
-          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
-          { name: 'file', in: 'body (multipart)', type: 'file', desc: 'The new binary.' },
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or csqtt.' },
         ],
       },
       {
         method: 'POST',
-        path: '/panel/api/extra/services/:name/download',
-        summary:
-          'Fetch the binary of an extra core from a public URL (file host, Google Drive, CDN) and save it to bin/extra-<name>.',
+        path: '/panel/api/cores/:name/stop',
+        summary: 'Stop every process belonging to the core.',
         params: [
-          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' },
-          {
-            name: 'url',
-            in: 'body (json)',
-            type: 'string',
-            desc: 'Direct download link to the core binary.',
-          },
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or csqtt.' },
         ],
       },
       {
-        method: 'DELETE',
-        path: '/panel/api/extra/services/:name/binary',
-        summary: 'Stop an extra core and delete its binary from disk.',
-        params: [{ name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt or olcrtc.' }],
+        method: 'POST',
+        path: '/panel/api/cores/:name/restart',
+        summary: 'Stop the core and restart every enabled inbound that uses it.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'Core name: qwdtt, olcrtc or csqtt.' },
+        ],
       },
     ],
   },
@@ -2824,7 +2816,7 @@ export const sections: readonly Section[] = [
     id: 'system-tools',
     title: 'System Tools',
     description:
-      'One-shot tuning for weak VPSes (DNS, BBR/sysctl, swap), the transparent zapret DPI-bypass service, and the /etc/hosts file used by the extra cores.',
+      'One-shot tuning for weak VPSes (DNS, BBR/sysctl, swap), the transparent zapret DPI-bypass service, and the system hosts file.',
     endpoints: [
       {
         method: 'GET',
@@ -3019,7 +3011,7 @@ export const sections: readonly Section[] = [
       {
         method: 'PUT',
         path: '/panel/api/hostsfile',
-        summary: 'Replace the system hosts file. Useful to pin domains for the extra cores.',
+        summary: 'Replace the system hosts file. Useful to pin domains for sidecar cores.',
         body: '{\n  "raw": "# Managed by x-ui\\n1.2.3.4 example.com\\n"\n}',
       },
       {

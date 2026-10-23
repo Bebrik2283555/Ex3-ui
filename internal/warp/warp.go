@@ -390,6 +390,29 @@ func runInstallScript(ctx context.Context, script []byte, logFile string) {
 	}
 	defer f.Close()
 	fmt.Fprintf(f, "=== warp install started at %s ===\n", time.Now().Format(time.RFC3339))
+	unit := fmt.Sprintf("ex3ui-warp-install-%d", time.Now().UnixNano())
+	if path, lookErr := exec.LookPath("systemd-run"); lookErr == nil {
+		// apt/systemd need full root: run as a transient unit outside the
+		// panel's NoNewPrivileges/CapabilityBoundingSet sandbox.
+		cmd := exec.CommandContext(ctx, path, "--quiet", "--wait", "--pipe", "--collect", "--unit", unit, "/bin/bash", "-s")
+		cmd.Stdin = bytes.NewReader(script)
+		cmd.Stdout = f
+		cmd.Stderr = f
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(f, "\n=== exit error: %v ===\n", err)
+			if ctx.Err() != nil {
+				// Killing systemd-run leaves the transient unit running.
+				cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+				_ = exec.CommandContext(cleanupCtx, "systemctl", "stop", unit).Run()
+				cancel()
+			}
+			return
+		}
+		fmt.Fprintf(f, "\n=== done at %s ===\n", time.Now().Format(time.RFC3339))
+		return
+	}
+	// Fallback for hosts without systemd-run; privileged steps will report
+	// their own sandbox errors into the install log.
 	cmd := exec.CommandContext(ctx, "bash", "-s")
 	cmd.Stdin = bytes.NewReader(script)
 	cmd.Stdout = f

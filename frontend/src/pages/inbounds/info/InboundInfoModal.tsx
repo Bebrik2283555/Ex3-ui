@@ -18,6 +18,7 @@ import {
 } from '@/lib/xray/inbound-link';
 import { inboundFromDb } from '@/lib/xray/inbound-from-db';
 import { withHostEndpoints } from '@/lib/hosts/host-link';
+import { QrPanel } from '@/pages/inbounds/qr';
 
 import {
   buildInboundInfo,
@@ -25,6 +26,7 @@ import {
   downloadText,
   formatIpInfo,
   hasShareLink,
+  isSidecarProtocol,
   peerConfFileName,
   statsColor,
 } from './helpers';
@@ -32,6 +34,13 @@ import type { ClientSetting, ClientStats, InboundInfo, InboundInfoModalProps } f
 import './InboundInfoModal.css';
 
 const EMPTY_HOSTS: NonNullable<InboundInfoModalProps['hosts']> = [];
+
+interface SidecarLinkSet {
+  links?: string[];
+  legacyUri?: string;
+  subJson?: string;
+  clients?: { email: string; links: string[] }[];
+}
 
 export default function InboundInfoModal({
   open,
@@ -60,6 +69,10 @@ export default function InboundInfoModal({
   const [amneziawgLinks, setAmneziawgLinks] = useState<string[][]>([]);
   const [subLink, setSubLink] = useState('');
   const [subJsonLink, setSubJsonLink] = useState('');
+  const [sidecarLinks, setSidecarLinks] = useState<string[]>([]);
+  const [sidecarLegacy, setSidecarLegacy] = useState('');
+  const [sidecarSubJson, setSidecarSubJson] = useState('');
+  const [sidecarClients, setSidecarClients] = useState<{ email: string; links: string[] }[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [clientIpsArray, setClientIpsArray] = useState<string[]>([]);
   const [clientIpsText, setClientIpsText] = useState('');
@@ -303,6 +316,48 @@ export default function InboundInfoModal({
   const serverNameLabel = inbound?.serverName || '';
   const showClientTab = !!clientSettings;
   const showSubscriptionTab = !!(subSettings?.enable && clientSettings?.subId);
+  const sidecar = !!dbInbound && isSidecarProtocol(dbInbound.protocol);
+  // Reset during render so a closed or switched modal never shows stale links.
+  const sidecarInboundId = open && sidecar ? dbInbound?.id : undefined;
+  const [syncedSidecarId, setSyncedSidecarId] = useState<number | undefined>(undefined);
+  if (sidecarInboundId !== syncedSidecarId) {
+    setSyncedSidecarId(sidecarInboundId);
+    setSidecarLinks([]);
+    setSidecarLegacy('');
+    setSidecarSubJson('');
+    setSidecarClients([]);
+  }
+
+  useEffect(() => {
+    if (!sidecarInboundId) return;
+    let cancelled = false;
+    void HttpUtil.get(`/panel/api/inbounds/sidecarLinks/${sidecarInboundId}`)
+      .then((msg) => {
+        if (cancelled) return;
+        const set = msg?.success ? (msg.obj as SidecarLinkSet | undefined) : undefined;
+        const links = set?.links ?? [];
+        setSidecarLinks(links);
+        setSidecarLegacy(set?.legacyUri ?? '');
+        setSidecarSubJson(set?.subJson ?? '');
+        setSidecarClients(set?.clients ?? []);
+        // Sidecars without client rows keep credentials on the inbound, so
+        // open their direct links instead of the generic inbound summary.
+        if (links.length > 0) {
+          setActiveTab((current) => (current === 'client' ? current : 'sidecarLinks'));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSidecarLinks([]);
+          setSidecarLegacy('');
+          setSidecarSubJson('');
+          setSidecarClients([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sidecarInboundId]);
 
   if (!dbInbound || !inbound) {
     return (
@@ -611,6 +666,43 @@ export default function InboundInfoModal({
               </a>
             </div>
           )}
+        </>
+      )}
+    </>
+  );
+
+  const sidecarLinksTab = (
+    <>
+      {sidecarLinks.map((link, idx) => {
+        const owner = sidecarClients.find((client) => client.links.includes(link))?.email;
+        return (
+          <QrPanel
+            key={idx}
+            value={link}
+            remark={`${dbInbound.remark || dbInbound.protocol}${owner ? ` · ${owner}` : ` #${idx + 1}`}`}
+            size={240}
+          />
+        );
+      })}
+      {sidecarLegacy && (
+        <>
+          <Divider>{t('pages.inbounds.sidecar.legacyLink')}</Divider>
+          <QrPanel
+            value={sidecarLegacy}
+            remark={t('pages.inbounds.sidecar.legacyLink')}
+            size={240}
+          />
+        </>
+      )}
+      {sidecarSubJson && (
+        <>
+          <Divider>{t('pages.inbounds.sidecar.subJsonLink')}</Divider>
+          <QrPanel
+            value={sidecarSubJson}
+            remark={t('pages.inbounds.sidecar.subJsonLink')}
+            downloadName={`${dbInbound.remark || 'qwdtt'}.json`}
+            size={240}
+          />
         </>
       )}
     </>
@@ -1308,6 +1400,13 @@ export default function InboundInfoModal({
   const tabItems = [];
   if (showClientTab) {
     tabItems.push({ key: 'client', label: t('pages.inbounds.client'), children: clientTab });
+  }
+  if (sidecar && sidecarLinks.length > 0) {
+    tabItems.push({
+      key: 'sidecarLinks',
+      label: t('pages.clients.tabLinks'),
+      children: sidecarLinksTab,
+    });
   }
   tabItems.push({ key: 'inbound', label: t('pages.xray.rules.inbound'), children: inboundTab });
 

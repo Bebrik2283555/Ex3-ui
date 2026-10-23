@@ -1,0 +1,72 @@
+/* Lane theme: warm paper, near-black type, generous radii. Antd tokens carry
+   most of the palette; this file only fixes surfaces that bypass them. */
+html[data-theme='lane'] body {
+  background: #f3efe6;
+}
+
+html[data-theme='lane'] .content-area,
+html[data-theme='lane'] .content-shell {
+  background: #f3efe6;
+}
+
+html[data-theme='lane'] .ant-card {
+  border: 1px solid rgba(20, 20, 20, 0.07);
+  box-shadow: 0 1px 2px rgba(20, 20, 20, 0.04);
+}
+
+html[data-theme='lane'] .ant-card-head {
+  border-bottom-color: rgba(20, 20, 20, 0.07);
+}
+
+html[data-theme='lane'] h1,
+html[data-theme='lane'] h2,
+html[data-theme='lane'] h3,
+html[data-theme='lane'] .ant-typography h1,
+html[data-theme='lane'] .ant-typography h2,
+html[data-theme='lane'] .ant-typography h3 {
+  letter-spacing: -0.02em;
+}
+
+html[data-theme='lane'] .ant-btn-primary {
+  color: #fbf8f1;
+}
+
+html[data-theme='lane'] .ant-table {
+  background: transparent;
+}
+
+html[data-theme='lane'] .ant-table-thead > tr > th {
+  background: rgba(20, 20, 20, 0.04);
+  border-bottom-color: rgba(20, 20, 20, 0.08);
+}
+
+html[data-theme='lane'] .ant-modal-content,
+html[data-theme='lane'] .ant-drawer-content {
+  background: #fbf8f1;
+}
+
+html[data-theme='lane'] .sidebar-command-trigger {
+  background: rgba(20, 20, 20, 0.05);
+}
+
+html[data-theme='lane'] .sidebar-command-trigger:hover {
+  background: rgba(20, 20, 20, 0.09);
+}
+
+/* The command palette hard-codes the blue antd primary. In lane the accent is
+   near-black, so keep the search icon, hover/active rows and their action
+   buttons on-theme. */
+html[data-theme='lane'] .command-palette-modal.light .command-palette-search-icon {
+  color: #141414;
+}
+
+html[data-theme='lane'] .command-palette-modal.light .command-palette-item:hover,
+html[data-theme='lane'] .command-palette-modal.light .command-palette-item.active {
+  background: rgba(20, 20, 20, 0.08);
+  color: #141414;
+}
+
+html[data-theme='lane'] .command-palette-modal.light .command-palette-action-btn:hover {
+  background: rgba(20, 20, 20, 0.08);
+  color: #141414;
+}

@@ -32,6 +32,10 @@ export default function BackupModal({
     window.location.href = (window.X_UI_BASE_PATH || '') + 'panel/api/server/getDb';
   }
 
+  function exportFullBackup() {
+    window.location.href = (window.X_UI_BASE_PATH || '') + 'panel/api/server/getDbZip';
+  }
+
   function exportMigration() {
     window.location.href = (window.X_UI_BASE_PATH || '') + 'panel/api/server/getMigration';
   }
@@ -39,7 +43,7 @@ export default function BackupModal({
   function importDb() {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = '.dump,.db';
+    fileInput.accept = '.zip,.dump,.db';
     fileInput.addEventListener('change', async (e) => {
       const dbFile = (e.target as HTMLInputElement).files?.[0];
       if (!dbFile) return;
@@ -88,6 +92,19 @@ export default function BackupModal({
             type="primary"
             aria-label={t('pages.index.exportDatabase')}
             onClick={exportDb}
+            icon={<DownloadOutlined />}
+          />
+        </div>
+
+        <div className="backup-item">
+          <div className="backup-meta">
+            <div className="backup-title">{t('pages.index.exportFullBackup')}</div>
+            <div className="backup-description">{t('pages.index.exportFullBackupDesc')}</div>
+          </div>
+          <Button
+            type="primary"
+            aria-label={t('pages.index.exportFullBackup')}
+            onClick={exportFullBackup}
             icon={<DownloadOutlined />}
           />
         </div>

@@ -35,6 +35,19 @@ func (s *InboundService) GetAllInboundLinks(host string, userId int) ([]string, 
 	return registeredSubLinkProvider.LinksForInbounds(host, inbounds), nil
 }
 
+// GetInboundLinks returns the direct share links for one inbound, including
+// sidecar protocols whose links are not rendered by the frontend.
+func (s *InboundService) GetInboundLinks(host string, inboundId int) ([]string, error) {
+	if registeredSubLinkProvider == nil {
+		return nil, common.NewError("sub link provider not registered")
+	}
+	inbound, err := s.GetInbound(inboundId)
+	if err != nil {
+		return nil, err
+	}
+	return registeredSubLinkProvider.LinksForInbounds(host, []*model.Inbound{inbound}), nil
+}
+
 func (s *InboundService) GetAllClientLinks(host string, email string) ([]string, error) {
 	if email == "" {
 		return nil, common.NewError("client email is required")

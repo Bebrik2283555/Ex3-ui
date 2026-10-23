@@ -47,6 +47,7 @@ const PromptModal = lazy(() => import('@/components/feedback/PromptModal'));
 
 import { useInbounds } from './useInbounds';
 import { InboundList } from './list';
+import { isSidecarProtocol } from './info/helpers';
 import { LazyMount } from '@/components/utility';
 const InboundFormModal = lazy(() => import('./form/InboundFormModal'));
 const CloneInboundModal = lazy(() => import('./CloneInboundModal'));
@@ -332,6 +333,18 @@ export default function InboundsPage() {
   const exportInboundLinks = useCallback(
     (dbInbound: DBInbound) => {
       const projected = checkFallback(dbInbound);
+      if (isSidecarProtocol(projected.protocol)) {
+        void HttpUtil.get(`/panel/api/inbounds/links/${dbInbound.id}`).then((msg) => {
+          const content =
+            msg?.success && Array.isArray(msg.obj) ? (msg.obj as string[]).join('\r\n') : '';
+          openText({
+            title: t('pages.inbounds.exportLinksTitle'),
+            content,
+            fileName: projected.remark || 'inbound',
+          });
+        });
+        return;
+      }
       const hostOverride = hostOverrideFor(dbInbound);
       const fallbackHostname = preferPublicHost(window.location.hostname, subSettings.publicHost);
       const genInput = {

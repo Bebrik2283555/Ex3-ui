@@ -54,6 +54,8 @@ interface SubSettings {
   subURI: string;
   subJsonURI: string;
   subJsonEnable: boolean;
+  subThroneURI: string;
+  subThroneEnable: boolean;
   subClashURI: string;
   subClashEnable: boolean;
   publicHost: string;
@@ -273,6 +275,8 @@ export function useClients(options: UseClientsOptions = {}) {
       subURI: (defaults.subURI as string) || '',
       subJsonURI: (defaults.subJsonURI as string) || '',
       subJsonEnable: !!defaults.subJsonEnable,
+      subThroneURI: (defaults.subThroneURI as string) || '',
+      subThroneEnable: !!defaults.subThroneEnable,
       subClashURI: (defaults.subClashURI as string) || '',
       subClashEnable: !!defaults.subClashEnable,
       publicHost: (defaults.subDomain as string) || (defaults.webDomain as string) || '',
@@ -283,6 +287,8 @@ export function useClients(options: UseClientsOptions = {}) {
       defaults.subURI,
       defaults.subJsonURI,
       defaults.subJsonEnable,
+      defaults.subThroneURI,
+      defaults.subThroneEnable,
       defaults.subClashURI,
       defaults.subClashEnable,
       defaults.subDomain,

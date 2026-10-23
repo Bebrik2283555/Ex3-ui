@@ -15,6 +15,11 @@
   --bg-card: #101013;
 }
 
+body.theme-custom .subscription-page {
+  --bg-page: var(--ant-color-bg-layout);
+  --bg-card: var(--ant-color-bg-container);
+}
+
 .subscription-page .ant-layout,
 .subscription-page .ant-layout-content {
   background: transparent;

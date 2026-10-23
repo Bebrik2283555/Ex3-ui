@@ -1,8 +1,7 @@
 ---
 title: System Tools
 description: One-shot tuning for weak VPSes (DNS, BBR/sysctl, swap), the
-  transparent zapret DPI-bypass service, and the /etc/hosts file used by the
-  extra cores.
+  transparent zapret DPI-bypass service, and the system hosts file.
 full: true
 _openapi:
   preload:
@@ -115,8 +114,8 @@ _openapi:
       title: Read the system hosts file (/etc/hosts) as raw text plus parsed entries.
       url: '#read-the-system-hosts-file-etchosts-as-raw-text-plus-parsed-entries'
     - depth: 2
-      title: Replace the system hosts file. Useful to pin domains for the extra cores.
-      url: '#replace-the-system-hosts-file-useful-to-pin-domains-for-the-extra-cores'
+      title: Replace the system hosts file. Useful to pin domains for sidecar cores.
+      url: '#replace-the-system-hosts-file-useful-to-pin-domains-for-sidecar-cores'
     - depth: 2
       title: Fetch the hosts content from a public URL and replace /etc/hosts with it.
       url: '#fetch-the-hosts-content-from-a-public-url-and-replace-etchosts-with-it'
@@ -217,9 +216,8 @@ _openapi:
       - content: Read the system hosts file (/etc/hosts) as raw text plus parsed
           entries.
         id: read-the-system-hosts-file-etchosts-as-raw-text-plus-parsed-entries
-      - content: Replace the system hosts file. Useful to pin domains for the extra
-          cores.
-        id: replace-the-system-hosts-file-useful-to-pin-domains-for-the-extra-cores
+      - content: Replace the system hosts file. Useful to pin domains for sidecar cores.
+        id: replace-the-system-hosts-file-useful-to-pin-domains-for-sidecar-cores
       - content: Fetch the hosts content from a public URL and replace /etc/hosts with
           it.
         id: fetch-the-hosts-content-from-a-public-url-and-replace-etchosts-with-it

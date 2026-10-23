@@ -64,6 +64,10 @@ func (s *SubClashService) getClash(subId string, host string, legacy bool) (stri
 		if len(clients) == 0 {
 			continue
 		}
+		if model.IsSidecarProtocol(inbound.Protocol) {
+			// Sidecar links are only meaningful in the URI subscription.
+			continue
+		}
 		if inbound.ExcludeFromSub {
 			if countHiddenClients(clients, seenEmails) {
 				hasEnabledClient = true

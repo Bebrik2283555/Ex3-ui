@@ -22,7 +22,7 @@ export default function TemplatePickerModal({
     <Modal
       open={open}
       title={t('pages.inbounds.form.templatePickerTitle')}
-      okText={null}
+      okButtonProps={{ style: { display: 'none' } }}
       cancelText={t('close')}
       onCancel={onClose}
       width={560}

@@ -255,6 +255,51 @@ export default function SubscriptionFormatsTab({
                   </SettingListItem>
                 </Card>
               )}
+              {allSetting.subThroneEnable && (
+                <Card
+                  size="small"
+                  className="subscription-format-card"
+                  title={
+                    <span className="subscription-format-card-title">
+                      <SendOutlined />
+                      {t('pages.settings.subThroneEnableTitle')}
+                    </span>
+                  }
+                >
+                  <SettingListItem
+                    paddings="small"
+                    title={<>qThrone {t('pages.settings.subPath')}</>}
+                    description={t('pages.settings.subPathDesc')}
+                  >
+                    <Input
+                      value={allSetting.subThronePath}
+                      placeholder="/throne/"
+                      onChange={(e) =>
+                        updateSetting({ subThronePath: sanitizePath(e.target.value) })
+                      }
+                      onBlur={() =>
+                        updateSetting({ subThronePath: normalizePath(allSetting.subThronePath) })
+                      }
+                    />
+                  </SettingListItem>
+                  <SettingListItem
+                    paddings="small"
+                    title={<>qThrone {t('pages.settings.subURI')}</>}
+                    description={t('pages.settings.subURIDesc')}
+                  >
+                    <Input
+                      value={allSetting.subThroneURI}
+                      placeholder="(http|https)://domain[:port]/path/"
+                      onChange={(e) => updateSetting({ subThroneURI: e.target.value })}
+                    />
+                  </SettingListItem>
+                  <SettingListItem
+                    paddings="small"
+                    title={t('pages.settings.subThroneHintTitle')}
+                    description={t('pages.settings.subThroneHintDesc')}
+                  />
+                </Card>
+              )}
               {allSetting.subClashEnable && (
                 <Card
                   size="small"

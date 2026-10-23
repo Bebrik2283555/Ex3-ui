@@ -16,6 +16,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/sidecar"
 	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/maskcompat"
@@ -204,6 +205,9 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			continue
 		}
 		if inbound.NodeID != nil {
+			continue
+		}
+		if model.IsSidecarProtocol(inbound.Protocol) {
 			continue
 		}
 		if inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC {
@@ -432,6 +436,13 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			continue
 		}
 		injectMtprotoEgress(xrayConfig, inbound)
+	}
+
+	// qWDTT and CSQTT opt into a TUN bridge; olcRTC gets a loopback SOCKS
+	// bridge. Both are tagged with the inbound's own tag so the routing page
+	// and per-inbound traffic accounting keep working.
+	for i := range inbounds {
+		injectSidecarEgress(xrayConfig, inbounds[i])
 	}
 
 	// Every AmneziaWG inbound is embedded (internal/amneziawgnet: amneziawg-go
@@ -748,6 +759,116 @@ func injectMtprotoEgress(cfg *xray.Config, inbound *model.Inbound) {
 		Settings: json_util.RawMessage(mtprotoEgressSocksSettings),
 		Tag:      tag,
 	})
+}
+
+// Sidecar TUNs are kernel sinks for the qWDTT/CSQTT client interfaces. The
+// settings mirror the AmneziaWG bridge so the router can match domains.
+const (
+	sidecarEgressTunSettingsFmt = `{"name":"%s","mtu":1280,"gateway":["%s"],"userLevel":0}`
+	sidecarEgressSniffing       = `{"enabled":true,"destOverride":["http","tls","quic"],"routeOnly":true}`
+)
+
+// injectSidecarEgress wires one opted-in sidecar inbound into Xray. qWDTT and
+// CSQTT use a TUN device (the kernel policy rules live in internal/sidecar),
+// olcRTC uses a loopback SOCKS bridge that its YAML socks: block dials.
+func injectSidecarEgress(cfg *xray.Config, inbound *model.Inbound) {
+	if cfg == nil || inbound == nil || !inbound.Enable || inbound.NodeID != nil {
+		return
+	}
+	if !sidecar.Supported(inbound.Protocol) || inbound.Tag == "" {
+		return
+	}
+	inst, err := sidecar.InstanceFromInbound(inbound)
+	if err != nil || !inst.RouteThroughXray {
+		return
+	}
+	switch inbound.Protocol {
+	case model.OLCRTC:
+		if inst.RouteXrayPort <= 0 {
+			return
+		}
+		injectSidecarSocks(cfg, inbound, inst)
+	case model.QWDTT, model.CSQTT:
+		injectSidecarTun(cfg, inbound, inst)
+	}
+}
+
+func injectSidecarTun(cfg *xray.Config, inbound *model.Inbound, inst sidecar.Instance) {
+	tag := inbound.Tag
+	for i := range cfg.InboundConfigs {
+		if cfg.InboundConfigs[i].Tag == tag {
+			logger.Warning("sidecar egress: inbound tag [", tag, "] already present, skipping bridge")
+			return
+		}
+	}
+	prependSidecarRule(cfg, tag, inst.OutboundTag, "sidecar egress")
+	settings := fmt.Sprintf(sidecarEgressTunSettingsFmt, inst.TunName, sidecar.TunGateway(inbound.Protocol, inbound.Id))
+	cfg.InboundConfigs = append(cfg.InboundConfigs, xray.InboundConfig{
+		Protocol: "tun",
+		Settings: json_util.RawMessage(settings),
+		Sniffing: json_util.RawMessage(sidecarEgressSniffing),
+		Tag:      tag,
+	})
+}
+
+func injectSidecarSocks(cfg *xray.Config, inbound *model.Inbound, inst sidecar.Instance) {
+	tag := inbound.Tag
+	for i := range cfg.InboundConfigs {
+		if cfg.InboundConfigs[i].Tag == tag {
+			logger.Warning("sidecar egress: inbound tag [", tag, "] already present, skipping bridge")
+			return
+		}
+		if cfg.InboundConfigs[i].Protocol == "socks" && cfg.InboundConfigs[i].Port == inst.RouteXrayPort {
+			logger.Warning("sidecar egress: loopback port ", inst.RouteXrayPort, " already taken, skipping bridge for [", tag, "]")
+			return
+		}
+	}
+	prependSidecarRule(cfg, tag, inst.OutboundTag, "sidecar egress")
+	cfg.InboundConfigs = append(cfg.InboundConfigs, xray.InboundConfig{
+		Listen:   json_util.RawMessage(`"127.0.0.1"`),
+		Port:     inst.RouteXrayPort,
+		Protocol: "socks",
+		Settings: json_util.RawMessage(mtprotoEgressSocksSettings),
+		Sniffing: json_util.RawMessage(sidecarEgressSniffing),
+		Tag:      tag,
+	})
+}
+
+// prependSidecarRule adds a must-win rule for the bridge. A missing target is
+// not fatal: the bridge still uses the normal routing rules.
+func prependSidecarRule(cfg *xray.Config, tag, target, prefix string) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return
+	}
+	routing := map[string]any{}
+	if len(cfg.RouterConfig) > 0 {
+		if err := json.Unmarshal(cfg.RouterConfig, &routing); err != nil {
+			logger.Warning(prefix, ": routing section is unparsable, skipping rule:", err)
+			return
+		}
+	}
+	if !routingTargetExists(routing, cfg.OutboundConfigs, target) {
+		logger.Warning(prefix, ": target tag [", target, "] not found, using normal routing")
+		return
+	}
+	rules, _ := routing["rules"].([]any)
+	rule := map[string]any{
+		"type":       "field",
+		"inboundTag": []any{tag},
+	}
+	if routingTagIsBalancer(routing, target) {
+		rule["balancerTag"] = target
+	} else {
+		rule["outboundTag"] = target
+	}
+	routing["rules"] = append([]any{rule}, rules...)
+	newRouting, err := json.Marshal(routing)
+	if err != nil {
+		logger.Warning(prefix, ": failed to rebuild routing section, skipping rule:", err)
+		return
+	}
+	cfg.RouterConfig = json_util.RawMessage(newRouting)
 }
 
 // Peers resolve DNS inside the tunnel, so domain rules match only via sniffing; routeOnly
@@ -1414,6 +1535,7 @@ func (s *XrayService) RestartXray(isForce bool) error {
 		}
 		if !isForce && !configUnchanged && s.tryHotApply(process, xrayConfig) {
 			logger.Info("Xray config changes applied through the core API, no restart needed")
+			go refreshSidecarRouting(s)
 			return nil
 		}
 		_ = process.Stop()
@@ -1430,8 +1552,19 @@ func (s *XrayService) RestartXray(isForce bool) error {
 	if err != nil {
 		return err
 	}
-
+	go refreshSidecarRouting(s)
 	return nil
+}
+
+// refreshSidecarRouting reapplies TUN/interface policy rules once the core is
+// up. It runs in the background because the core may need a moment to create
+// the TUN device.
+func refreshSidecarRouting(s *XrayService) {
+	inbounds, err := s.inboundService.GetAllInbounds()
+	if err != nil {
+		return
+	}
+	sidecar.EnsureRoutingForInbounds(inbounds)
 }
 
 // restartToDropClients reports whether a diff that strands clients must be

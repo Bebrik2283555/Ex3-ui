@@ -117,6 +117,9 @@ type AllSetting struct {
 	SubURI                      string `json:"subURI" form:"subURI"`
 	SubJsonPath                 string `json:"subJsonPath" form:"subJsonPath"`
 	SubJsonURI                  string `json:"subJsonURI" form:"subJsonURI"`
+	SubThroneEnable             bool   `json:"subThroneEnable" form:"subThroneEnable"`
+	SubThronePath               string `json:"subThronePath" form:"subThronePath"`
+	SubThroneURI                string `json:"subThroneURI" form:"subThroneURI"`
 	SubClashEnable              bool   `json:"subClashEnable" form:"subClashEnable"`
 	SubClashPath                string `json:"subClashPath" form:"subClashPath"`
 	SubClashURI                 string `json:"subClashURI" form:"subClashURI"`

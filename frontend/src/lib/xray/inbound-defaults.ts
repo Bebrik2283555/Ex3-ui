@@ -15,6 +15,11 @@ import type {
   ShadowsocksInboundSettings,
 } from '@/schemas/protocols/inbound/shadowsocks';
 import type { TrojanClient, TrojanInboundSettings } from '@/schemas/protocols/inbound/trojan';
+import type {
+  CsqttInboundSettings,
+  OlcrtcInboundSettings,
+  QwdttInboundSettings,
+} from '@/schemas/protocols/inbound/sidecar';
 import type { TuicClient, TuicInboundSettings } from '@/schemas/protocols/inbound/tuic';
 import type { TunInboundSettings } from '@/schemas/protocols/inbound/tun';
 import type { TunnelInboundSettings } from '@/schemas/protocols/inbound/tunnel';
@@ -365,6 +370,81 @@ export function createDefaultTuicInboundSettings(): TuicInboundSettings {
   };
 }
 
+export function createDefaultQwdttInboundSettings(): QwdttInboundSettings {
+  return {
+    clients: [],
+    sidecar: {
+      listenAddr: '0.0.0.0:56000',
+      wgPort: 56001,
+      listenRaw: '0.0.0.0:56003',
+      listenDirect: '',
+      hashes: '',
+      hashesByEmail: {},
+      workers: 16,
+      clientPort: 9000,
+      dns: '1.1.1.1',
+      subHost: '',
+      mainPassword: '',
+      configDir: '',
+      routeThroughXray: true,
+      outboundTag: '',
+      routeXrayPort: 0,
+    },
+  };
+}
+
+export function createDefaultOlcrtcInboundSettings(): OlcrtcInboundSettings {
+  return {
+    clients: [],
+    sidecar: {
+      provider: 'jitsi',
+      roomId: '',
+      cryptoKey: '',
+      transport: 'datachannel',
+      vp8Fps: 60,
+      vp8Batch: 64,
+      seiFps: 30,
+      seiBatch: 64,
+      seiFrag: 900,
+      seiAck: 2000,
+      videoW: 1080,
+      videoH: 1080,
+      videoFps: 30,
+      videoCodec: 'qrcode',
+      dns: '8.8.8.8:53',
+      dataDir: '',
+      configFile: '',
+      debug: false,
+      routeThroughXray: true,
+      outboundTag: '',
+      routeXrayPort: 0,
+    },
+  };
+}
+
+export function createDefaultCsqttInboundSettings(): CsqttInboundSettings {
+  return {
+    clients: [],
+    sidecar: {
+      listenAddr: '0.0.0.0:46000',
+      webPort: 46002,
+      webUser: 'ex3ui',
+      webPass: '',
+      dns: '77.88.8.8,77.88.8.1',
+      configDir: '',
+      mainPassword: '',
+      secureCookie: false,
+      webSecretPath: '',
+      hashes: '',
+      hashesByEmail: {},
+      subHost: '',
+      routeThroughXray: true,
+      outboundTag: '',
+      routeXrayPort: 0,
+    },
+  };
+}
+
 // Protocol-aware dispatch over every inbound-settings factory. Mirrors
 // the legacy `Inbound.Settings.getSettings(protocol)` dispatcher, but
 // returns a plain Zod-parsable object instead of a class instance.
@@ -384,7 +464,10 @@ export type AnyInboundSettings =
   | MtprotoInboundSettings
   | AmneziawgInboundSettings
   | TuicInboundSettings
-  | MasqueInboundSettings;
+  | MasqueInboundSettings
+  | QwdttInboundSettings
+  | OlcrtcInboundSettings
+  | CsqttInboundSettings;
 
 export function createDefaultInboundSettings(protocol: string): AnyInboundSettings | null {
   switch (protocol) {
@@ -416,6 +499,12 @@ export function createDefaultInboundSettings(protocol: string): AnyInboundSettin
       return createDefaultTuicInboundSettings();
     case 'masque':
       return createDefaultMasqueInboundSettings();
+    case 'qwdtt':
+      return createDefaultQwdttInboundSettings();
+    case 'olcrtc':
+      return createDefaultOlcrtcInboundSettings();
+    case 'csqtt':
+      return createDefaultCsqttInboundSettings();
     default:
       return null;
   }

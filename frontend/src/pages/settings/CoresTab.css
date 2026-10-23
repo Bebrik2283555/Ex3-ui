@@ -1,0 +1,14 @@
+.cores-descriptions.ant-descriptions-bordered > .ant-descriptions-view > table,
+.cores-descriptions .ant-descriptions-view table {
+  table-layout: fixed;
+}
+
+.cores-descriptions .ant-descriptions-item-content {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 576px) {
+  .cores-descriptions.ant-descriptions-bordered > .ant-descriptions-view > table {
+    table-layout: auto;
+  }
+}
