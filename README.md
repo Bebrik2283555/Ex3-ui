@@ -19,7 +19,7 @@
 - **Поддержка ядер для обхода блокировок через звонки российских сервисов из белого списка:**
   - [qWDTT](https://github.com/SpaceNeuroX/proxy-turn-vk-android) — форк [WDTT](https://github.com/amurcanov/proxy-turn-vk-android)
   - [olcRTC](https://github.com/openlibrecommunity/olcrtc)
-  - [CSQTT](https://github.com/amurcanov/csqtt) — TURN/RTP-ядро, интегрировано в панель как отдельный протокол
+  - [CSQTT](https://github.com/amurcanov/csqtt)
 - **zapret** — обход DPI-блокировок ([zapret-linux-easy](https://github.com/ImMALWARE/zapret-linux-easy), интегрирован в панель)
 - **hosts** — обход гео и DPI-блокировок для серверов в России (можно использовать свой список или [этот](https://info.dns.malw.link/hosts))
 - **SmartDNS** - резолвинг dns серверов для обхода гео блокировок и прописывания их в hosts
