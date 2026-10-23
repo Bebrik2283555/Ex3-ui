@@ -12,6 +12,10 @@ Based on 3x-ui 3.10.2.
   a single sidecar manager with per-inbound lifecycle, status, traffic, and
   migration from the previous extra-core layout.
 - Settings → Cores page for starting, stopping, and monitoring external cores.
+- Panel color customization, including accent and theme colors.
+- qThrone subscription format: a base64 subscription with Xray, CSQTT, qWDTT,
+  and olcRTC links. These sidecar protocols are not included in regular
+  subscriptions.
 - TUIC sidecar is included in release archives and installed with both
   `bin/tuic-server` and `bin/tuic-server-linux-<arch>` names.
 - `install.sh --local <archive>` for offline installation from a release archive.
@@ -25,6 +29,7 @@ Based on 3x-ui 3.10.2.
 - Release sidecar binaries are made executable on install and update. This fixes
   qWDTT, olcRTC, CSQTT, and TUIC failing after an update with `permission denied`.
 - `uninstall-extra.sh` now also removes TUIC and the legacy `bin/tuic` directory.
+- The Routing and Inbounds tabs are now under Xray settings.
 - `x-ui uninstall` keeps `/root/cert`, so certificates issued by the panel's
   ACME flow survive an uninstall.
 - CSQTT clients use only their own `csqttPassword`; the inbound main password
@@ -48,8 +53,9 @@ Based on 3x-ui 3.10.2.
 - Saving an inbound now rejects sidecar `wgPort`, `rawPort`, `listenDirect`,
   `webPort`, and loopback `routeXrayPort` collisions instead of starting a core
   that cannot bind its socket or an Xray bridge that is silently skipped.
-- Full backup now fails with the offending path instead of returning a ZIP with
-  unreadable or oversized certificates silently omitted. Restore rejects
+- Full backup now includes certificates for XHTTP connections created from
+  templates. It also fails with the offending path instead of returning a ZIP
+  with unreadable or oversized certificates silently omitted; restore rejects
   manifest-listed certificates that are missing or too large.
 - A data race in core status reads (`Manager.StatusOf`) is fixed.
 

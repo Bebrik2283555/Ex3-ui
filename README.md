@@ -19,6 +19,7 @@
 - **Поддержка ядер для обхода блокировок через звонки российских сервисов из белого списка:**
   - [qWDTT](https://github.com/SpaceNeuroX/proxy-turn-vk-android) — форк [WDTT](https://github.com/amurcanov/proxy-turn-vk-android)
   - [olcRTC](https://github.com/openlibrecommunity/olcrtc)
+  - [CSQTT](https://github.com/amurcanov/csqtt) — TURN/RTP-ядро, интегрировано в панель как отдельный протокол
 - **zapret** — обход DPI-блокировок ([zapret-linux-easy](https://github.com/ImMALWARE/zapret-linux-easy), интегрирован в панель)
 - **hosts** — обход гео и DPI-блокировок для серверов в России (можно использовать свой список или [этот](https://info.dns.malw.link/hosts))
 - **SmartDNS** - резолвинг dns серверов для обхода гео блокировок и прописывания их в hosts
@@ -76,6 +77,9 @@ bash <(curl -Ls https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/inst
 
 ## Лицензии
 
+<details>
+<summary>Показать лицензии компонентов</summary>
+
 | Компонент | Репозиторий | Лицензия |
 | --- | --- | --- |
 | EX3-UI / 3x-ui панель | [MHSanaei/3x-ui](https://github.com/MHSanaei/3x-ui) | GPL-3.0 |
@@ -98,3 +102,5 @@ PolyForm Noncommercial 1.0.0. Коммерческое использовани�
 Полные тексты лицензий — в каталоге [`licenses/`](licenses/) (в релизном архиве)
 и в исходниках соответствующих проектов. Полная матрица — в
 [`LICENSING.md`](LICENSING.md).
+
+</details>
