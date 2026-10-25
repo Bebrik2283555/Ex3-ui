@@ -1,6 +1,8 @@
 package geodata
 
 import (
+	"bufio"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +17,10 @@ import (
 // ErrUnrecognized reports a file that parses as neither database layout, which
 // in practice means a truncated download or an unrelated file renamed to .dat.
 var ErrUnrecognized = errors.New("file is not a geosite or geoip database")
+
+// errInvalidProtoField reports a wire form these databases never use, such as
+// a protobuf group or a field number that does not fit.
+var errInvalidProtoField = errors.New("invalid protobuf field")
 
 const (
 	fieldListEntry     = 1
@@ -49,12 +55,12 @@ type byteSpan struct {
 }
 
 // scanIndex walks the database once and reports every category with its entry
-// count and attribute keys, holding nothing else in memory.
-func scanIndex(data []byte, kind GeoKind) (*categoryScan, error) {
+// count and attribute keys, holding only one top-level record at a time.
+func scanIndex(reader *geoReader, kind GeoKind) (*categoryScan, error) {
 	scan := &categoryScan{kind: kind, spans: make(map[string][]byteSpan)}
 	byCode := make(map[string]int)
 
-	err := eachListEntry(data, func(entry []byte, span byteSpan) error {
+	err := eachListEntry(reader, func(entry []byte, span byteSpan) error {
 		count := 0
 		attributes := make(map[string]struct{})
 		code, err := walkEntry(entry, func(payload []byte) error {
@@ -160,14 +166,14 @@ func scanEntries(records [][]byte, kind GeoKind, code, query string, offset, lim
 // whose field types disagree, so decoding one as the other yields no usable
 // values at all — the count of readable entries is what tells them apart. The
 // file name only picks which layout to try first, so the common case scans once.
-func detectKind(data []byte, name string) (GeoKind, *categoryScan, error) {
+func detectKind(dir, name string) (GeoKind, *categoryScan, error) {
 	first, second := KindSite, KindIP
 	if strings.Contains(strings.ToLower(name), "ip") {
 		first, second = KindIP, KindSite
 	}
 	var firstErr error
 	for _, kind := range [...]GeoKind{first, second} {
-		scan, err := scanIndex(data, kind)
+		scan, err := scanDatabase(dir, name, kind)
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -188,7 +194,7 @@ func detectKind(data []byte, name string) (GeoKind, *categoryScan, error) {
 
 // readSpans reads only the recorded slices of the file, so serving a page of a
 // category costs its own record rather than the whole database. The handle is
-// opened through an os.Root for the same reason readDatabase is.
+// opened through an os.Root for the same reason the index scan is.
 func readSpans(dir, name string, spans []byteSpan) ([][]byte, error) {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
@@ -216,12 +222,156 @@ func readSpans(dir, name string, spans []byteSpan) ([][]byte, error) {
 	return records, nil
 }
 
-// readDatabase reads one database through an os.Root rooted at the asset
-// directory. Going through the root rather than a joined path means the file
-// name — which arrives from an HTTP request — never becomes a path this code
-// resolves itself: a symlink planted in the folder, or swapped in between the
-// check and the read, cannot pull in a file from elsewhere on disk.
-func readDatabase(dir, name string) ([]byte, error) {
+// geoReader reads a database through a small buffer while tracking the absolute
+// offset. Reading one top-level record at a time is what keeps a 70 MB
+// geosite_RU from materialising in the panel's heap: only the record being
+// inspected is allocated, not the whole file.
+type geoReader struct {
+	br   *bufio.Reader
+	size int64
+	pos  int64
+}
+
+const geoReadBufferSize = 64 << 10
+
+func newGeoReader(file *os.File, size int64) *geoReader {
+	return &geoReader{br: bufio.NewReaderSize(file, geoReadBufferSize), size: size}
+}
+
+// ReadByte satisfies io.ByteReader, so binary.ReadUvarint can read from the
+// stream without a slice of the file.
+func (r *geoReader) ReadByte() (byte, error) {
+	b, err := r.br.ReadByte()
+	if err == nil {
+		r.pos++
+	}
+	return b, err
+}
+
+func (r *geoReader) readTag() (protowire.Number, protowire.Type, error) {
+	value, err := binary.ReadUvarint(r)
+	if err != nil {
+		return 0, 0, err
+	}
+	number, wireType := protowire.DecodeTag(value)
+	if number < protowire.MinValidNumber {
+		return 0, 0, errInvalidProtoField
+	}
+	return number, wireType, nil
+}
+
+// readLength reads a length-delimited field's size and rejects one that would
+// run past the end of the file before allocating anything for it.
+func (r *geoReader) readLength() (int64, error) {
+	value, err := binary.ReadUvarint(r)
+	if err != nil {
+		return 0, err
+	}
+	if value > uint64(r.size-r.pos) {
+		return 0, io.ErrUnexpectedEOF
+	}
+	return int64(value), nil
+}
+
+func (r *geoReader) discard(n int64) error {
+	if n < 0 || n > r.size-r.pos {
+		return io.ErrUnexpectedEOF
+	}
+	discarded, err := r.br.Discard(int(n))
+	r.pos += int64(discarded)
+	if err != nil {
+		return err
+	}
+	if int64(discarded) != n {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+
+func (r *geoReader) skipField(number protowire.Number, wireType protowire.Type) error {
+	if number <= 0 {
+		return errInvalidProtoField
+	}
+	switch wireType {
+	case protowire.VarintType:
+		_, err := binary.ReadUvarint(r)
+		return err
+	case protowire.Fixed32Type:
+		return r.discard(4)
+	case protowire.Fixed64Type:
+		return r.discard(8)
+	case protowire.BytesType:
+		length, err := r.readLength()
+		if err != nil {
+			return err
+		}
+		return r.discard(length)
+	default:
+		// Geo databases never use protobuf groups or the reserved wire types.
+		return errInvalidProtoField
+	}
+}
+
+// nextListEntry advances to the next top-level list record and returns its
+// payload plus its location. buf is reused across calls so a database with
+// thousands of categories allocates only its largest record.
+func (r *geoReader) nextListEntry(buf []byte) ([]byte, byteSpan, bool, error) {
+	for r.pos < r.size {
+		number, wireType, err := r.readTag()
+		if err != nil {
+			return nil, byteSpan{}, false, err
+		}
+		if number != fieldListEntry || wireType != protowire.BytesType {
+			if err := r.skipField(number, wireType); err != nil {
+				return nil, byteSpan{}, false, err
+			}
+			continue
+		}
+
+		length, err := r.readLength()
+		if err != nil {
+			return nil, byteSpan{}, false, err
+		}
+		if int64(cap(buf)) < length {
+			buf = make([]byte, length)
+		}
+		buf = buf[:length]
+		if _, err := io.ReadFull(r.br, buf); err != nil {
+			return nil, byteSpan{}, false, err
+		}
+		span := byteSpan{offset: r.pos, length: length}
+		r.pos += length
+		return buf, span, true, nil
+	}
+	return nil, byteSpan{}, false, nil
+}
+
+// eachListEntry walks every top-level record in the database. The callback must
+// not retain entry: its backing array is reused for the next record.
+func eachListEntry(reader *geoReader, visit func(entry []byte, span byteSpan) error) error {
+	var buf []byte
+	for {
+		entry, span, ok, err := reader.nextListEntry(buf)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+		buf = entry[:0]
+		if err := visit(entry, span); err != nil {
+			return err
+		}
+	}
+}
+
+// scanDatabase opens one database through an os.Root rooted at the asset
+// directory and scans it as kind. Going through the root rather than a joined
+// path means the file name — which arrives from an HTTP request — never becomes
+// a path this code resolves itself: a symlink planted in the folder, or swapped
+// in between the check and the read, cannot pull in a file from elsewhere on
+// disk.
+func scanDatabase(dir, name string, kind GeoKind) (*categoryScan, error) {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return nil, err
@@ -244,37 +394,7 @@ func readDatabase(dir, name string) ([]byte, error) {
 	if info.Size() > MaxFileSize {
 		return nil, ErrFileTooLarge
 	}
-	return io.ReadAll(io.LimitReader(file, MaxFileSize))
-}
-
-func eachListEntry(data []byte, visit func(entry []byte, span byteSpan) error) error {
-	total := int64(len(data))
-	for len(data) > 0 {
-		consumedSoFar := total - int64(len(data))
-		number, wireType, consumed := protowire.ConsumeTag(data)
-		if consumed < 0 {
-			return protowire.ParseError(consumed)
-		}
-		data = data[consumed:]
-		if number == fieldListEntry && wireType == protowire.BytesType {
-			entry, size := protowire.ConsumeBytes(data)
-			if size < 0 {
-				return protowire.ParseError(size)
-			}
-			span := byteSpan{offset: consumedSoFar + int64(consumed) + int64(size) - int64(len(entry)), length: int64(len(entry))}
-			if err := visit(entry, span); err != nil {
-				return err
-			}
-			data = data[size:]
-			continue
-		}
-		size := protowire.ConsumeFieldValue(number, wireType, data)
-		if size < 0 {
-			return protowire.ParseError(size)
-		}
-		data = data[size:]
-	}
-	return nil
+	return scanIndex(newGeoReader(file, info.Size()), kind)
 }
 
 // walkEntry reports a record's category code and hands each rule to visit.

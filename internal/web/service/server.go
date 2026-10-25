@@ -42,6 +42,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/sys"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
+	"github.com/mhsanaei/3x-ui/v3/internal/xray/geodata"
 
 	"github.com/google/uuid"
 	utls "github.com/refraction-networking/utls"
@@ -2404,11 +2405,28 @@ type stagedGeofile struct {
 	stagePath string
 }
 
+const (
+	// geofileDownloadTimeout bounds one update request. These files run to tens
+	// of megabytes, so the limit is generous, but it still stops a stalled
+	// upstream from pinning the handler (and the admin's browser) forever.
+	geofileDownloadTimeout = 10 * time.Minute
+)
+
+// geofileUpdateMu serialises updates: two runs would download into separate
+// staging folders and race their renames, leaving the asset folder holding
+// databases from different releases.
+var geofileUpdateMu sync.Mutex
+
 // restartXrayAfterGeofileUpdate is a seam: tests assert that an update which
 // installed nothing also restarted nothing.
 var restartXrayAfterGeofileUpdate = (*ServerService).RestartXrayService
 
 func (s *ServerService) UpdateGeofile(fileName string) error {
+	if !geofileUpdateMu.TryLock() {
+		return common.NewError("a Geofile update is already running")
+	}
+	defer geofileUpdateMu.Unlock()
+
 	// Strict allowlist check to avoid writing uncontrolled files
 	if fileName != "" {
 		if _, ok := geofileAllowlist[fileName]; !ok {
@@ -2429,14 +2447,14 @@ func (s *ServerService) UpdateGeofile(fileName string) error {
 	}
 	repos := slices.Sorted(maps.Keys(byRepo))
 
-	binFolder := config.GetBinFolderPath()
+	binFolder := assetDir()
 	stageDir, err := os.MkdirTemp(binFolder, "geofile-")
 	if err != nil {
 		return common.NewErrorf("Failed to create staging folder for Geofiles: %v", err)
 	}
 	defer os.RemoveAll(stageDir)
 
-	client := s.settingService.NewProxiedHTTPClient(0)
+	client := s.settingService.NewProxiedHTTPClient(geofileDownloadTimeout)
 
 	var errorMessages []string
 	installed := 0
@@ -2459,8 +2477,9 @@ func (s *ServerService) UpdateGeofile(fileName string) error {
 	}
 
 	// Nothing changed, so there is no reason to restart the core and drop every
-	// client connection.
-	if installed > 0 {
+	// client connection. A core the operator stopped on purpose stays stopped:
+	// updating databases must not silently bring it back.
+	if installed > 0 && !isManuallyStopped.Load() {
 		if err := restartXrayAfterGeofileUpdate(s); err != nil {
 			errorMessages = append(errorMessages, fmt.Sprintf("Updated Geofiles but Failed to start Xray: %v", err))
 		}
@@ -2587,18 +2606,31 @@ func (s *ServerService) stageGeofile(client *http.Client, entry geofileEntry, ta
 	if resp.StatusCode != http.StatusOK {
 		return false, common.NewErrorf("Failed to download Geofile from %s: received status code %d", assetURL, resp.StatusCode)
 	}
+	// Refuse an oversized payload before writing it: these databases are tens of
+	// megabytes at most, and filling the small disk a panel usually runs on is a
+	// worse failure than a retry.
+	if resp.ContentLength > geodata.MaxFileSize {
+		return false, common.NewErrorf("Geofile %s is larger than the %d-byte limit", entry.FileName, geodata.MaxFileSize)
+	}
 
 	file, err := os.Create(stagePath)
 	if err != nil {
 		return false, common.NewErrorf("Failed to create Geofile %s: %v", stagePath, err)
 	}
 	hasher := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(file, hasher), resp.Body); err != nil {
-		file.Close()
-		return false, common.NewErrorf("Failed to save Geofile %s: %v", stagePath, err)
+	written, copyErr := io.Copy(io.MultiWriter(file, hasher), io.LimitReader(resp.Body, geodata.MaxFileSize+1))
+	closeErr := file.Close()
+	if copyErr != nil {
+		return false, common.NewErrorf("Failed to save Geofile %s: %v", stagePath, copyErr)
 	}
-	if err := file.Close(); err != nil {
-		return false, common.NewErrorf("Failed to save Geofile %s: %v", stagePath, err)
+	if closeErr != nil {
+		return false, common.NewErrorf("Failed to save Geofile %s: %v", stagePath, closeErr)
+	}
+	if written == 0 {
+		return false, common.NewErrorf("Geofile %s downloaded an empty file", entry.FileName)
+	}
+	if written > geodata.MaxFileSize {
+		return false, common.NewErrorf("Geofile %s is larger than the %d-byte limit", entry.FileName, geodata.MaxFileSize)
 	}
 
 	// TLS protects the transport, not the artifact. Xray parses these databases
@@ -2609,6 +2641,13 @@ func (s *ServerService) stageGeofile(client *http.Client, entry geofileEntry, ta
 	}
 	if got := hex.EncodeToString(hasher.Sum(nil)); !strings.EqualFold(got, want) {
 		return false, common.NewErrorf("does not match the published SHA-256 checksum, so the download is corrupted or has been tampered with (expected %s, got %s)", want, got)
+	}
+
+	// The panel runs with a restrictive umask, so os.Create leaves the staged file
+	// 0600 while the bundled databases are 0644. Match them: the file is served by
+	// the geodata API and read by the core, not just by this process.
+	if err := os.Chmod(stagePath, 0o644); err != nil {
+		return false, common.NewErrorf("Failed to set Geofile permissions %s: %v", stagePath, err)
 	}
 
 	setModTime(stagePath)

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
+	"github.com/mhsanaei/3x-ui/v3/internal/xray/geodata"
 )
 
 // Loyalsoldier and runetfreedom write "<hash>  geoip.dat"; chocolate4u writes
@@ -145,6 +146,10 @@ func geofileTestEnv(t *testing.T, entries map[string]geofileEntry) string {
 
 	binFolder := t.TempDir()
 	t.Setenv("XUI_BIN_FOLDER", binFolder)
+	// UpdateGeofile writes to the same folder Xray reads; keep a developer's
+	// own asset override out of the test.
+	t.Setenv("XRAY_LOCATION_ASSET", "")
+	t.Setenv("xray.location.asset", "")
 
 	originalAllowlist := geofileAllowlist
 	geofileAllowlist = entries
@@ -408,5 +413,114 @@ func TestStandardGeodataSources(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("source %d = %+v, want %+v", i, got[i], want[i])
 		}
+	}
+}
+
+// Xray reads its databases from XRAY_LOCATION_ASSET when that is set, so an
+// update must write there rather than to the default bin folder the panel
+// happens to use for its binary.
+func TestUpdateGeofileWritesToXrayAssetDir(t *testing.T) {
+	srv, _ := geofileServer(t, []fakeUpstream{{repo: "a", assets: map[string]string{"geoip.dat": "good geoip payload"}}})
+	binFolder := geofileTestEnv(t, map[string]geofileEntry{
+		"geoip.dat": {srv.URL + "/a", "geoip.dat", "geoip.dat"},
+	})
+	assetFolder := t.TempDir()
+	t.Setenv("XRAY_LOCATION_ASSET", assetFolder)
+
+	var restarted bool
+	restartStub(t, &restarted)
+
+	if err := (&ServerService{}).UpdateGeofile(""); err != nil {
+		t.Fatalf("UpdateGeofile: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(assetFolder, "geoip.dat"))
+	if err != nil {
+		t.Fatalf("read installed geofile from XRAY_LOCATION_ASSET: %v", err)
+	}
+	if string(got) != "good geoip payload" {
+		t.Fatalf("installed content = %q, want %q", got, "good geoip payload")
+	}
+	if _, statErr := os.Stat(filepath.Join(binFolder, "geoip.dat")); !os.IsNotExist(statErr) {
+		t.Fatalf("the file must not be written to bin/ when XRAY_LOCATION_ASSET points elsewhere (stat: %v)", statErr)
+	}
+	if !restarted {
+		t.Fatal("a file was installed, so xray should have been restarted")
+	}
+}
+
+func TestUpdateGeofileRejectsOversizedDownload(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/a/releases/latest/download/geoip.dat", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/a/releases/download/v1/geoip.dat", http.StatusFound)
+	})
+	mux.HandleFunc("/a/releases/download/v1/geoip.dat", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", geodata.MaxFileSize+1))
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	binFolder := geofileTestEnv(t, map[string]geofileEntry{
+		"geoip.dat": {srv.URL + "/a", "geoip.dat", "geoip.dat"},
+	})
+	var restarted bool
+	restartStub(t, &restarted)
+
+	err := (&ServerService{}).UpdateGeofile("")
+	if err == nil {
+		t.Fatal("expected an error for a payload above the size limit")
+	}
+	if !strings.Contains(err.Error(), "larger than") {
+		t.Fatalf("error = %q, want it to name the size limit", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(binFolder, "geoip.dat")); !os.IsNotExist(statErr) {
+		t.Fatalf("an oversized download must not be installed (stat: %v)", statErr)
+	}
+	if restarted {
+		t.Fatal("nothing was installed, so xray must not be restarted")
+	}
+}
+
+func TestUpdateGeofileRejectsEmptyDownload(t *testing.T) {
+	srv, _ := geofileServer(t, []fakeUpstream{{repo: "a", assets: map[string]string{"geoip.dat": ""}}})
+	binFolder := geofileTestEnv(t, map[string]geofileEntry{
+		"geoip.dat": {srv.URL + "/a", "geoip.dat", "geoip.dat"},
+	})
+	var restarted bool
+	restartStub(t, &restarted)
+
+	err := (&ServerService{}).UpdateGeofile("")
+	if err == nil {
+		t.Fatal("expected an error for an empty payload")
+	}
+	if !strings.Contains(err.Error(), "empty file") {
+		t.Fatalf("error = %q, want it to name the empty download", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(binFolder, "geoip.dat")); !os.IsNotExist(statErr) {
+		t.Fatalf("an empty download must not be installed (stat: %v)", statErr)
+	}
+	if restarted {
+		t.Fatal("nothing was installed, so xray must not be restarted")
+	}
+}
+
+func TestUpdateGeofileLeavesManuallyStoppedXrayStopped(t *testing.T) {
+	srv, _ := geofileServer(t, []fakeUpstream{{repo: "a", assets: map[string]string{"geoip.dat": "good geoip payload"}}})
+	geofileTestEnv(t, map[string]geofileEntry{
+		"geoip.dat": {srv.URL + "/a", "geoip.dat", "geoip.dat"},
+	})
+
+	isManuallyStopped.Store(true)
+	t.Cleanup(func() { isManuallyStopped.Store(false) })
+
+	var restarted bool
+	restartStub(t, &restarted)
+
+	if err := (&ServerService{}).UpdateGeofile(""); err != nil {
+		t.Fatalf("UpdateGeofile: %v", err)
+	}
+	if restarted {
+		t.Fatal("updating databases must not start a core the operator stopped")
 	}
 }

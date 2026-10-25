@@ -240,11 +240,7 @@ func (s *Store) cachedIndex(key fileKey) (*index, bool) {
 // a failed index, so a broken download is reported without being re-parsed on
 // every request.
 func buildIndex(dir, name string) *index {
-	data, err := readDatabase(dir, name)
-	if err != nil {
-		return &index{err: err}
-	}
-	kind, scan, err := detectKind(data, name)
+	kind, scan, err := detectKind(dir, name)
 	if err != nil {
 		return &index{err: err}
 	}
