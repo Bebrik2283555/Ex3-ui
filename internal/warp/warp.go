@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -28,6 +29,7 @@ const (
 	installLog   = "/var/log/warp-install.log"
 	rotateBin    = "/usr/local/bin/warp-rotate.sh"
 	watchBin     = "/usr/local/bin/warp-watch.sh"
+	rotateStamp  = "/run/warp-rotate.last"
 	settingsFile = "/etc/usque/warp-settings.json"
 	envFile      = "/etc/usque/warp.env"
 )
@@ -162,10 +164,19 @@ func SaveSettings(s Settings) error {
 	_ = os.WriteFile(envFile, []byte(envContent), 0o644)
 
 	timerContent := fmt.Sprintf("[Unit]\nDescription=Run Cloudflare WARP Tunnel Watchdog periodically\n\n[Timer]\nOnBootSec=1min\nOnUnitActiveSec=%dmin\nAccuracySec=10s\n\n[Install]\nWantedBy=timers.target\n", s.CheckInterval)
-	if _, err := os.Stat("/etc/systemd/system/warp-watch.timer"); err == nil {
-		_ = os.WriteFile("/etc/systemd/system/warp-watch.timer", []byte(timerContent), 0o644)
+	timerPath := "/etc/systemd/system/warp-watch.timer"
+	timerExists := false
+	if _, err := os.Stat(timerPath); err == nil {
+		timerExists = true
+		_ = os.WriteFile(timerPath, []byte(timerContent), 0o644)
 		_ = run("systemctl", "daemon-reload")
 		_ = run("systemctl", "restart", "warp-watch.timer")
+	}
+
+	if timerExists {
+		// Таймер systemd основной: убираем резервный cron, иначе проверки дублируются.
+		removeCronEntry("warp-watch.sh")
+		return nil
 	}
 
 	if out, err := runOutput("crontab", "-l"); err == nil && strings.Contains(out, "warp-watch.sh") {
@@ -266,6 +277,11 @@ WantedBy=timers.target
 	_ = os.WriteFile("/etc/systemd/system/warp-watch.timer", []byte(timerContent), 0o644)
 	_ = run("systemctl", "daemon-reload")
 	_ = run("systemctl", "enable", "--now", "warp-watch.timer")
+
+	if out, err := runOutput("systemctl", "is-active", "warp-watch.timer"); err == nil && strings.TrimSpace(out) == "active" {
+		removeCronEntry("warp-watch.sh")
+		return
+	}
 
 	if out, err := runOutput("crontab", "-l"); err == nil && !strings.Contains(out, "warp-watch.sh") {
 		var lines []string
@@ -424,6 +440,59 @@ func runInstallScript(ctx context.Context, script []byte, logFile string) {
 	}
 }
 
+// tgNets mirrors the Telegram ranges in warp-usque.sh/up.sh: they are routed
+// through table 10000 by priority-100 ip rules that must be removed on uninstall.
+var tgNets = []string{
+	"91.108.0.0/16", "149.154.160.0/20", "95.161.64.0/20", "185.76.151.0/24",
+	"185.64.92.0/22", "91.105.192.0/23", "194.169.233.0/24", "194.102.202.0/24",
+}
+
+// cleanupNetwork stops the tunnel and drops the network state it installed.
+func cleanupNetwork() {
+	_ = run("systemctl", "stop", serviceName)
+	removeNetworkState()
+}
+
+// removeNetworkState deletes the routes, rules and firewall entries added by
+// up.sh. usque does not run its on-disconnect hook when systemd stops it with
+// SIGTERM, so Stop has to call this too: otherwise the priority-100 rules stay
+// behind, pointing at a table the kernel just emptied with the TUN device.
+func removeNetworkState() {
+	if _, err := os.Stat("/etc/usque/down.sh"); err == nil {
+		_ = run("bash", "/etc/usque/down.sh")
+	}
+	for _, n := range tgNets {
+		_ = run("ip", "rule", "del", "to", n, "table", "10000", "priority", "100")
+	}
+	_ = run("ip", "rule", "del", "fwmark", "10000", "table", "10000", "priority", "99")
+	_ = run("ip", "-6", "rule", "del", "fwmark", "10000", "table", "10000", "priority", "99")
+	_ = run("ip", "route", "flush", "table", "10000")
+	_ = run("ip", "-6", "route", "flush", "table", "10000")
+	_ = run("ip", "route", "del", "162.159.198.1/32")
+	_ = run("ip", "route", "del", "162.159.198.2/32")
+	_ = run("iptables", "-t", "nat", "-D", "POSTROUTING", "-o", "warp", "-j", "MASQUERADE")
+	_ = run("iptables", "-t", "mangle", "-D", "POSTROUTING", "-o", "warp", "-p", "tcp",
+		"--tcp-flags", "SYN,RST", "SYN", "-j", "TCPMSS", "--clamp-mss-to-pmtu")
+	_ = run("ip6tables", "-t", "nat", "-D", "POSTROUTING", "-o", "warp", "-j", "MASQUERADE")
+	_ = run("ip6tables", "-D", "OUTPUT", "-m", "mark", "--mark", "10000", "!", "-o", "warp", "-j", "REJECT")
+	_ = run("ip", "link", "del", "warp")
+}
+
+// removeDirContents empties dir and then tries to remove it. The panel runs
+// with /etc mounted read-only and /etc/usque bind-mounted read-write, so
+// os.RemoveAll("/etc/usque") fails with EROFS before touching the contents.
+func removeDirContents(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		_ = os.RemoveAll(dir)
+		return
+	}
+	for _, entry := range entries {
+		_ = os.RemoveAll(filepath.Join(dir, entry.Name()))
+	}
+	_ = os.Remove(dir)
+}
+
 // Uninstall stops the service, removes the unit, binaries, config and cron.
 func Uninstall() error {
 	if err := requireLinux(); err != nil {
@@ -444,31 +513,32 @@ func Uninstall() error {
 
 	_ = run("pkill", "-9", "-f", "warp-rotate.sh")
 	_ = run("pkill", "-9", "-f", "warp-watch.sh")
+
+	// Stop the tunnel before pkill so its disconnect hook can drop the rules;
+	// cleanupNetwork then removes anything the hook missed.
+	_ = run("systemctl", "stop", "warp-watch.timer")
+	_ = run("systemctl", "disable", "warp-watch.timer")
+	cleanupNetwork()
 	_ = run("pkill", "-9", "-f", "usque")
 
-	_ = run("systemctl", "stop", serviceName)
 	_ = run("systemctl", "disable", serviceName)
 	_ = os.Remove("/etc/systemd/system/" + serviceName)
 	_ = run("systemctl", "daemon-reload")
-	_ = run("systemctl", "stop", "warp-watch.timer")
-	_ = run("systemctl", "disable", "warp-watch.timer")
 	_ = os.Remove("/etc/systemd/system/warp-watch.timer")
 	_ = os.Remove("/etc/systemd/system/warp-watch.service")
-	_ = os.RemoveAll("/etc/usque")
+	removeDirContents("/etc/usque")
 	_ = os.Remove(usqueBin)
 	_ = os.Remove(rotateBin)
 	_ = os.Remove(watchBin)
+	_ = os.Remove("/usr/local/bin/warp-api-host.sh")
 	_ = os.Remove("/run/warp-watch.state")
 	_ = os.Remove("/run/warp-rotate.lock")
+	_ = os.Remove(rotateStamp)
 	_ = os.Remove("/run/warp-install.lock")
 	_ = os.Remove(watchLog)
 	_ = os.Remove(installLog)
 	removeCronEntry("warp-watch.sh")
 	cleanHostsFile()
-	_ = run("ip", "rule", "del", "fwmark", "10000", "table", "10000", "priority", "99")
-	_ = run("ip", "-6", "rule", "del", "fwmark", "10000", "table", "10000", "priority", "99")
-	_ = run("ip6tables", "-D", "OUTPUT", "-m", "mark", "--mark", "10000", "!", "-o", "warp", "-j", "REJECT")
-	_ = run("ip", "link", "del", "warp")
 	return nil
 }
 
@@ -497,6 +567,40 @@ func removeCronEntry(needle string) {
 	_ = run("crontab", tmp.Name())
 }
 
+// waitTunnelThenRotate gives usque time for the QUIC handshake before deciding
+// the tunnel is dead. The old 4s check rotated a healthy tunnel that simply
+// connected slower.
+func waitTunnelThenRotate() {
+	go func() {
+		for i := 0; i < 15; i++ {
+			time.Sleep(2 * time.Second)
+			// 1.1.1.1 отвечает 301 с пустым телом: проверять len(out) нельзя,
+			// иначе здоровый туннель 30 секунд считается мёртвым и уходит в ротацию.
+			code, err := runOutput("curl", "--interface", "warp", "-4", "-s", "-o", "/dev/null",
+				"-w", "%{http_code}", "--max-time", "3", "https://1.1.1.1/")
+			if err == nil {
+				code = strings.TrimSpace(code)
+				if strings.HasPrefix(code, "2") || strings.HasPrefix(code, "3") {
+					return
+				}
+			}
+		}
+		// Недавняя смена IP ещё раскручивается — не долбим регистрацию повторно.
+		if fi, err := os.Stat(rotateStamp); err == nil && time.Since(fi.ModTime()) < 5*time.Minute {
+			return
+		}
+		// Автосмена IP выключена в настройках — только сторож решает, когда менять.
+		if !GetSettings().AutoRotate {
+			return
+		}
+		// Пользователь мог нажать «Стоп» за это время — не поднимаем туннель сами.
+		if out, err := runOutput("systemctl", "is-active", serviceName); err != nil || strings.TrimSpace(out) != "active" {
+			return
+		}
+		_ = RotateIP()
+	}()
+}
+
 // Start starts the usque systemd service and watchdog timer.
 func Start() error {
 	if err := requireLinux(); err != nil {
@@ -507,16 +611,11 @@ func Start() error {
 		return err
 	}
 	_ = run("systemctl", "start", "warp-watch.timer")
-	go func() {
-		time.Sleep(4 * time.Second)
-		if out, err := runOutput("curl", "--interface", "warp", "-4", "-s", "--max-time", "3", "https://1.1.1.1/"); err != nil || len(out) == 0 {
-			_ = RotateIP()
-		}
-	}()
+	waitTunnelThenRotate()
 	return nil
 }
 
-// Stop stops the usque systemd service and watchdog timer.
+// Stop stops the usque systemd service, watchdog timer and its network state.
 func Stop() error {
 	if err := requireLinux(); err != nil {
 		return err
@@ -525,7 +624,7 @@ func Stop() error {
 	if err := run("systemctl", "stop", serviceName); err != nil {
 		return err
 	}
-	_ = run("ip", "link", "del", "warp")
+	removeNetworkState()
 	return nil
 }
 
@@ -535,17 +634,12 @@ func Restart() error {
 		return err
 	}
 	_ = run("systemctl", "stop", serviceName)
-	_ = run("ip", "link", "del", "warp")
+	removeNetworkState()
 	if err := run("systemctl", "start", serviceName); err != nil {
 		return err
 	}
 	_ = run("systemctl", "start", "warp-watch.timer")
-	go func() {
-		time.Sleep(4 * time.Second)
-		if out, err := runOutput("curl", "--interface", "warp", "-4", "-s", "--max-time", "3", "https://1.1.1.1/"); err != nil || len(out) == 0 {
-			_ = RotateIP()
-		}
-	}()
+	waitTunnelThenRotate()
 	return nil
 }
 
@@ -565,9 +659,11 @@ func RotateIP() error {
 		return ErrRotateRunning
 	}
 	rotating = true
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	rotateCancel = cancel
 	mu.Unlock()
+
+	_ = os.WriteFile(rotateStamp, []byte(time.Now().Format(time.RFC3339)), 0o644)
 
 	go func() {
 		defer func() {
