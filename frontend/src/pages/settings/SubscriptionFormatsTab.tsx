@@ -158,7 +158,11 @@ export default function SubscriptionFormatsTab({
       items={[
         {
           key: '1',
-          label: catTabLabel(<SettingOutlined />, t('pages.settings.panelSettings'), isMobile),
+          label: catTabLabel(
+            <SettingOutlined aria-hidden />,
+            t('pages.settings.panelSettings'),
+            isMobile,
+          ),
           children: (
             <div className="subscription-format-sections">
               {allSetting.subJsonEnable && (
@@ -167,7 +171,7 @@ export default function SubscriptionFormatsTab({
                   className="subscription-format-card"
                   title={
                     <span className="subscription-format-card-title">
-                      <FileTextOutlined />
+                      <FileTextOutlined aria-hidden />
                       {t('pages.settings.subJsonEnableTitle')}
                     </span>
                   }
@@ -261,7 +265,7 @@ export default function SubscriptionFormatsTab({
                   className="subscription-format-card"
                   title={
                     <span className="subscription-format-card-title">
-                      <SendOutlined />
+                      <SendOutlined aria-hidden />
                       {t('pages.settings.subThroneEnableTitle')}
                     </span>
                   }
@@ -306,7 +310,7 @@ export default function SubscriptionFormatsTab({
                   className="subscription-format-card"
                   title={
                     <span className="subscription-format-card-title">
-                      <NodeIndexOutlined />
+                      <NodeIndexOutlined aria-hidden />
                       {t('pages.settings.subClashEnableTitle')}
                     </span>
                   }
@@ -367,7 +371,7 @@ export default function SubscriptionFormatsTab({
         {
           key: '2',
           label: catTabLabel(
-            <RocketOutlined />,
+            <RocketOutlined aria-hidden />,
             t('pages.settings.subFormats.finalMask'),
             isMobile,
           ),
@@ -387,7 +391,7 @@ export default function SubscriptionFormatsTab({
         },
         {
           key: '3',
-          label: catTabLabel(<PartitionOutlined />, t('pages.settings.mux'), isMobile),
+          label: catTabLabel(<PartitionOutlined aria-hidden />, t('pages.settings.mux'), isMobile),
           children: (
             <>
               <SettingListItem
@@ -441,7 +445,7 @@ export default function SubscriptionFormatsTab({
         },
         {
           key: '4',
-          label: catTabLabel(<SendOutlined />, t('pages.settings.direct'), isMobile),
+          label: catTabLabel(<SendOutlined aria-hidden />, t('pages.settings.direct'), isMobile),
           children: (
             <>
               <SettingListItem
@@ -490,7 +494,7 @@ export default function SubscriptionFormatsTab({
         },
         {
           key: '5',
-          label: catTabLabel(<StopOutlined />, t('pages.settings.block'), isMobile),
+          label: catTabLabel(<StopOutlined aria-hidden />, t('pages.settings.block'), isMobile),
           children: (
             <>
               <SettingListItem

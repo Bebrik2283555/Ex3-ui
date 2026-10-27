@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { ConfigProvider, Tag, Tooltip, message, theme as antdTheme } from 'antd';
 import {
-  ApiOutlined,
   ApartmentOutlined,
   CheckCircleFilled,
   ClockCircleOutlined,
@@ -18,24 +17,18 @@ import {
   DiscordOutlined,
   ExportOutlined,
   FileTextOutlined,
-  GlobalOutlined,
-  HddOutlined,
   ImportOutlined,
   LoadingOutlined,
   MailOutlined,
-  MessageOutlined,
   MoonOutlined,
   PlusOutlined,
   ReloadOutlined,
-  SafetyCertificateOutlined,
   SafetyOutlined,
   SearchOutlined,
   SettingOutlined,
   SunOutlined,
   SwapOutlined,
-  TagsOutlined,
-  TeamOutlined,
-  ThunderboltOutlined,
+  TelegramFilled,
   ToolOutlined,
 } from '@ant-design/icons';
 
@@ -44,6 +37,7 @@ import { activateOnKey } from '@/utils/a11y';
 import { useInboundOptions } from '@/api/queries/useInboundOptions';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import { useTheme } from '@/hooks/useTheme';
+import { PANEL_ROUTES } from '@/routes/panelRoutes';
 import type { ClientRecord, InboundOption } from '@/schemas/client';
 import { commandPaletteStore, useCommandPalette } from './useCommandPalette';
 import './CommandPalette.css';
@@ -65,6 +59,36 @@ interface PaletteItem {
 }
 
 type PaletteStyle = CSSProperties & Record<`--cp-${string}`, string>;
+
+// The search terms of every panel page, so the palette finds it by what it
+// does rather than by its title.
+export const PALETTE_KEYWORDS: Record<string, string[]> = {
+  '/': ['overview', 'dashboard', 'cpu', 'ram', 'memory', 'traffic', 'speed'],
+  '/inbounds': [
+    'inbounds',
+    'ports',
+    'vless',
+    'vmess',
+    'reality',
+    'trojan',
+    'shadowsocks',
+    'wireguard',
+    'hysteria',
+    'masque',
+  ],
+  '/clients': ['clients', 'users', 'sub', 'traffic', 'quota'],
+  '/groups': ['groups', 'tags', 'batch'],
+  '/nodes': ['nodes', 'servers', 'cluster', 'remote nodes'],
+  '/hosts': ['hosts', 'sni', 'domains'],
+  '/outbound': ['outbounds', 'freedom', 'blackhole', 'socks', 'http', 'warp', 'nord', 'pia'],
+  '/routing': ['routing', 'rules', 'geoip', 'geosite', 'direct', 'block'],
+  '/settings': ['settings', 'config', 'port', 'password', 'ssl', 'telegram'],
+  '/xray': ['xray', 'templates', 'balancer', 'dns'],
+  '/optimize': ['optimize', 'optimization', 'bbr', 'dns', 'swap', 'sysctl', 'tcp', 'vps'],
+  '/zapret': ['zapret', 'dpi', 'nfqws', 'bypass', 'blocking'],
+  '/hostsfile': ['hosts', 'hosts file', 'dns', 'bypass', 'geo'],
+  '/api-docs': ['api', 'api docs', 'swagger', 'rest api', 'endpoints'],
+};
 
 export default function CommandPalette() {
   const { t } = useTranslation();
@@ -266,9 +290,9 @@ export default function CommandPalette() {
           title: c.email,
           subtitle: `${trafficUsed} / ${trafficTotal}${c.comment ? ` · ${c.comment}` : ''}`,
           icon: isOnline ? (
-            <CheckCircleFilled style={{ color: '#52c41a' }} />
+            <CheckCircleFilled aria-hidden style={{ color: '#52c41a' }} />
           ) : (
-            <CloseCircleFilled style={{ color: '#ff4d4f' }} />
+            <CloseCircleFilled aria-hidden style={{ color: '#ff4d4f' }} />
           ),
           action: () => {
             close();
@@ -278,7 +302,7 @@ export default function CommandPalette() {
             c.subId && allSetting.subURI
               ? {
                   label: t('commandPalette.copySubscription'),
-                  icon: <CopyOutlined />,
+                  icon: <CopyOutlined aria-hidden />,
                   execute: (e) => {
                     e.stopPropagation();
                     copySubscription(c);
@@ -335,7 +359,7 @@ export default function CommandPalette() {
         category: 'inbounds',
         title: ib.remark || ib.tag || `Inbound #${ib.id}`,
         subtitle: `Port ${ib.port || ''}`,
-        icon: <ImportOutlined style={{ color: '#1677ff' }} />,
+        icon: <ImportOutlined aria-hidden style={{ color: '#1677ff' }} />,
         tag:
           tags.length > 0 ? (
             <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>{tags}</div>
@@ -347,97 +371,12 @@ export default function CommandPalette() {
       });
     });
 
-    const pages = [
-      {
-        path: '/',
-        title: t('menu.dashboard'),
-        keywords: ['overview', 'dashboard', 'cpu', 'ram', 'memory', 'traffic', 'speed'],
-        icon: <DashboardOutlined />,
-      },
-      {
-        path: '/inbounds',
-        title: t('menu.inbounds'),
-        keywords: [
-          'inbounds',
-          'ports',
-          'vless',
-          'vmess',
-          'reality',
-          'trojan',
-          'shadowsocks',
-          'wireguard',
-          'hysteria',
-          'masque',
-        ],
-        icon: <ImportOutlined />,
-      },
-      {
-        path: '/clients',
-        title: t('menu.clients'),
-        keywords: ['clients', 'users', 'sub', 'traffic', 'quota'],
-        icon: <TeamOutlined />,
-      },
-      {
-        path: '/groups',
-        title: t('menu.groups'),
-        keywords: ['groups', 'tags', 'batch'],
-        icon: <TagsOutlined />,
-      },
-      {
-        path: '/nodes',
-        title: t('menu.nodes'),
-        keywords: ['nodes', 'servers', 'cluster', 'remote nodes'],
-        icon: <ClusterOutlined />,
-      },
-      {
-        path: '/hosts',
-        title: t('menu.hosts'),
-        keywords: ['hosts', 'sni', 'domains'],
-        icon: <GlobalOutlined />,
-      },
-      {
-        path: '/settings',
-        title: t('menu.settings'),
-        keywords: ['settings', 'config', 'port', 'password', 'ssl', 'telegram'],
-        icon: <SettingOutlined />,
-      },
-      {
-        path: '/xray',
-        title: t('menu.xray'),
-        keywords: ['xray', 'templates', 'balancer', 'dns'],
-        icon: <ToolOutlined />,
-      },
-      {
-        path: '/settings#cores',
-        title: t('menu.cores'),
-        keywords: ['cores', 'core', 'xray', 'qwdtt', 'olcrtc', 'csqtt', 'sidecar', 'binary'],
-        icon: <HddOutlined />,
-      },
-      {
-        path: '/optimize',
-        title: t('menu.optimize'),
-        keywords: ['optimize', 'optimization', 'bbr', 'dns', 'swap', 'sysctl', 'tcp', 'vps'],
-        icon: <ThunderboltOutlined />,
-      },
-      {
-        path: '/zapret',
-        title: t('menu.zapret'),
-        keywords: ['zapret', 'dpi', 'nfqws', 'bypass', 'blocking'],
-        icon: <SafetyCertificateOutlined />,
-      },
-      {
-        path: '/hostsfile',
-        title: t('menu.hostsFile'),
-        keywords: ['hosts', 'hosts file', 'dns', 'bypass', 'geo'],
-        icon: <CloudServerOutlined />,
-      },
-      {
-        path: '/api-docs',
-        title: t('menu.apiDocs'),
-        keywords: ['api', 'api docs', 'swagger', 'rest api', 'endpoints'],
-        icon: <ApiOutlined />,
-      },
-    ];
+    const pages = PANEL_ROUTES.map((route) => ({
+      path: route.path,
+      title: t(route.titleKey),
+      keywords: PALETTE_KEYWORDS[route.path] ?? [],
+      icon: <route.icon aria-hidden />,
+    }));
 
     pages
       .filter((p) => matches(p.title, undefined, p.keywords))
@@ -461,63 +400,63 @@ export default function CommandPalette() {
         title: `${t('menu.settings')} · ${t('pages.settings.panelSettings')}`,
         subtitle: t('pages.settings.panelSettings'),
         keywords: ['general', 'webPort', 'webBasePath', 'listenIP', 'ssl', 'certificate'],
-        icon: <SettingOutlined />,
+        icon: <SettingOutlined aria-hidden />,
       },
       {
         path: '/settings#security',
         title: `${t('menu.settings')} · ${t('pages.settings.securitySettings')}`,
         subtitle: t('pages.settings.securitySettings'),
         keywords: ['security', 'password', 'username', '2fa', 'two factor', 'login limit'],
-        icon: <SafetyOutlined />,
+        icon: <SafetyOutlined aria-hidden />,
       },
       {
         path: '/settings#telegram',
         title: `${t('menu.settings')} · ${t('pages.settings.TGBotSettings')}`,
         subtitle: t('pages.settings.TGBotSettings'),
         keywords: ['telegram', 'tgbot', 'bot token', 'chat id', 'notifications', 'alerts'],
-        icon: <MessageOutlined />,
+        icon: <TelegramFilled aria-hidden />,
       },
       {
         path: '/settings#email',
         title: `${t('menu.settings')} · ${t('pages.settings.emailSettings')}`,
         subtitle: t('pages.settings.emailSettings'),
         keywords: ['email', 'smtp', 'mail', 'crash alerts'],
-        icon: <MailOutlined />,
+        icon: <MailOutlined aria-hidden />,
       },
       {
         path: '/settings#discord',
         title: `${t('menu.settings')} · ${t('pages.settings.discordSettings')}`,
         subtitle: t('pages.settings.discordSettings'),
         keywords: ['discord', 'bot', 'channel', 'notifications', 'alerts'],
-        icon: <DiscordOutlined />,
+        icon: <DiscordOutlined aria-hidden />,
       },
       {
         path: '/settings#subscription',
         title: `${t('menu.settings')} · ${t('pages.settings.subSettings')}`,
         subtitle: t('pages.settings.subSettings'),
         keywords: ['subscription', 'subPort', 'subURI', 'subDomain', 'reverse proxy'],
-        icon: <CloudServerOutlined />,
+        icon: <CloudServerOutlined aria-hidden />,
       },
       {
         path: '/settings#subscription-formats',
         title: `${t('menu.settings')} · ${t('menu.subFormats')}`,
         subtitle: t('menu.subFormats'),
         keywords: ['formats', 'clash', 'sing-box', 'v2ray', 'json', 'sub formats'],
-        icon: <CodeOutlined />,
+        icon: <CodeOutlined aria-hidden />,
       },
       {
         path: '/settings#subscription-balancers',
         title: `${t('menu.settings')} · ${t('pages.settings.subBalancers.menu')}`,
         subtitle: t('pages.settings.subBalancers.menu'),
         keywords: ['balancers', 'sub balancers', 'balancer nodes'],
-        icon: <ApartmentOutlined />,
+        icon: <ApartmentOutlined aria-hidden />,
       },
       {
         path: '/xray#basic',
         title: `${t('menu.xray')} · ${t('pages.xray.basicTemplate')}`,
         subtitle: t('pages.xray.basicTemplate'),
         keywords: ['basics', 'freedom strategy', 'happy eyeballs', 'torrent', 'connection'],
-        icon: <ToolOutlined />,
+        icon: <ToolOutlined aria-hidden />,
       },
       {
         path: '/xray#basic',
@@ -532,56 +471,56 @@ export default function CommandPalette() {
           'statsOutbound',
           'metrics_out',
         ],
-        icon: <DashboardOutlined />,
+        icon: <DashboardOutlined aria-hidden />,
       },
       {
         path: '/xray#basic',
         title: `${t('menu.xray')} · ${t('pages.xray.connectionLimits')}`,
         subtitle: t('pages.xray.connectionLimits'),
         keywords: ['limits', 'idle timeout', 'bufferSize', 'connIdle', 'timeout'],
-        icon: <ClockCircleOutlined />,
+        icon: <ClockCircleOutlined aria-hidden />,
       },
       {
         path: '/xray#basic',
         title: `${t('menu.xray')} · ${t('pages.xray.logConfigs')}`,
         subtitle: t('pages.xray.logConfigs'),
         keywords: ['logs', 'access log', 'error log', 'dns log', 'mask address', 'loglevel'],
-        icon: <FileTextOutlined />,
+        icon: <FileTextOutlined aria-hidden />,
       },
       {
         path: '/xray#balancer',
         title: `${t('menu.xray')} · ${t('pages.xray.Balancers')}`,
         subtitle: t('pages.xray.Balancers'),
         keywords: ['balancers', 'leastPing', 'roundRobin', 'fallback', 'strategy'],
-        icon: <ClusterOutlined />,
+        icon: <ClusterOutlined aria-hidden />,
       },
       {
         path: '/xray#dns',
         title: `${t('menu.xray')} · DNS`,
         subtitle: 'DNS',
         keywords: ['dns', 'dns servers', 'hosts', 'doh', 'dot', 'cloudflare dns'],
-        icon: <DatabaseOutlined />,
+        icon: <DatabaseOutlined aria-hidden />,
       },
       {
         path: '/xray#outbound',
         title: `${t('menu.xray')} · ${t('pages.xray.Outbounds')}`,
         subtitle: t('pages.xray.Outbounds'),
         keywords: ['outbound', 'freedom', 'direct', 'proxy outbounds'],
-        icon: <ExportOutlined />,
+        icon: <ExportOutlined aria-hidden />,
       },
       {
         path: '/xray#routing',
         title: `${t('menu.xray')} · ${t('pages.xray.basicRouting')}`,
         subtitle: t('pages.xray.basicRouting'),
         keywords: ['routing', 'routing rules', 'geoip', 'geosite', 'block', 'direct'],
-        icon: <SwapOutlined />,
+        icon: <SwapOutlined aria-hidden />,
       },
       {
         path: '/xray#advanced',
         title: `${t('menu.xray')} · ${t('pages.xray.advancedTemplate')}`,
         subtitle: t('pages.xray.advancedTemplate'),
         keywords: ['advanced', 'json template', 'advanced config', 'custom json'],
-        icon: <CodeOutlined />,
+        icon: <CodeOutlined aria-hidden />,
       },
     ];
 
@@ -609,7 +548,7 @@ export default function CommandPalette() {
         title: t('commandPalette.restartXray'),
         subtitle: t('pages.index.restartXray'),
         keywords: ['restart', 'xray restart', 'reboot xray'],
-        icon: <ReloadOutlined style={{ color: '#faad14' }} />,
+        icon: <ReloadOutlined aria-hidden style={{ color: '#faad14' }} />,
         action: restartXray,
       },
       {
@@ -618,7 +557,7 @@ export default function CommandPalette() {
         title: t('menu.theme'),
         subtitle: isUltra ? 'Ultra Dark' : isDark ? 'Dark' : 'Light',
         keywords: ['theme', 'light', 'dark', 'ultra'],
-        icon: isDark ? <SunOutlined /> : <MoonOutlined />,
+        icon: isDark ? <SunOutlined aria-hidden /> : <MoonOutlined aria-hidden />,
         action: cycleTheme,
       },
       {
@@ -627,7 +566,7 @@ export default function CommandPalette() {
         title: t('pages.inbounds.addInbound'),
         subtitle: t('menu.inbounds'),
         keywords: ['add inbound', 'create inbound', 'new port', 'new inbound'],
-        icon: <PlusOutlined style={{ color: '#52c41a' }} />,
+        icon: <PlusOutlined aria-hidden style={{ color: '#52c41a' }} />,
         action: () => {
           close();
           navigate('/inbounds');
@@ -639,7 +578,7 @@ export default function CommandPalette() {
         title: t('pages.clients.addClient'),
         subtitle: t('menu.clients'),
         keywords: ['add client', 'create user', 'new client', 'new user'],
-        icon: <PlusOutlined style={{ color: '#52c41a' }} />,
+        icon: <PlusOutlined aria-hidden style={{ color: '#52c41a' }} />,
         action: () => {
           close();
           navigate('/clients');
@@ -741,9 +680,9 @@ export default function CommandPalette() {
         >
           <div className="command-palette-header">
             {isClientSearching ? (
-              <LoadingOutlined className="command-palette-search-icon spinning" />
+              <LoadingOutlined aria-hidden className="command-palette-search-icon spinning" />
             ) : (
-              <SearchOutlined className="command-palette-search-icon" />
+              <SearchOutlined aria-hidden className="command-palette-search-icon" />
             )}
             <input
               ref={inputRef}

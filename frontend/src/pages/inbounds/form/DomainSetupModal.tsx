@@ -116,6 +116,7 @@ export default function DomainSetupModal({ open, onClose, onDone }: DomainSetupM
         </Typography.Paragraph>
         <Space.Compact style={{ width: '100%' }}>
           <Input
+            aria-label={t('pages.inbounds.form.templateDomainTitle')}
             value={domain}
             disabled={busy}
             placeholder={isIp ? '178.253.44.8' : 'example.com'}
@@ -138,7 +139,7 @@ export default function DomainSetupModal({ open, onClose, onDone }: DomainSetupM
                     </span>
                   }
                 >
-                  <QuestionCircleOutlined style={{ color: 'rgba(128,128,128,0.65)' }} />
+                  <QuestionCircleOutlined aria-hidden style={{ color: 'rgba(128,128,128,0.65)' }} />
                 </Tooltip>
               )
             }

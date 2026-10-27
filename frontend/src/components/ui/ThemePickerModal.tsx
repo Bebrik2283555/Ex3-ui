@@ -98,7 +98,7 @@ export default function ThemePickerModal({ open, onClose }: ThemePickerModalProp
       destroyOnHidden
       title={
         <>
-          <BgColorsOutlined /> {t('menu.theme')}
+          <BgColorsOutlined aria-hidden /> {t('menu.theme')}
         </>
       }
     >
@@ -135,7 +135,7 @@ export default function ThemePickerModal({ open, onClose }: ThemePickerModalProp
               <span className="theme-picker-meta">
                 <span className="theme-picker-name">
                   {t(opt.labelKey)}
-                  {selected && <CheckOutlined className="theme-picker-check" />}
+                  {selected && <CheckOutlined aria-hidden className="theme-picker-check" />}
                 </span>
                 {opt.descKey && <span className="theme-picker-desc">{t(opt.descKey)}</span>}
               </span>

@@ -68,6 +68,24 @@ func TestClientOwnedBy(t *testing.T) {
 	if err := db.Create(inbound).Error; err != nil {
 		t.Fatalf("create inbound: %v", err)
 	}
+	// GetClientTrafficTgBot reads the normalized clients/client_inbounds tables,
+	// so the ownership binding has to exist there as well as in the JSON.
+	for _, c := range []struct {
+		uuid  string
+		email string
+		tgID  int64
+	}{{"u1", "alice@x", 777}, {"u2", "bob@y", 999}} {
+		client := &model.ClientRecord{
+			Email: c.email, UUID: c.uuid, Enable: true, TgID: c.tgID,
+			TotalGB: 0, ExpiryTime: 0,
+		}
+		if err := db.Create(client).Error; err != nil {
+			t.Fatalf("create client %s: %v", c.email, err)
+		}
+		if err := db.Create(&model.ClientInbound{ClientId: client.Id, InboundId: inbound.Id}).Error; err != nil {
+			t.Fatalf("link client %s: %v", c.email, err)
+		}
+	}
 	for _, email := range []string{"alice@x", "bob@y"} {
 		if err := db.Create(&xray.ClientTraffic{InboundId: inbound.Id, Email: email, Enable: true, Up: 1, Down: 2}).Error; err != nil {
 			t.Fatalf("create client_traffics for %s: %v", email, err)

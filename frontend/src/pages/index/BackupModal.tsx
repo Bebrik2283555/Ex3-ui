@@ -92,7 +92,7 @@ export default function BackupModal({
             type="primary"
             aria-label={t('pages.index.exportDatabase')}
             onClick={exportDb}
-            icon={<DownloadOutlined />}
+            icon={<DownloadOutlined aria-hidden />}
           />
         </div>
 
@@ -105,7 +105,7 @@ export default function BackupModal({
             type="primary"
             aria-label={t('pages.index.exportFullBackup')}
             onClick={exportFullBackup}
-            icon={<DownloadOutlined />}
+            icon={<DownloadOutlined aria-hidden />}
           />
         </div>
 
@@ -119,7 +119,7 @@ export default function BackupModal({
               type="primary"
               aria-label={t('pages.index.migrationDownload')}
               onClick={exportMigration}
-              icon={<DownloadOutlined />}
+              icon={<DownloadOutlined aria-hidden />}
             />
           </div>
         )}
@@ -137,7 +137,7 @@ export default function BackupModal({
             type="primary"
             aria-label={t('pages.index.importDatabase')}
             onClick={importDb}
-            icon={<UploadOutlined />}
+            icon={<UploadOutlined aria-hidden />}
           />
         </div>
 

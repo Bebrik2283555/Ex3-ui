@@ -276,13 +276,14 @@ export default function SidecarFields() {
         >
           <Space.Compact style={{ display: 'flex' }}>
             <Input
+              aria-label={t('pages.inbounds.sidecar.cryptoKey')}
               value={cryptoKey}
               style={{ flex: 1 }}
               onChange={(e) => setValue('settings.sidecar.cryptoKey', e.target.value)}
             />
             <Button
               aria-label={t('regenerate')}
-              icon={<ReloadOutlined />}
+              icon={<ReloadOutlined aria-hidden />}
               onClick={() => setValue('settings.sidecar.cryptoKey', randomHex(32))}
             />
           </Space.Compact>

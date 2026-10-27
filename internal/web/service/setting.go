@@ -83,6 +83,7 @@ var defaultValueMap = map[string]string{
 	"remarkTemplate":              DefaultRemarkTemplate,
 	"subShowIdentityOnAllLinks":   "false",
 	"subInfoNodeEnable":           "false",
+	"subHostSortMode":             "inbound-first",
 	"subCalendarExpireInclusive":  "false",
 	"subExpiredTemplate":          DefaultSubExpiredTemplate,
 	"subTrafficDepletedTemplate":  DefaultSubTrafficDepletedTemplate,
@@ -189,6 +190,7 @@ var defaultValueMap = map[string]string{
 	"subClashURI":                 "",
 	"subClashEnableRouting":       "false",
 	"subClashRules":               "",
+	"subClashRemoteDNS":           "false",
 	"subJsonMux":                  "",
 	"subJsonRules":                "",
 	"subJsonRoutingRules":         "",
@@ -239,6 +241,8 @@ var defaultValueMap = map[string]string{
 
 	// Consecutive failed observatory probes before an outbound.down event fires
 	"outboundDownThreshold": "3",
+
+	"nodeDownThreshold": "1",
 
 	// Email (SMTP) notifications
 	"smtpEnable":         "false",
@@ -788,6 +792,10 @@ func (s *SettingService) GetSubInfoNodeEnable() (bool, error) {
 	return s.getBool("subInfoNodeEnable")
 }
 
+func (s *SettingService) GetSubHostSortMode() (string, error) {
+	return s.getString("subHostSortMode")
+}
+
 func (s *SettingService) GetSubCalendarExpireInclusive() (bool, error) {
 	return s.getBool("subCalendarExpireInclusive")
 }
@@ -1274,6 +1282,10 @@ func (s *SettingService) GetSubClashRules() (string, error) {
 	return s.getString("subClashRules")
 }
 
+func (s *SettingService) GetSubClashRemoteDNS() (bool, error) {
+	return s.getBool("subClashRemoteDNS")
+}
+
 func (s *SettingService) GetSubJsonMux() (string, error) {
 	return s.getString("subJsonMux")
 }
@@ -1669,6 +1681,14 @@ func (s *SettingService) SetOutboundDownThreshold(value int) error {
 	return s.setInt("outboundDownThreshold", value)
 }
 
+func (s *SettingService) GetNodeDownThreshold() (int, error) {
+	return s.getInt("nodeDownThreshold")
+}
+
+func (s *SettingService) SetNodeDownThreshold(value int) error {
+	return s.setInt("nodeDownThreshold", value)
+}
+
 // SecretClears marks redacted secrets the user explicitly emptied. Without a
 // flag, a blank submitted secret means "unchanged" (the field is always served
 // blank to the browser) and the stored value is preserved.
@@ -1680,6 +1700,13 @@ type SecretClears struct {
 }
 
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting, clears SecretClears) error {
+	switch allSetting.SubHostSortMode {
+	case "":
+		allSetting.SubHostSortMode = "inbound-first"
+	case "inbound-first", "hosts-first":
+	default:
+		return errors.New("subscription host sort mode must be inbound-first or hosts-first")
+	}
 	switch allSetting.SubProfileMode {
 	case "", SubProfileModeNone, SubProfileModeBuiltin, SubProfileModeCustom:
 		allSetting.SubProfileMode = effectiveSubProfileMode(allSetting.SubProfileMode, allSetting.SubProfileUrl)

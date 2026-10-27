@@ -58,7 +58,9 @@ function SidecarPanel({ core }: { core: CoreInfo }) {
         extra={
           <Space wrap>
             <Button
-              icon={core.running ? <StopOutlined /> : <PlayCircleOutlined />}
+              icon={
+                core.running ? <StopOutlined aria-hidden /> : <PlayCircleOutlined aria-hidden />
+              }
               disabled={!core.installed || core.inbounds === 0}
               loading={busy}
               onClick={() =>
@@ -73,11 +75,11 @@ function SidecarPanel({ core }: { core: CoreInfo }) {
             >
               {t(core.running ? 'pages.cores.disable' : 'pages.cores.enable')}
             </Button>
-            <Button icon={<FileTextOutlined />} onClick={() => setLogsOpen(true)}>
+            <Button icon={<FileTextOutlined aria-hidden />} onClick={() => setLogsOpen(true)}>
               {t('pages.cores.logs')}
             </Button>
             <Button
-              icon={<ReloadOutlined />}
+              icon={<ReloadOutlined aria-hidden />}
               loading={actions.restart.isPending}
               disabled={!core.installed || core.inbounds === 0}
               onClick={() =>

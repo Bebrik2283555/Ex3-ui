@@ -6,6 +6,7 @@ import '@/styles/theme-lane.css';
 import { setupHttp } from '@/api/http-init';
 import { applyDocumentTitle } from '@/utils';
 import { readyI18n } from '@/i18n/react';
+import { AntdRootConfig } from '@/i18n/AntdRootConfig';
 import { ThemeProvider } from '@/hooks/useTheme';
 import { QueryProvider } from '@/api/QueryProvider';
 import LoginPage from '@/pages/login/LoginPage';
@@ -22,11 +23,13 @@ readyI18n().then(() => {
   const root = document.getElementById('app');
   if (root) {
     createRoot(root).render(
-      <ThemeProvider>
-        <QueryProvider>
-          <LoginPage />
-        </QueryProvider>
-      </ThemeProvider>,
+      <AntdRootConfig>
+        <ThemeProvider>
+          <QueryProvider>
+            <LoginPage />
+          </QueryProvider>
+        </ThemeProvider>
+      </AntdRootConfig>,
     );
   }
 });

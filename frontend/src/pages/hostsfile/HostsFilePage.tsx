@@ -112,6 +112,7 @@ function HostsFileTab() {
         style={{ marginBottom: 16 }}
       >
         <Input.TextArea
+          aria-label={t('pages.hostsfile.editorTitle')}
           rows={14}
           value={content}
           onChange={(e) => setContent(e.target.value)}
@@ -120,7 +121,7 @@ function HostsFileTab() {
         />
         <Button
           type="primary"
-          icon={<SaveOutlined />}
+          icon={<SaveOutlined aria-hidden />}
           loading={busy}
           onClick={() => void runSave()}
           style={{ marginTop: 16 }}
@@ -135,13 +136,14 @@ function HostsFileTab() {
       >
         <Space.Compact style={{ width: '100%' }}>
           <Input
+            aria-label={t('pages.hostsfile.downloadTitle')}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder={t('pages.hostsfile.downloadPlaceholder')}
             style={{ fontFamily: 'monospace' }}
           />
           <Button
-            icon={<DownloadOutlined />}
+            icon={<DownloadOutlined aria-hidden />}
             loading={busy}
             disabled={!url}
             onClick={() => void runDownload()}
@@ -317,11 +319,11 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
       key: 'status',
       render: (st: string) =>
         st === 'OK' ? (
-          <Tag color="green" icon={<CheckCircleOutlined />}>
+          <Tag color="green" icon={<CheckCircleOutlined aria-hidden />}>
             OK
           </Tag>
         ) : (
-          <Tag color="red" icon={<CloseCircleOutlined />}>
+          <Tag color="red" icon={<CloseCircleOutlined aria-hidden />}>
             {st}
           </Tag>
         ),
@@ -341,21 +343,22 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
             <Space align="center">
               <Text strong>{t('pages.dnsresolver.autoUpdateLabel')}:</Text>
               <Switch
+                aria-label={t('pages.dnsresolver.autoUpdateLabel')}
                 checked={status?.enabled ?? false}
                 loading={busy === 'toggle'}
                 onChange={(checked) => void onToggleEnabled(checked)}
               />
             </Space>
             {status?.running ? (
-              <Tag icon={<SyncOutlined spin />} color="processing">
+              <Tag icon={<SyncOutlined aria-hidden spin />} color="processing">
                 {t('pages.dnsresolver.statusRunning')}
               </Tag>
             ) : status?.enabled ? (
-              <Tag color="green" icon={<CheckCircleOutlined />}>
+              <Tag color="green" icon={<CheckCircleOutlined aria-hidden />}>
                 {t('pages.dnsresolver.statusActive')}
               </Tag>
             ) : (
-              <Tag color="default" icon={<CloseCircleOutlined />}>
+              <Tag color="default" icon={<CloseCircleOutlined aria-hidden />}>
                 {t('pages.dnsresolver.statusDisabled')}
               </Tag>
             )}
@@ -375,13 +378,13 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
           <Space wrap>
             <Button
               type="primary"
-              icon={<PlayCircleOutlined />}
+              icon={<PlayCircleOutlined aria-hidden />}
               loading={busy === 'resolve' || status?.running}
               onClick={() => void onResolveNow()}
             >
               {t('pages.dnsresolver.resolveNowBtn')}
             </Button>
-            <Button icon={<FileTextOutlined />} onClick={onOpenDomainsModal}>
+            <Button icon={<FileTextOutlined aria-hidden />} onClick={onOpenDomainsModal}>
               {t('pages.dnsresolver.changeDomainsBtn')}
             </Button>
           </Space>
@@ -406,12 +409,12 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
                     {testResult && (
                       <div style={{ marginTop: 4 }}>
                         {testResult.success ? (
-                          <Tag color="success" icon={<CheckCircleOutlined />}>
+                          <Tag color="success" icon={<CheckCircleOutlined aria-hidden />}>
                             {t('pages.dnsresolver.testSuccess', { latency: testResult.latencyMs })}
                             {testResult.ip ? ` (${testResult.ip})` : ''}
                           </Tag>
                         ) : (
-                          <Tag color="error" icon={<CloseCircleOutlined />}>
+                          <Tag color="error" icon={<CloseCircleOutlined aria-hidden />}>
                             {t('pages.dnsresolver.testFailed')}: {testResult.error}
                           </Tag>
                         )}
@@ -422,9 +425,12 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
                 rules={[{ required: true }]}
               >
                 <Space.Compact style={{ width: '100%' }}>
-                  <Input placeholder="https://dns.comss.one/dns-query" />
+                  <Input
+                    aria-label={t('pages.dnsresolver.dnsServerLabel')}
+                    placeholder="https://dns.comss.one/dns-query"
+                  />
                   <Button
-                    icon={<ThunderboltOutlined />}
+                    icon={<ThunderboltOutlined aria-hidden />}
                     loading={testingDns}
                     onClick={() => void onTestDns()}
                   >
@@ -446,7 +452,7 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
           </Row>
           <Button
             type="primary"
-            icon={<SaveOutlined />}
+            icon={<SaveOutlined aria-hidden />}
             loading={busy === 'settings'}
             onClick={() => void onSaveSettings()}
           >
@@ -483,6 +489,7 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
           {t('pages.dnsresolver.changeDomainsHint')}
         </Text>
         <Input.TextArea
+          aria-label={t('pages.dnsresolver.changeDomainsBtn')}
           rows={14}
           value={domainsText}
           onChange={(e) => setDomainsText(e.target.value)}
@@ -498,7 +505,11 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
             alignItems: 'center',
           }}
         >
-          <Button size="small" icon={<UndoOutlined />} onClick={onResetToDefaultDomains}>
+          <Button
+            size="small"
+            icon={<UndoOutlined aria-hidden />}
+            onClick={onResetToDefaultDomains}
+          >
             {t('pages.dnsresolver.resetDefaultsBtn')}
           </Button>
           <Text type="secondary">

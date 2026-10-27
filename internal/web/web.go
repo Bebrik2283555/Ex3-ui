@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgkern"
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/dnsresolver"
@@ -141,8 +142,12 @@ type Server struct {
 	cancel context.CancelFunc
 }
 
-// NewServer creates a new web server instance with a cancellable context.
-func NewServer() *Server {
+// NewServer installs the share-link provider before anything serves, so an early link request
+// no longer gets "sub link provider not registered".
+func NewServer(subLinkProvider service.SubLinkProvider) *Server {
+	if subLinkProvider != nil {
+		service.RegisterSubLinkProvider(subLinkProvider)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Server{
 		ctx:    ctx,
@@ -606,11 +611,13 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	// add/update/delete to either the local xray or a remote node panel.
 	// The closures bridge into XrayService (which owns the running xray
 	// process state) without forcing the runtime package to import service.
-	runtime.SetManager(runtime.NewManager(runtime.LocalDeps{
-		APIPort:        func() int { return s.xrayService.GetXrayAPIPort() },
-		SetNeedRestart: func() { s.xrayService.SetToNeedRestart() },
-	}))
-	runtime.GetManager().SetNodeEgressResolver(&s.settingService)
+	mgr := runtime.NewManager(runtime.LocalDeps{
+		APIPort:          func() int { return s.xrayService.GetXrayAPIPort() },
+		SetNeedRestart:   func() { s.xrayService.SetToNeedRestart() },
+		RequestReconcile: func() { s.xrayService.SetToNeedReconcile() },
+	})
+	runtime.SetManager(mgr)
+	mgr.SetNodeEgressResolver(&s.settingService)
 	// Move the pre-1.4.2 global qWDTT/olcRTC settings into regular sidecar
 	// inbounds before the first reconcile tick.
 	service.MigrateExtraServices()
@@ -772,6 +779,19 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		return nil
 	})
 
+	controller.SetTgBotCapsFunc(func() (controller.TgBotCapabilities, error) {
+		caps, err := s.tgbotService.Capabilities()
+		if err != nil {
+			return controller.TgBotCapabilities{}, err
+		}
+		return controller.TgBotCapabilities{
+			InlineEnabled: caps.InlineEnabled,
+			GroupPrivacy:  caps.GroupPrivacy,
+			Username:      caps.Username,
+			Running:       caps.Running,
+		}, nil
+	})
+
 	controller.SetReloadTgbotFunc(func() {
 		enabled, err := s.settingService.GetTgbotEnabled()
 		if err != nil || !enabled {
@@ -825,16 +845,33 @@ func (s *Server) StopPanelOnly() error {
 
 func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	s.cancel()
+	var err1 error
+	var err2 error
+	if s.httpServer != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err1 = s.httpServer.Shutdown(shutdownCtx)
+		shutdownCancel()
+	}
+	if s.cron != nil {
+		<-s.cron.Stop().Done()
+	}
 	if stopXray {
-		_ = s.xrayService.StopXray()
+		tuic.GetManager().StopAll()
+		if err := job.NewTuicJob().FlushStoppedTraffic(); err != nil {
+			logger.Warning("persist final TUIC traffic on shutdown failed:", err)
+			err2 = err
+		}
 		mtproto.GetManager().StopAll()
 		amneziawgnet.GetManager().StopAll()
-		tuic.GetManager().StopAll()
+		job.NewAmneziaWGJob().FlushKernelTraffic()
+		amneziawgkern.GetManager().StopAll()
 		amneziawgnet.GetOutboundManager().StopAll()
 		sidecar.GetManager().StopAll()
 	}
-	if s.cron != nil {
-		s.cron.Stop()
+	if stopXray {
+		if err := s.xrayService.StopXray(); err != nil && !errors.Is(err, service.ErrXrayNotRunning) {
+			err2 = common.Combine(err2, err)
+		}
 	}
 	if s.bus != nil {
 		s.bus.Stop()
@@ -843,9 +880,6 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 		logger.Warning("persist system metrics on shutdown failed:", err)
 	}
 	if stopXray {
-		if err := job.NewTuicJob().FlushStoppedTraffic(); err != nil {
-			logger.Warning("persist TUIC traffic on shutdown failed:", err)
-		}
 		service.StopTrafficWriter()
 	}
 	if stopTgBot && s.tgbotService.IsRunning() {
@@ -858,15 +892,11 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	if s.wsHub != nil {
 		s.wsHub.Stop()
 	}
-	var err1 error
-	var err2 error
-	if s.httpServer != nil {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer shutdownCancel()
-		err1 = s.httpServer.Shutdown(shutdownCtx)
-	}
 	if s.listener != nil {
-		err2 = s.listener.Close()
+		// httpServer.Shutdown already closes the listener; ignore closed errors.
+		if err := s.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			err1 = common.Combine(err1, err)
+		}
 	}
 	return common.Combine(err1, err2)
 }

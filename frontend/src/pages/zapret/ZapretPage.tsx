@@ -217,7 +217,10 @@ function ZapretTab() {
   };
 
   const tag = (label: React.ReactNode, ok: boolean) => (
-    <Tag color={ok ? 'green' : 'red'} icon={ok ? <CheckCircleOutlined /> : <CloseCircleOutlined />}>
+    <Tag
+      color={ok ? 'green' : 'red'}
+      icon={ok ? <CheckCircleOutlined aria-hidden /> : <CloseCircleOutlined aria-hidden />}
+    >
       {label}
     </Tag>
   );
@@ -229,7 +232,10 @@ function ZapretTab() {
           <Result status="error" title={t('pages.zapret.installFailed')} />
         ) : !status ? null : (
           <Space wrap size="large">
-            {tag(t('pages.zapret.installed'), status.installed)}
+            {tag(
+              status.installed ? t('pages.zapret.installed') : t('pages.zapret.notInstalled'),
+              status.installed,
+            )}
             {status.installed && tag(t('pages.zapret.running'), status.running)}
             {status.firewall && (
               <Text>
@@ -249,6 +255,7 @@ function ZapretTab() {
           <Form form={dlForm} layout="vertical" initialValues={{ firewall: 'nftables' }}>
             <Form.Item label={t('pages.zapret.downloadUrl')}>
               <Input
+                aria-label={t('pages.zapret.downloadUrl')}
                 value={ZAPRET_DOWNLOAD_URL}
                 readOnly
                 placeholder={t('pages.zapret.downloadPlaceholder')}
@@ -271,7 +278,7 @@ function ZapretTab() {
             </Form.Item>
             <Button
               type="primary"
-              icon={<DownloadOutlined />}
+              icon={<DownloadOutlined aria-hidden />}
               loading={busy === 'download'}
               onClick={() => void runDownload()}
             >
@@ -288,7 +295,7 @@ function ZapretTab() {
           >
             <Space wrap style={{ marginBottom: 16 }}>
               <Button
-                icon={<RedoOutlined />}
+                icon={<RedoOutlined aria-hidden />}
                 loading={busy === 'restart'}
                 onClick={() => void run('restart')}
               >
@@ -296,14 +303,14 @@ function ZapretTab() {
               </Button>
               <Button
                 danger
-                icon={<PoweroffOutlined />}
+                icon={<PoweroffOutlined aria-hidden />}
                 loading={busy === 'stop'}
                 onClick={() => void run('stop')}
               >
                 {t('pages.zapret.stopBtn')}
               </Button>
               <Button
-                icon={<PlayCircleOutlined />}
+                icon={<PlayCircleOutlined aria-hidden />}
                 loading={busy === 'start'}
                 onClick={() => void run('start')}
               >
@@ -314,6 +321,7 @@ function ZapretTab() {
               <Col xs={24} md={12}>
                 <Text strong>{t('pages.zapret.bypassLabel')}</Text>
                 <Input.TextArea
+                  aria-label={t('pages.zapret.bypassLabel')}
                   rows={10}
                   value={bypassText}
                   onChange={(e) => setBypassText(e.target.value)}
@@ -323,6 +331,7 @@ function ZapretTab() {
               <Col xs={24} md={12}>
                 <Text strong>{t('pages.zapret.ignoreLabel')}</Text>
                 <Input.TextArea
+                  aria-label={t('pages.zapret.ignoreLabel')}
                   rows={10}
                   value={ignoreText}
                   onChange={(e) => setIgnoreText(e.target.value)}
@@ -332,27 +341,27 @@ function ZapretTab() {
             <Space wrap style={{ marginTop: 16 }}>
               <Button
                 type="primary"
-                icon={<SaveOutlined />}
+                icon={<SaveOutlined aria-hidden />}
                 loading={busy === 'hosts'}
                 onClick={() => void runSaveHosts()}
               >
                 {t('pages.zapret.saveHosts')}
               </Button>
               <Button
-                icon={<SettingOutlined />}
+                icon={<SettingOutlined aria-hidden />}
                 loading={busy === 'config'}
                 onClick={() => void openConfig()}
               >
                 {t('pages.zapret.strategyBtn')}
               </Button>
               <Button
-                icon={<FileTextOutlined />}
+                icon={<FileTextOutlined aria-hidden />}
                 loading={busy === 'list'}
                 onClick={() => void openLists()}
               >
                 {t('pages.zapret.listBtn')}
               </Button>
-              <Button icon={<DownloadOutlined />} onClick={() => setBackupOpen(true)}>
+              <Button icon={<DownloadOutlined aria-hidden />} onClick={() => setBackupOpen(true)}>
                 {t('pages.zapret.backupBtn')}
               </Button>
             </Space>
@@ -369,6 +378,7 @@ function ZapretTab() {
                 {t('pages.zapret.strategyHint')}
               </Text>
               <Input.TextArea
+                aria-label={t('pages.zapret.strategyTitle')}
                 rows={16}
                 value={configText}
                 onChange={(e) => setConfigText(e.target.value)}
@@ -385,6 +395,7 @@ function ZapretTab() {
               confirmLoading={busy === 'list'}
             >
               <Select
+                aria-label={t('pages.zapret.listSelect')}
                 style={{ width: '100%', marginBottom: 8 }}
                 value={listName}
                 placeholder={t('pages.zapret.listSelect')}
@@ -395,6 +406,7 @@ function ZapretTab() {
                 }}
               />
               <Input.TextArea
+                aria-label={t('pages.zapret.listTitle')}
                 rows={14}
                 value={listText}
                 onChange={(e) => setListText(e.target.value)}
@@ -414,7 +426,7 @@ function ZapretTab() {
             onCancel={() => setBackupOpen(false)}
           >
             <Space direction="vertical" style={{ width: '100%' }}>
-              <Button block icon={<DownloadOutlined />} onClick={runBackup}>
+              <Button block icon={<DownloadOutlined aria-hidden />} onClick={runBackup}>
                 {t('pages.zapret.backupDownload')}
               </Button>
               <Upload
@@ -422,7 +434,7 @@ function ZapretTab() {
                 showUploadList={false}
                 customRequest={onRestore}
               >
-                <Button block icon={<UploadOutlined />}>
+                <Button block icon={<UploadOutlined aria-hidden />}>
                   {t('pages.zapret.restoreBtn')}
                 </Button>
               </Upload>
@@ -591,7 +603,10 @@ function WarpTab() {
   );
 
   const tag = (label: React.ReactNode, ok: boolean) => (
-    <Tag color={ok ? 'green' : 'red'} icon={ok ? <CheckCircleOutlined /> : <CloseCircleOutlined />}>
+    <Tag
+      color={ok ? 'green' : 'red'}
+      icon={ok ? <CheckCircleOutlined aria-hidden /> : <CloseCircleOutlined aria-hidden />}
+    >
       {label}
     </Tag>
   );
@@ -601,12 +616,21 @@ function WarpTab() {
       {/* Status card */}
       <Card title={t('pages.warp.statusCard')} variant="borderless" style={{ marginBottom: 16 }}>
         <Space wrap size="large">
-          {tag(t('pages.warp.installed'), !!status?.installed)}
+          {tag(
+            status?.installed ? t('pages.warp.installed') : t('pages.warp.notInstalled'),
+            !!status?.installed,
+          )}
           {status?.installed && tag(t('pages.warp.running'), !!status.running)}
           {status?.installed && (
             <Tag
               color={status.watchdogActive ? 'green' : 'orange'}
-              icon={status.watchdogActive ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+              icon={
+                status.watchdogActive ? (
+                  <CheckCircleOutlined aria-hidden />
+                ) : (
+                  <CloseCircleOutlined aria-hidden />
+                )
+              }
             >
               {t('pages.warp.watchdog')}
             </Tag>
@@ -618,7 +642,7 @@ function WarpTab() {
             </Tag>
           )}
           {isWorking && (
-            <Tag icon={<SyncOutlined spin />} color="processing">
+            <Tag icon={<SyncOutlined aria-hidden spin />} color="processing">
               {status?.installing ? t('pages.warp.installing') : t('pages.warp.rotating')}
             </Tag>
           )}
@@ -669,7 +693,7 @@ function WarpTab() {
                   <Button
                     type="text"
                     size="small"
-                    icon={<SyncOutlined />}
+                    icon={<SyncOutlined aria-hidden />}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (logTab === 'watch') void refetchWatchLogs();
@@ -712,7 +736,7 @@ function WarpTab() {
           </Text>
           <Button
             type="primary"
-            icon={<DownloadOutlined />}
+            icon={<DownloadOutlined aria-hidden />}
             loading={busy === 'install'}
             onClick={handleOpenInstall}
           >
@@ -731,7 +755,7 @@ function WarpTab() {
           >
             <Space wrap>
               <Button
-                icon={<PlayCircleOutlined />}
+                icon={<PlayCircleOutlined aria-hidden />}
                 loading={busy === 'start'}
                 onClick={() => void run('start')}
               >
@@ -739,28 +763,28 @@ function WarpTab() {
               </Button>
               <Button
                 danger
-                icon={<PoweroffOutlined />}
+                icon={<PoweroffOutlined aria-hidden />}
                 loading={busy === 'stop'}
                 onClick={() => void run('stop')}
               >
                 {t('pages.warp.stopBtn')}
               </Button>
               <Button
-                icon={<RedoOutlined />}
+                icon={<RedoOutlined aria-hidden />}
                 loading={busy === 'restart'}
                 onClick={() => void run('restart')}
               >
                 {t('pages.warp.restartBtn')}
               </Button>
               <Button
-                icon={<SettingOutlined />}
+                icon={<SettingOutlined aria-hidden />}
                 loading={busy === 'settings'}
                 onClick={() => void handleOpenSettings()}
               >
                 {t('pages.warp.settingsBtn')}
               </Button>
               <Button
-                icon={<SyncOutlined spin={status.rotating} />}
+                icon={<SyncOutlined aria-hidden spin={status.rotating} />}
                 loading={busy === 'rotate'}
                 onClick={() => void run('rotate')}
                 disabled={status.rotating}

@@ -83,9 +83,9 @@ export default function OptimizePage() {
       <Col xs={24} sm={12} md={8}>
         <Space>
           {ok ? (
-            <CheckCircleOutlined style={{ color: '#52c41a' }} />
+            <CheckCircleOutlined aria-hidden style={{ color: '#52c41a' }} />
           ) : (
-            <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
+            <CloseCircleOutlined aria-hidden style={{ color: '#ff4d4f' }} />
           )}
           <Text>{label}</Text>
         </Space>
@@ -132,7 +132,7 @@ export default function OptimizePage() {
               <Card
                 title={
                   <>
-                    <ThunderboltOutlined />{' '}
+                    <ThunderboltOutlined aria-hidden />{' '}
                     {allApplied ? t('pages.optimize.allApplied') : t('pages.optimize.applyTitle')}
                   </>
                 }
@@ -157,6 +157,7 @@ export default function OptimizePage() {
                     </Checkbox>
                     {dns && (
                       <Select
+                        aria-label={t('pages.optimize.dnsOption')}
                         mode="tags"
                         style={{ width: '100%', maxWidth: 420 }}
                         value={dnsResolvers}
@@ -182,6 +183,7 @@ export default function OptimizePage() {
                       </Checkbox>
                       {swap && (
                         <InputNumber
+                          aria-label={t('pages.optimize.swapOption')}
                           min={64}
                           step={128}
                           value={swapSize}
