@@ -1315,4 +1315,3 @@ func (t *Tgbot) refuseNonPrivateChat(update telego.Update) {
 		t.sendNoticeNoKeyboard(chatID, t.I18nBot("tgbot.messages.privateOnly"))
 	}
 }
-
