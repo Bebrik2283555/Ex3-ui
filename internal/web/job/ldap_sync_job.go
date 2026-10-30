@@ -23,39 +23,53 @@ type LdapSyncJob struct {
 	clientService  service.ClientService
 	xrayService    service.XrayService
 	lastFlagCount  atomic.Int64
+	// settingsErr collects the first failed settings read. A run must not
+	// apply a half-read configuration (and must not panic out of the job and
+	// lose the work it already did).
+	settingsErr error
 }
 
-// --- Helper functions for mustGet ---
-func mustGetString(fn func() (string, error)) string {
-	v, err := fn()
-	if err != nil {
-		panic(err)
+func (j *LdapSyncJob) settingError(err error) {
+	if err != nil && j.settingsErr == nil {
+		j.settingsErr = err
 	}
+}
+
+func (j *LdapSyncJob) getString(fn func() (string, error)) string {
+	v, err := fn()
+	j.settingError(err)
 	return v
 }
 
-func mustGetInt(fn func() (int, error)) int {
+func (j *LdapSyncJob) getInt(fn func() (int, error)) int {
 	v, err := fn()
-	if err != nil {
-		panic(err)
-	}
+	j.settingError(err)
 	return v
 }
 
-func mustGetBool(fn func() (bool, error)) bool {
+func (j *LdapSyncJob) getBool(fn func() (bool, error)) bool {
 	v, err := fn()
-	if err != nil {
-		panic(err)
-	}
+	j.settingError(err)
 	return v
 }
 
-func mustGetStringOr(fn func() (string, error), fallback string) string {
+func (j *LdapSyncJob) getStringOr(fn func() (string, error), fallback string) string {
 	v, err := fn()
-	if err != nil || v == "" {
+	j.settingError(err)
+	if v == "" {
 		return fallback
 	}
 	return v
+}
+
+// settingsFailed reports (and clears) a failed settings read.
+func (j *LdapSyncJob) settingsFailed(step string) bool {
+	if j.settingsErr == nil {
+		return false
+	}
+	logger.Warning("LDAP sync aborted, settings unavailable (", step, "):", j.settingsErr)
+	j.settingsErr = nil
+	return true
 }
 
 func NewLdapSyncJob() *LdapSyncJob {
@@ -64,6 +78,7 @@ func NewLdapSyncJob() *LdapSyncJob {
 
 func (j *LdapSyncJob) Run() {
 	logger.Info("LDAP sync job started")
+	j.settingsErr = nil
 
 	enabled, err := j.settingService.GetLdapEnable()
 	if err != nil || !enabled {
@@ -73,18 +88,21 @@ func (j *LdapSyncJob) Run() {
 
 	// --- LDAP fetch ---
 	cfg := ldaputil.Config{
-		Host:               mustGetString(j.settingService.GetLdapHost),
-		Port:               mustGetInt(j.settingService.GetLdapPort),
-		UseTLS:             mustGetBool(j.settingService.GetLdapUseTLS),
-		InsecureSkipVerify: mustGetBool(j.settingService.GetLdapInsecureSkipVerify),
-		BindDN:             mustGetString(j.settingService.GetLdapBindDN),
-		Password:           mustGetString(j.settingService.GetLdapPassword),
-		BaseDN:             mustGetString(j.settingService.GetLdapBaseDN),
-		UserFilter:         mustGetString(j.settingService.GetLdapUserFilter),
-		UserAttr:           mustGetString(j.settingService.GetLdapUserAttr),
-		FlagField:          mustGetStringOr(j.settingService.GetLdapFlagField, mustGetString(j.settingService.GetLdapVlessField)),
-		TruthyVals:         truthyValuesOrDefault(mustGetString(j.settingService.GetLdapTruthyValues)),
-		Invert:             mustGetBool(j.settingService.GetLdapInvertFlag),
+		Host:               j.getString(j.settingService.GetLdapHost),
+		Port:               j.getInt(j.settingService.GetLdapPort),
+		UseTLS:             j.getBool(j.settingService.GetLdapUseTLS),
+		InsecureSkipVerify: j.getBool(j.settingService.GetLdapInsecureSkipVerify),
+		BindDN:             j.getString(j.settingService.GetLdapBindDN),
+		Password:           j.getString(j.settingService.GetLdapPassword),
+		BaseDN:             j.getString(j.settingService.GetLdapBaseDN),
+		UserFilter:         j.getString(j.settingService.GetLdapUserFilter),
+		UserAttr:           j.getString(j.settingService.GetLdapUserAttr),
+		FlagField:          j.getStringOr(j.settingService.GetLdapFlagField, j.getString(j.settingService.GetLdapVlessField)),
+		TruthyVals:         truthyValuesOrDefault(j.getString(j.settingService.GetLdapTruthyValues)),
+		Invert:             j.getBool(j.settingService.GetLdapInvertFlag),
+	}
+	if j.settingsFailed("ldap connection") {
+		return
 	}
 
 	flags, err := ldaputil.FetchVlessFlags(cfg)
@@ -95,7 +113,7 @@ func (j *LdapSyncJob) Run() {
 	logger.Infof("Fetched %d LDAP flags", len(flags))
 
 	// --- Load all inbounds and all clients once ---
-	inboundTags := splitCsv(mustGetString(j.settingService.GetLdapInboundTags))
+	inboundTags := splitCsv(j.getString(j.settingService.GetLdapInboundTags))
 	inbounds, err := j.inboundService.GetAllInbounds()
 	if err != nil {
 		logger.Warning("Failed to get inbounds:", err)
@@ -113,10 +131,15 @@ func (j *LdapSyncJob) Run() {
 	}
 
 	// --- Prepare batch operations ---
-	autoCreate := mustGetBool(j.settingService.GetLdapAutoCreate)
-	defGB := mustGetInt(j.settingService.GetLdapDefaultTotalGB)
-	defExpiryDays := mustGetInt(j.settingService.GetLdapDefaultExpiryDays)
-	defLimitIP := mustGetInt(j.settingService.GetLdapDefaultLimitIP)
+	autoCreate := j.getBool(j.settingService.GetLdapAutoCreate)
+	defGB := j.getInt(j.settingService.GetLdapDefaultTotalGB)
+	defExpiryDays := j.getInt(j.settingService.GetLdapDefaultExpiryDays)
+	defLimitIP := j.getInt(j.settingService.GetLdapDefaultLimitIP)
+	// Checked before anything is written: a half-read configuration must not
+	// enable, create or disable a single client.
+	if j.settingsFailed("client defaults") {
+		return
+	}
 
 	resolvedInboundIds := make([]int, 0, len(inboundTags))
 	resolvedTags := make([]string, 0, len(inboundTags))
@@ -158,7 +181,12 @@ func (j *LdapSyncJob) Run() {
 	j.batchSetEnable(clientsToDisable, false)
 
 	// --- Auto delete clients not in LDAP ---
-	autoDelete := mustGetBool(j.settingService.GetLdapAutoDelete)
+	autoDelete := j.getBool(j.settingService.GetLdapAutoDelete)
+	if j.settingsErr != nil {
+		// Read as false; say why so a silent skip is not mistaken for policy.
+		logger.Warning("LDAP auto-delete skipped, settings unavailable:", j.settingsErr)
+		j.settingsErr = nil
+	}
 	if autoDelete && j.autoDeleteSafeForFetch(len(flags)) {
 		ldapEmailSet := map[string]struct{}{}
 		for e := range flags {
@@ -172,7 +200,7 @@ func (j *LdapSyncJob) Run() {
 }
 
 // FetchVlessFlags returns (empty, nil) when the bind succeeds but the search
-// yields nothing — a renamed OU, a lost read grant — which is not "all gone".
+// yields nothing вЂ” a renamed OU, a lost read grant вЂ” which is not "all gone".
 func (j *LdapSyncJob) autoDeleteSafeForFetch(fetched int) bool {
 	if fetched == 0 {
 		logger.Warning("LDAP auto-delete skipped: directory returned no usable users")

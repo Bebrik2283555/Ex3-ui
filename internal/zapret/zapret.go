@@ -110,6 +110,11 @@ func installFromFS(src fs.FS, base, firewallType, ifaceWan, ifaceLan string) err
 	if err := run("systemctl", "enable", serviceName); err != nil {
 		return err
 	}
+	// Pin GitHub/Discord in /etc/hosts so the bypass works even when their DNS
+	// answers are poisoned; Uninstall removes the block again.
+	if err := updateHostsBlock(hostsFile); err != nil {
+		return err
+	}
 	return Start()
 }
 
@@ -287,6 +292,9 @@ func Uninstall() error {
 		if err := os.RemoveAll(installDir); err != nil {
 			return err
 		}
+	}
+	if err := removeHostsBlock(hostsFile); err != nil {
+		return err
 	}
 	return nil
 }

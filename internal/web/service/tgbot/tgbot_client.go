@@ -314,7 +314,7 @@ func (t *Tgbot) clientInfoMsg(
 	}
 
 	output := ""
-	output += t.I18nBot("tgbot.messages.email", "Email=="+traffic.Email)
+	output += t.I18nBot("tgbot.messages.email", "Email=="+html.EscapeString(traffic.Email))
 	if attachIds, err := t.clientService.GetInboundIdsForEmail(nil, traffic.Email); err == nil && len(attachIds) > 0 {
 		output += fmt.Sprintf("🔗 Inbounds: %s\r\n", t.describeAttachedInbounds(attachIds))
 	}

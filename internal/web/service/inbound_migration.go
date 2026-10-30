@@ -117,7 +117,14 @@ func (s *InboundService) MigrationRequirements() (err error) {
 			newClients := make([]any, 0, len(clients))
 			hasVisionFlow := false
 			for client_index := range clients {
-				c := clients[client_index].(map[string]any)
+				c, isMap := clients[client_index].(map[string]any)
+				if !isMap {
+					// Keep an unexpected element instead of panicking (which
+					// aborted the whole migration and the panel boot) or
+					// dropping data from the settings written back below.
+					newClients = append(newClients, clients[client_index])
+					continue
+				}
 
 				// Add email='' if it is not exists
 				if _, ok := c["email"]; !ok {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
@@ -26,7 +27,8 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { HttpUtil, LanguageManager } from '@/utils';
 import { FormField, rhfZodValidate } from '@/components/form/rhf';
 import { setMessageInstance } from '@/utils/messageBus';
-import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
+import ThemePickerModal from '@/components/ui/ThemePickerModal';
+import { useTheme } from '@/hooks/useTheme';
 import { LoginFormSchema, TwoFactorCodeSchema, type LoginFormValues } from '@/schemas/login';
 import './LoginPage.css';
 
@@ -38,8 +40,9 @@ const basePath = window.X_UI_BASE_PATH || '';
 
 export default function LoginPage() {
   const { t } = useTranslation();
-  const { isDark, isUltra, toggleTheme, toggleUltra, antdThemeConfig } = useTheme();
+  const { isDark, isUltra, themeName, accent, customBg, antdThemeConfig } = useTheme();
   const [messageApi, messageContextHolder] = message.useMessage();
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
 
   useEffect(() => {
     setMessageInstance(messageApi);
@@ -94,25 +97,29 @@ export default function LoginPage() {
     LanguageManager.setLanguage(next);
   }, []);
 
-  const cycleTheme = useCallback(() => {
-    pauseAnimationsUntilLeave('login-theme-cycle');
-    if (!isDark) {
-      toggleTheme();
-      if (isUltra) toggleUltra();
-    } else if (!isUltra) {
-      toggleUltra();
-    } else {
-      toggleUltra();
-      toggleTheme();
-    }
-  }, [isDark, isUltra, toggleTheme, toggleUltra]);
-
   const pageClass = useMemo(() => {
     const classes = ['login-app'];
     if (isDark) classes.push('is-dark');
     if (isUltra) classes.push('is-ultra');
+    // Lane and custom themes have no is-dark/is-ultra switch: they carry their
+    // own surfaces, so the login page has to opt into them by name.
+    if (themeName === 'lane') classes.push('is-lane');
+    if (themeName === 'custom') classes.push('is-custom');
     return classes.join(' ');
-  }, [isDark, isUltra]);
+  }, [isDark, isUltra, themeName]);
+
+  const themeVars = useMemo<CSSProperties | undefined>(() => {
+    if (themeName !== 'custom') return undefined;
+    const token = antdThemeConfig.token ?? {};
+    return {
+      '--login-bg': String(token.colorBgLayout ?? customBg),
+      '--login-card': String(token.colorBgContainer ?? customBg),
+      '--login-text': String(token.colorText ?? '#ffffff'),
+      '--login-text-subtle': String(token.colorTextSecondary ?? 'rgba(255, 255, 255, 0.6)'),
+      '--login-border': String(token.colorBorder ?? 'rgba(255, 255, 255, 0.14)'),
+      '--login-accent': accent,
+    } as CSSProperties;
+  }, [themeName, antdThemeConfig, customBg, accent]);
 
   const langMenuItems = useMemo(
     () =>
@@ -141,18 +148,18 @@ export default function LoginPage() {
   return (
     <ConfigProvider theme={antdThemeConfig}>
       {messageContextHolder}
-      <Layout className={pageClass}>
+      <Layout className={pageClass} style={themeVars}>
         <Layout.Content className="login-content">
           <div className="login-toolbar">
             <Button
-              id="login-theme-cycle"
+              id="login-theme-picker"
               shape="circle"
               size="large"
               className="toolbar-btn"
               aria-label={t('menu.theme')}
               title={t('menu.theme')}
               icon={themeIcon}
-              onClick={cycleTheme}
+              onClick={() => setThemePickerOpen(true)}
             />
             <Popover
               rootClassName={isDark ? 'dark' : 'light'}
@@ -261,6 +268,9 @@ export default function LoginPage() {
           </div>
         </Layout.Content>
       </Layout>
+      {/* Same picker as the panel: the login page must offer every fork theme,
+          not only the upstream light/dark/ultra cycle. */}
+      <ThemePickerModal open={themePickerOpen} onClose={() => setThemePickerOpen(false)} />
     </ConfigProvider>
   );
 }

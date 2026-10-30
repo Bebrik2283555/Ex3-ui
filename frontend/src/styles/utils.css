@@ -116,3 +116,13 @@
     animation: none;
   }
 }
+
+/* pauseAnimationsUntilLeave sets this while the pointer is on a theme toggle:
+   without a consuming rule the cycle still smears the old palette across the
+   page during antd's colour transitions. */
+html[data-theme-animations='off'],
+html[data-theme-animations='off'] *,
+html[data-theme-animations='off'] *::before,
+html[data-theme-animations='off'] *::after {
+  transition: none !important;
+}

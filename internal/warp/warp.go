@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -141,6 +142,9 @@ func SaveSettings(s Settings) error {
 	if s.CheckUrl == "" {
 		s.CheckUrl = "https://api.telegram.org/"
 	}
+	if err := validateCheckURL(s.CheckUrl); err != nil {
+		return err
+	}
 	if len(s.Domains) == 0 {
 		s.Domains = DefaultTelegramDomains
 	}
@@ -159,8 +163,8 @@ func SaveSettings(s Settings) error {
 	if s.AutoRotate {
 		autoRotateInt = 1
 	}
-	envContent := fmt.Sprintf("MAX_LATENCY=%d\nCHECK_INTERVAL=%d\nCHECK_URL=%q\nAUTO_ROTATE=%d\n",
-		s.Timeout, s.CheckInterval, s.CheckUrl, autoRotateInt)
+	envContent := fmt.Sprintf("MAX_LATENCY=%d\nCHECK_INTERVAL=%d\nCHECK_URL=%s\nAUTO_ROTATE=%d\n",
+		s.Timeout, s.CheckInterval, shellQuote(s.CheckUrl), autoRotateInt)
 	_ = os.WriteFile(envFile, []byte(envContent), 0o644)
 
 	timerContent := fmt.Sprintf("[Unit]\nDescription=Run Cloudflare WARP Tunnel Watchdog periodically\n\n[Timer]\nOnBootSec=1min\nOnUnitActiveSec=%dmin\nAccuracySec=10s\n\n[Install]\nWantedBy=timers.target\n", s.CheckInterval)
@@ -197,6 +201,26 @@ func SaveSettings(s Settings) error {
 }
 
 var errUnsupported = errors.New("warp is only supported on Linux")
+
+// validateCheckURL keeps the watchdog target an absolute http(s) URL and
+// rejects the control characters that would corrupt the sourced env file.
+func validateCheckURL(raw string) error {
+	if raw == "" || strings.ContainsAny(raw, "\r\n\x00") {
+		return errors.New("warp: check URL must be a single-line http(s) URL")
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return errors.New("warp: check URL must be an absolute http(s) URL")
+	}
+	return nil
+}
+
+// shellQuote renders a value for the single-quoted assignment in warp.env,
+// which the watchdog sources with ".". Double quotes would not stop command
+// substitution inside the URL.
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
+}
 
 func requireLinux() error {
 	if runtime.GOOS != "linux" {

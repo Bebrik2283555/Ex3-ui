@@ -12,7 +12,9 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/amneziawgnet"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	xuilogger "github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/sidecar"
 	"github.com/mhsanaei/3x-ui/v3/internal/testpg"
+	"github.com/mhsanaei/3x-ui/v3/internal/tuic"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 
@@ -633,6 +635,73 @@ func TestInjectAmneziawgnetSocks_SniffingRouteOnly(t *testing.T) {
 	}
 	if want := []string{"http", "tls", "quic", "fakedns"}; !slices.Equal(sniffing.DestOverride, want) {
 		t.Fatalf("destOverride = %v, want %v", sniffing.DestOverride, want)
+	}
+}
+
+// Sidecar TUNs carry ordinary client traffic, so the sniffed SNI must replace
+// the dial target: that is what lets SmartDNS hosts pins apply when the phone
+// resolved DNS itself and handed us a bare IP.
+func TestInjectSidecarTun_SniffingReplacesDestination(t *testing.T) {
+	cfg := &xray.Config{}
+	injectSidecarTun(cfg, &model.Inbound{Id: 7, Tag: "in-7-tcp", Protocol: model.QWDTT},
+		sidecar.Instance{InboundID: 7, Tag: "in-7-tcp", Protocol: model.QWDTT, TunName: "wdtt0"})
+	if len(cfg.InboundConfigs) != 1 {
+		t.Fatalf("expected 1 injected tun inbound, got %d", len(cfg.InboundConfigs))
+	}
+	var sniffing struct {
+		Enabled      bool     `json:"enabled"`
+		DestOverride []string `json:"destOverride"`
+		RouteOnly    bool     `json:"routeOnly"`
+	}
+	sc := cfg.InboundConfigs[0]
+	if err := json.Unmarshal(sc.Sniffing, &sniffing); err != nil {
+		t.Fatalf("tun inbound must carry a sniffing block, got %q: %v", sc.Sniffing, err)
+	}
+	if !sniffing.Enabled || sniffing.RouteOnly {
+		t.Fatalf("sidecar sniffing must be enabled without routeOnly, got %+v", sniffing)
+	}
+	if want := []string{"http", "tls", "quic"}; !slices.Equal(sniffing.DestOverride, want) {
+		t.Fatalf("destOverride = %v, want %v", sniffing.DestOverride, want)
+	}
+}
+
+// An operator-supplied block wins over the protocol default, and an explicit
+// disable leaves the bridge without sniffing instead of silently re-enabling.
+func TestInjectSidecarTun_OperatorSniffingWins(t *testing.T) {
+	custom := `{"enabled":true,"destOverride":["tls"],"routeOnly":true}`
+	cfg := &xray.Config{}
+	injectSidecarTun(cfg, &model.Inbound{Id: 8, Tag: "in-8-tcp", Protocol: model.CSQTT, Sniffing: custom},
+		sidecar.Instance{InboundID: 8, Tag: "in-8-tcp", Protocol: model.CSQTT, TunName: "csqtt1"})
+	if got := string(cfg.InboundConfigs[0].Sniffing); got != custom {
+		t.Fatalf("bridge must use the operator's block, got %s", got)
+	}
+
+	cfg = &xray.Config{}
+	injectSidecarTun(cfg, &model.Inbound{Id: 9, Tag: "in-9-tcp", Protocol: model.CSQTT, Sniffing: `{"enabled":false}`},
+		sidecar.Instance{InboundID: 9, Tag: "in-9-tcp", Protocol: model.CSQTT, TunName: "csqtt1"})
+	if len(cfg.InboundConfigs[0].Sniffing) != 0 {
+		t.Fatalf("disabled sniffing must stay off, got %s", cfg.InboundConfigs[0].Sniffing)
+	}
+}
+
+func TestBridgeSniffingFallsBackOnBlankOrBrokenBlock(t *testing.T) {
+	const fallback = `{"enabled":true,"destOverride":["http","tls","quic"],"routeOnly":false}`
+	for _, raw := range []string{"", "  ", "null", `{`, `{"destOverride":["tls"]}`} {
+		if got := string(bridgeSniffing(raw, fallback)); got != fallback {
+			t.Fatalf("raw %q: expected the protocol default, got %s", raw, got)
+		}
+	}
+}
+
+func TestInjectTuicRelay_UsesOperatorSniffing(t *testing.T) {
+	custom := `{"enabled":true,"destOverride":["tls"],"routeOnly":false}`
+	cfg := &xray.Config{}
+	inst := tuic.Instance{Id: 11, Tag: "tuic-in-11", Sniffing: custom}
+	if err := injectTuicRelay(cfg, []tuic.Instance{inst}); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(cfg.InboundConfigs[0].Sniffing); got != custom {
+		t.Fatalf("tuic relay must use the operator's block, got %s", got)
 	}
 }
 

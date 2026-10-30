@@ -4,8 +4,8 @@ package sidecar
 
 import "github.com/mhsanaei/3x-ui/v3/internal/database/model"
 
-// EnsureRoutingForInbounds is a no-op outside Linux: the sidecar binaries and
-// the policy-routing tools are Linux-only.
+// EnsureRoutingForInbounds is a no-op outside Linux: the cores and the routing
+// tools do not exist there, yet callers invoke it unconditionally.
 func EnsureRoutingForInbounds(_ []*model.Inbound) {}
 
 // EnsureRouting is a no-op outside Linux.

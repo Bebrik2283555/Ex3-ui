@@ -55,6 +55,54 @@
   background: radial-gradient(ellipse at 25% 20%, #0a0a1a 0%, #000 60%);
 }
 
+/* Lane is the panel's paper theme: warm surfaces, near-black type, no glass. */
+.login-app.is-lane {
+  --bg-card: #fbf8f1;
+  --bg-card-solid: #fbf8f1;
+  --color-text: #141414;
+  --color-text-subtle: rgba(20, 20, 20, 0.68);
+  --color-accent: #141414;
+  --color-border: rgba(20, 20, 20, 0.09);
+  --shadow-card: 0 1px 2px rgba(20, 20, 20, 0.04), 0 18px 50px rgba(20, 20, 20, 0.1);
+  --blob-1: rgba(20, 20, 20, 0.05);
+  --blob-2: rgba(20, 20, 20, 0.04);
+  --blob-3: rgba(20, 20, 20, 0.035);
+  --blob-4: rgba(20, 20, 20, 0.025);
+  --blob-5: rgba(20, 20, 20, 0.03);
+  --grid-color: rgba(20, 20, 20, 0.045);
+  background: #f3efe6;
+}
+
+.login-app.is-lane .login-card {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Custom derives every surface from the operator's base and accent colours;
+   the tokens are injected as --login-* variables on the layout. */
+.login-app.is-custom {
+  --bg-card: color-mix(in srgb, var(--login-card) 82%, transparent);
+  --bg-card-solid: var(--login-card);
+  --color-text: var(--login-text);
+  --color-text-subtle: var(--login-text-subtle);
+  --color-accent: var(--login-accent);
+  --color-border: var(--login-border);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08), 0 18px 50px rgba(0, 0, 0, 0.24);
+  --blob-1: color-mix(in srgb, var(--login-accent) 34%, transparent);
+  --blob-2: color-mix(in srgb, var(--login-accent) 26%, transparent);
+  --blob-3: color-mix(in srgb, var(--login-accent) 20%, transparent);
+  --blob-4: color-mix(in srgb, var(--login-accent) 14%, transparent);
+  --blob-5: color-mix(in srgb, var(--login-accent) 18%, transparent);
+  --grid-color: color-mix(in srgb, var(--login-text) 7%, transparent);
+  background: radial-gradient(
+    ellipse at 25% 20%,
+    color-mix(in srgb, var(--login-accent) 16%, var(--login-bg)) 0%,
+    var(--login-bg) 65%
+  );
+}
+
+/* Both themes replace the indigo-pink branding with their own palette. */
+
 .login-app::before,
 .login-app::after {
   content: '';
@@ -414,4 +462,20 @@
 
 .login-sponsor {
   margin-top: 20px;
+}
+
+/* Lane and custom replace the indigo-pink branding with their own palette.
+   These come last so they win over the is-dark/is-ultra blocks above. */
+.login-app:is(.is-lane, .is-custom) .brand-name {
+  background: none;
+  color: var(--color-text);
+  -webkit-text-fill-color: currentColor;
+}
+
+.login-app:is(.is-lane, .is-custom) .brand-accent {
+  background: var(--color-accent);
+}
+
+.login-app:is(.is-lane, .is-custom) .login-card::before {
+  background: linear-gradient(135deg, var(--color-border), transparent 45%, var(--color-accent));
 }

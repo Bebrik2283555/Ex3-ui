@@ -139,19 +139,29 @@ func (s *UserService) UpdateUser(id int, username string, password string) error
 		return err
 	}
 
-	if twoFactorEnable {
-		_ = s.settingService.SetTwoFactorEnable(false)
-		_ = s.settingService.SetTwoFactorToken("")
-	}
-
-	return db.Model(model.User{}).
+	if err := db.Model(model.User{}).
 		Where("id = ?", id).
 		Updates(map[string]any{
 			"username":    username,
 			"password":    hashedPassword,
 			"login_epoch": gorm.Expr("login_epoch + 1"),
 		}).
-		Error
+		Error; err != nil {
+		return err
+	}
+
+	// The new password replaces the old credential, so the second factor may
+	// drop with it - but only after the write landed: clearing 2FA first left a
+	// failed password update with the old password and no TOTP.
+	if twoFactorEnable {
+		if err := s.settingService.SetTwoFactorEnable(false); err != nil {
+			return err
+		}
+		if err := s.settingService.SetTwoFactorToken(""); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *UserService) UpdateFirstUser(username string, password string) error {

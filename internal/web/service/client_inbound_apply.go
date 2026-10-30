@@ -395,7 +395,10 @@ func (s *ClientService) AddInboundClient(inboundSvc *InboundService, data *model
 		return false, err
 	}
 
-	interfaceClients := settings["clients"].([]any)
+	interfaceClients, ok := settings["clients"].([]any)
+	if !ok {
+		return false, common.NewError("Inbound Settings Have No Clients:", data.Id)
+	}
 	nowTs := time.Now().Unix() * 1000
 	for i := range interfaceClients {
 		if cm, ok := interfaceClients[i].(map[string]any); ok {
@@ -735,7 +738,10 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 		return false, err
 	}
 
-	interfaceClients := settings["clients"].([]any)
+	interfaceClients, ok := settings["clients"].([]any)
+	if !ok {
+		return false, common.NewError("Inbound Settings Have No Clients:", data.Id)
+	}
 
 	oldInbound, err := inboundSvc.GetInbound(data.Id)
 	if err != nil {
@@ -1369,10 +1375,16 @@ func (s *ClientService) SetClientTelegramUserID(inboundSvc *InboundService, traf
 	if err != nil {
 		return false, err
 	}
-	clients := settings["clients"].([]any)
+	clients, ok := settings["clients"].([]any)
+	if !ok {
+		return false, common.NewError("Inbound Settings Have No Clients:", inbound.Id)
+	}
 	var newClients []any
 	for client_index := range clients {
-		c := clients[client_index].(map[string]any)
+		c, isMap := clients[client_index].(map[string]any)
+		if !isMap {
+			continue
+		}
 		if c["email"] == clientEmail {
 			c["tgId"] = tgId
 			c["updated_at"] = time.Now().Unix() * 1000

@@ -2687,7 +2687,7 @@
     },
     "dnsresolver": {
       "tabDnsResolver": "SmartDNS",
-      "desc": "Automatically resolve geo-blocked domains via SmartDNS and update hosts file to bypass geo-restrictions.",
+      "desc": "Automatically detect IPs of blocked services via SmartDNS and write them to hosts to bypass geo-restrictions; requires sniffing enabled on the connection.",
       "statusCard": "SmartDNS Status",
       "autoUpdateLabel": "Auto update",
       "statusRunning": "Resolving...",

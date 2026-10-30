@@ -24,7 +24,7 @@ import {
   formValuesToWirePayload,
   withoutClients,
 } from '@/lib/xray/inbound-form-adapter';
-import { createDefaultInboundSettings } from '@/lib/xray/inbound-defaults';
+import { createDefaultInboundSettings, defaultBridgeSniffing } from '@/lib/xray/inbound-defaults';
 import { generateAwgObfuscation } from '@/lib/xray/amneziawg-obfuscation';
 import { composeInboundTag, isAutoInboundTag, type InboundTagInput } from '@/lib/xray/inbound-tag';
 import {
@@ -608,6 +608,10 @@ export default function InboundFormModal({
       const next = getV('protocol') as string;
       const settings = createDefaultInboundSettings(next) ?? undefined;
       setV('settings', settings);
+      // Bridge-served protocols sniff inside Xray even without a stored block,
+      // so the tab opens on the values the backend already applies.
+      const bridgeSniffing = defaultBridgeSniffing(next);
+      if (bridgeSniffing) setV('sniffing', bridgeSniffing);
       if (!NODE_ELIGIBLE_PROTOCOLS[next]) {
         setV('nodeId', null);
       }

@@ -390,9 +390,15 @@ export function pauseAnimationsUntilLeave(elementId: string): void {
     document.documentElement.removeAttribute('data-theme-animations');
     el.removeEventListener('mouseleave', restore);
     el.removeEventListener('touchend', restore);
+    // A keyboard activation fires click without mouseleave/touchend: without
+    // these the attribute would stay set and disable every transition.
+    el.removeEventListener('blur', restore);
+    el.removeEventListener('keyup', restore);
   };
   el.addEventListener('mouseleave', restore);
   el.addEventListener('touchend', restore);
+  el.addEventListener('blur', restore);
+  el.addEventListener('keyup', restore);
 }
 
 interface ThemeContextValue {

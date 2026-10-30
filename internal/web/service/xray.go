@@ -773,11 +773,35 @@ func injectMtprotoEgress(cfg *xray.Config, inbound *model.Inbound) {
 }
 
 // Sidecar TUNs are kernel sinks for the qWDTT/CSQTT client interfaces. The
-// settings mirror the AmneziaWG bridge so the router can match domains.
+// settings mirror the AmneziaWG bridge so the router can match domains, but
+// routeOnly stays false here: sidecar traffic is ordinary client traffic, so
+// replacing the dial target with the sniffed SNI is what lets SmartDNS hosts
+// pins apply even when the client resolved DNS itself.
 const (
 	sidecarEgressTunSettingsFmt = `{"name":"%s","mtu":1280,"gateway":["%s"],"userLevel":0}`
-	sidecarEgressSniffing       = `{"enabled":true,"destOverride":["http","tls","quic"],"routeOnly":true}`
+	sidecarEgressSniffing       = `{"enabled":true,"destOverride":["http","tls","quic"],"routeOnly":false}`
 )
+
+// bridgeSniffing picks the sniffing block for a generated bridge: the
+// operator's own inbound setting when the row carries one, otherwise the
+// protocol default. Only an explicit {"enabled":false} turns it off.
+func bridgeSniffing(raw, fallback string) json_util.RawMessage {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == "null" {
+		return json_util.RawMessage(fallback)
+	}
+	var parsed struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if err := json.Unmarshal([]byte(trimmed), &parsed); err != nil || parsed.Enabled == nil {
+		logger.Warning("sniffing: unparsable inbound block, using the protocol default:", err)
+		return json_util.RawMessage(fallback)
+	}
+	if !*parsed.Enabled {
+		return nil
+	}
+	return json_util.RawMessage(trimmed)
+}
 
 // injectSidecarEgress wires one opted-in sidecar inbound into Xray. qWDTT and
 // CSQTT use a TUN device (the kernel policy rules live in internal/sidecar),
@@ -817,7 +841,7 @@ func injectSidecarTun(cfg *xray.Config, inbound *model.Inbound, inst sidecar.Ins
 	cfg.InboundConfigs = append(cfg.InboundConfigs, xray.InboundConfig{
 		Protocol: "tun",
 		Settings: json_util.RawMessage(settings),
-		Sniffing: json_util.RawMessage(sidecarEgressSniffing),
+		Sniffing: bridgeSniffing(inbound.Sniffing, sidecarEgressSniffing),
 		Tag:      tag,
 	})
 }
@@ -840,7 +864,7 @@ func injectSidecarSocks(cfg *xray.Config, inbound *model.Inbound, inst sidecar.I
 		Port:     inst.RouteXrayPort,
 		Protocol: "socks",
 		Settings: json_util.RawMessage(mtprotoEgressSocksSettings),
-		Sniffing: json_util.RawMessage(sidecarEgressSniffing),
+		Sniffing: bridgeSniffing(inbound.Sniffing, sidecarEgressSniffing),
 		Tag:      tag,
 	})
 }
@@ -1003,7 +1027,7 @@ func injectTuicRelay(cfg *xray.Config, instances []tuic.Instance) error {
 			TuicRelay:     true,
 			TuicInboundID: inst.Id,
 			Settings:      json_util.RawMessage(settings),
-			Sniffing:      json_util.RawMessage(tuicEgressSniffingSettings),
+			Sniffing:      bridgeSniffing(inst.Sniffing, tuicEgressSniffingSettings),
 			Tag:           inst.Tag,
 		})
 	}
@@ -1457,27 +1481,36 @@ func stripDisabledRules(routerCfg json_util.RawMessage) json_util.RawMessage {
 	return out
 }
 
-// GetXrayTraffic fetches the current traffic statistics from the running Xray process.
-func (s *XrayService) GetXrayTraffic() ([]*xray.Traffic, []*xray.ClientTraffic, error) {
+// GetXrayTraffic fetches the current traffic statistics from the running Xray
+// process, together with the counter baselines it replaced.
+func (s *XrayService) GetXrayTraffic() ([]*xray.Traffic, []*xray.ClientTraffic, xray.TrafficBaseline, error) {
 	process := currentXrayProcess()
 	if process == nil || !process.IsRunning() {
 		err := ErrXrayNotRunning
 		logger.Debug("Attempted to fetch Xray traffic, but Xray is not running:", err)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	apiPort := process.GetAPIPort()
-	if err := s.xrayAPI.Init(apiPort); err != nil {
-		logger.Debug("Failed to initialize Xray API:", err)
-		return nil, nil, err
-	}
-	defer s.xrayAPI.Close()
-
-	traffic, clientTraffic, err := s.xrayAPI.GetTraffic()
+	var traffic []*xray.Traffic
+	var clientTraffic []*xray.ClientTraffic
+	var baseline xray.TrafficBaseline
+	err := s.xrayAPI.WithClient(apiPort, func(api *xray.XrayAPI) error {
+		var err error
+		api.SetAPITag(process.GetAPITag())
+		traffic, clientTraffic, baseline, err = api.GetTrafficWithBaseline()
+		return err
+	})
 	if err != nil {
 		logger.Debug("Failed to fetch Xray traffic:", err)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return traffic, clientTraffic, nil
+	return traffic, clientTraffic, baseline, nil
+}
+
+// RestoreXrayTrafficBaseline hands back the baselines of a batch that could not
+// be written, so the next poll reports the same interval instead of losing it.
+func (s *XrayService) RestoreXrayTrafficBaseline(baseline xray.TrafficBaseline) {
+	s.xrayAPI.RestoreTrafficBaseline(baseline)
 }
 
 // GetOnlineUsers returns connection-based online users (email + source IPs)
@@ -1495,13 +1528,12 @@ func (s *XrayService) GetOnlineUsers() ([]xray.OnlineUser, bool, error) {
 	if process.OnlineAPISupport() == xray.OnlineAPIUnsupported {
 		return nil, false, nil
 	}
-	if err := s.xrayAPI.Init(process.GetAPIPort()); err != nil {
-		logger.Debug("Failed to initialize Xray API:", err)
-		return nil, false, err
-	}
-	defer s.xrayAPI.Close()
-
-	users, err := s.xrayAPI.GetOnlineUsers()
+	var users []xray.OnlineUser
+	err := s.xrayAPI.WithClient(process.GetAPIPort(), func(api *xray.XrayAPI) error {
+		var err error
+		users, err = api.GetOnlineUsers()
+		return err
+	})
 	if err != nil {
 		if xray.IsUnimplementedErr(err) {
 			process.SetOnlineAPISupport(xray.OnlineAPIUnsupported)
@@ -1541,24 +1573,24 @@ func (s *XrayService) GetBalancersStatus(tags []string) ([]BalancerStatus, error
 		}
 		return statuses, nil
 	}
-	if err := s.xrayAPI.Init(process.GetAPIPort()); err != nil {
-		return nil, err
-	}
-	defer s.xrayAPI.Close()
-
-	for _, tag := range tags {
-		info, err := s.xrayAPI.GetBalancerInfo(tag)
-		if err != nil {
-			logger.Debug("get balancer info [", tag, "] failed:", err)
-			statuses = append(statuses, BalancerStatus{Tag: tag})
-			continue
+	if err := s.xrayAPI.WithClient(process.GetAPIPort(), func(api *xray.XrayAPI) error {
+		for _, tag := range tags {
+			info, err := api.GetBalancerInfo(tag)
+			if err != nil {
+				logger.Debug("get balancer info [", tag, "] failed:", err)
+				statuses = append(statuses, BalancerStatus{Tag: tag})
+				continue
+			}
+			statuses = append(statuses, BalancerStatus{
+				Tag:      tag,
+				Running:  true,
+				Override: info.Override,
+				Selected: info.Selected,
+			})
 		}
-		statuses = append(statuses, BalancerStatus{
-			Tag:      tag,
-			Running:  true,
-			Override: info.Override,
-			Selected: info.Selected,
-		})
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 	return statuses, nil
 }
@@ -1573,11 +1605,12 @@ func (s *XrayService) OverrideBalancer(tag, target string) error {
 	if process == nil || !process.IsRunning() {
 		return ErrXrayNotRunning
 	}
-	if err := s.xrayAPI.Init(process.GetAPIPort()); err != nil {
+	if err := s.xrayAPI.WithClient(process.GetAPIPort(), func(api *xray.XrayAPI) error {
+		return balancerOverrides.set(process, api, tag, target)
+	}); err != nil {
 		return err
 	}
-	defer s.xrayAPI.Close()
-	return balancerOverrides.set(process, &s.xrayAPI, tag, target)
+	return nil
 }
 
 // TestRoute asks the running core which outbound its router picks for the
@@ -1587,11 +1620,15 @@ func (s *XrayService) TestRoute(req xray.RouteTestRequest) (*xray.RouteTestResul
 	if process == nil || !process.IsRunning() {
 		return nil, ErrXrayNotRunning
 	}
-	if err := s.xrayAPI.Init(process.GetAPIPort()); err != nil {
+	var result *xray.RouteTestResult
+	if err := s.xrayAPI.WithClient(process.GetAPIPort(), func(api *xray.XrayAPI) error {
+		var err error
+		result, err = api.TestRoute(req)
+		return err
+	}); err != nil {
 		return nil, err
 	}
-	defer s.xrayAPI.Close()
-	return s.xrayAPI.TestRoute(req)
+	return result, nil
 }
 
 // RestartXray reconciles the running Xray process with the current desired
@@ -1645,7 +1682,12 @@ func (s *XrayService) RestartXray(isForce bool) error {
 		}
 		invalidateTuicRelayReadiness(process.GetConfig())
 		invalidateTuicRelayReadiness(xrayConfig)
-		_ = process.Stop()
+		// A core that survived the stop still owns its ports, so the new one
+		// would fail to bind after Start() had already reported success.
+		if err := process.Stop(); err != nil {
+			xrayState.holdBack("stop failed: " + err.Error())
+			return fmt.Errorf("stop xray before restart: %w", err)
+		}
 	} else if conflicts := bindConflicts(xrayConfig, nil); len(conflicts) > 0 {
 		// Nothing is running to protect and the core is the authority on what it
 		// can bind: start it and let its own error name the port it lost.
@@ -1655,7 +1697,7 @@ func (s *XrayService) RestartXray(isForce bool) error {
 	invalidateTuicRelayReadiness(xrayConfig)
 	process = xray.NewProcess(xrayConfig)
 	xrayState.replace(process)
-	s.xrayAPI.StatsLastValues = nil
+	s.xrayAPI.ResetStats()
 	err = process.Start()
 	if err != nil {
 		return err

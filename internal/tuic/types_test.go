@@ -16,6 +16,7 @@ func TestInstanceFromInbound(t *testing.T) {
 			Port:     8443,
 			Listen:   "0.0.0.0",
 			Protocol: model.TUIC,
+			Sniffing: `{"enabled":true,"destOverride":["tls"],"routeOnly":false}`,
 			Settings: `{"certificate":"/etc/cert.pem","private_key":"/etc/key.pem","congestion_control":"bbr","alpn":["h3"],"clients":[{"uuid":"11111111-2222-3333-4444-555555555555","password":"pass1","email":"user1@test","enable":true}]}`,
 		}
 		inst, ok := InstanceFromInbound(ib)
@@ -24,6 +25,9 @@ func TestInstanceFromInbound(t *testing.T) {
 		}
 		if inst.Id != 10 || inst.Port != 8443 || inst.Tag != "tuic-in-1" {
 			t.Fatalf("unexpected inst header fields: %+v", inst)
+		}
+		if inst.Sniffing != ib.Sniffing {
+			t.Fatalf("relay must carry the inbound sniffing block, got %q", inst.Sniffing)
 		}
 		if inst.Certificate != "/etc/cert.pem" || inst.PrivateKey != "/etc/key.pem" {
 			t.Fatalf("unexpected cert/key: %s / %s", inst.Certificate, inst.PrivateKey)

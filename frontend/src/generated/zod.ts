@@ -15,6 +15,9 @@ export type ProcessState = z.infer<typeof ProcessStateSchema>;
 export const ProtocolSchema = z.string();
 export type Protocol = z.infer<typeof ProtocolSchema>;
 
+export const TrafficBaselineSchema = z.record(z.string(), z.number().int());
+export type TrafficBaseline = z.infer<typeof TrafficBaselineSchema>;
+
 export const addrFamilySchema = z.number().int();
 export type addrFamily = z.infer<typeof addrFamilySchema>;
 

@@ -1,6 +1,7 @@
 package sidecar
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -8,254 +9,268 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 )
 
+// Child stop windows, per platform and in total.
 const (
-	gracefulStopTimeout = 5 * time.Second
-	forceStopTimeout    = 2 * time.Second
-	maxLogLines         = 500
+	lineLimit     = 500
+	stopGraceTime = 5 * time.Second
+	stopKillTime  = 2 * time.Second
 )
 
-// ring is a bounded, concurrency-safe line buffer.
-type ring struct {
-	mu   sync.Mutex
-	rows []string
-}
+var (
+	errProcNotRunning = errors.New("service is not running")
+	errProcRunning    = errors.New("service is already running")
+	errProcStopTimed  = errors.New("timed out waiting for process to stop")
+)
 
-func (r *ring) push(line string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if len(r.rows) >= maxLogLines {
-		copy(r.rows, r.rows[len(r.rows)-maxLogLines+1:])
-		r.rows = r.rows[:maxLogLines-1]
-	}
-	r.rows = append(r.rows, line)
-}
-
-func (r *ring) last() string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if len(r.rows) == 0 {
-		return ""
-	}
-	return r.rows[len(r.rows)-1]
-}
-
-func (r *ring) all(max int) []string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if max <= 0 || len(r.rows) <= max {
-		out := make([]string, len(r.rows))
-		copy(out, r.rows)
-		return out
-	}
-	out := make([]string, max)
-	copy(out, r.rows[len(r.rows)-max:])
-	return out
-}
-
-// logWriter funnels the child's stdout/stderr into the ring buffer and the
-// panel logger.
-type logWriter struct {
-	ring *ring
-	name string
-	buf  string
-	mu   sync.Mutex
-}
-
-func (w *logWriter) Write(p []byte) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.buf += string(p)
-	for {
-		i := strings.IndexByte(w.buf, '\n')
-		if i < 0 {
-			break
-		}
-		w.push(strings.TrimRight(strings.TrimSpace(w.buf[:i]), "\r"))
-		w.buf = w.buf[i+1:]
-	}
-	return len(p), nil
-}
-
-func (w *logWriter) push(line string) {
-	w.ring.push(line)
-	if line == "" || strings.Contains(line, "] TRACE:") || strings.Contains(line, "] DEBUG:") {
-		return
-	}
-	logger.Infof("sidecar[%s]: %s", w.name, line)
-}
-
-func (w *logWriter) flush() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if trimmed := strings.TrimSpace(w.buf); trimmed != "" {
-		w.push(trimmed)
-		w.buf = ""
-	}
-}
-
-// Proc supervises one sidecar process.
+// Proc supervises the single child process of one inbound and keeps the last
+// lines it printed. The captured buffer survives a restart of the child.
 type Proc struct {
 	name string
+	out  *lineBuffer
 
-	startMu sync.Mutex
-	mu      sync.RWMutex
-	cmd     *exec.Cmd
-	done    chan struct{}
-	log     *logWriter
-	lines   *ring
-
-	exitErr         error
-	intentionalStop atomic.Bool
+	mu       sync.Mutex
+	cmd      *exec.Cmd
+	done     chan struct{}
+	running  bool
+	stopping bool
 }
 
-// NewProc returns an idle supervised process for the given label.
+// NewProc returns an idle supervised process for the given log label.
 func NewProc(name string) *Proc {
-	lines := &ring{}
-	return &Proc{
-		name:  name,
-		log:   &logWriter{ring: lines, name: name},
-		lines: lines,
-	}
+	return &Proc{name: name, out: newLineBuffer(name)}
 }
 
-// IsRunning reports whether the process is currently alive.
+// IsRunning reports whether a child was spawned and has not exited yet.
 func (p *Proc) IsRunning() bool {
-	p.mu.RLock()
-	cmd, done := p.cmd, p.done
-	p.mu.RUnlock()
-	if cmd == nil || cmd.Process == nil {
-		return false
-	}
-	if done != nil {
-		select {
-		case <-done:
-			return false
-		default:
-		}
-	}
-	return true
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.running
 }
 
-// LastLine returns the most recent captured log line.
-func (p *Proc) LastLine() string { return p.lines.last() }
+// LastLine returns the most recently captured line, or an empty string.
+func (p *Proc) LastLine() string { return p.out.last() }
 
-// Lines returns up to max recent captured log lines.
-func (p *Proc) Lines(max int) []string { return p.lines.all(max) }
+// Lines returns a snapshot of the captured lines, oldest first. A max of zero
+// or less returns everything retained.
+func (p *Proc) Lines(max int) []string { return p.out.snapshot(max) }
 
-// Signal delivers a Unix signal to the running process.
+// Signal forwards a signal to the live child.
 func (p *Proc) Signal(sig syscall.Signal) error {
-	p.mu.RLock()
+	p.mu.Lock()
 	cmd := p.cmd
-	p.mu.RUnlock()
-	if cmd == nil || cmd.Process == nil {
-		return errors.New("service is not running")
+	running := p.running
+	p.mu.Unlock()
+	if !running || cmd == nil || cmd.Process == nil {
+		return errProcNotRunning
 	}
-	if err := cmd.Process.Signal(sig); err != nil {
-		if errors.Is(err, os.ErrProcessDone) {
-			return errors.New("service is not running")
-		}
+	return cmd.Process.Signal(sig)
+}
+
+// Start spawns the child with the given argv. stdout and stderr share one
+// capture stream; the child inherits the panel's environment plus extraEnv and
+// working directory and reads end-of-file on stdin.
+func (p *Proc) Start(bin string, args []string, extraEnv ...string) error {
+	p.mu.Lock()
+	if p.running {
+		p.mu.Unlock()
+		return errProcRunning
+	}
+	p.mu.Unlock()
+
+	cmd := exec.CommandContext(context.Background(), bin, args...)
+	if len(extraEnv) > 0 {
+		// Credentials are handed over in the environment instead of argv, which
+		// any local user can read from /proc/<pid>/cmdline.
+		cmd.Env = append(os.Environ(), extraEnv...)
+	}
+	cmd.Stdout = p.out
+	cmd.Stderr = p.out
+	if err := cmd.Start(); err != nil {
 		return err
 	}
-	return nil
-}
 
-// Start launches the binary with the given arguments.
-func (p *Proc) Start(bin string, args []string) error {
-	p.startMu.Lock()
-	defer p.startMu.Unlock()
-	if p.IsRunning() {
-		return errors.New("service is already running")
-	}
-	cmd := exec.CommandContext(context.Background(), bin, args...)
-	cmd.Stdout = p.log
-	cmd.Stderr = p.log
 	done := make(chan struct{})
 	p.mu.Lock()
 	p.cmd = cmd
 	p.done = done
-	p.exitErr = nil
+	p.running = true
+	p.stopping = false
 	p.mu.Unlock()
-	p.intentionalStop.Store(false)
-	if err := cmd.Start(); err != nil {
-		close(done)
-		p.mu.Lock()
-		p.cmd = nil
-		p.mu.Unlock()
-		return err
-	}
-	logger.Infof("sidecar: %s started (pid %d)", p.name, cmd.Process.Pid)
-	go p.wait(cmd, done)
+
+	go p.watch(cmd, done)
 	return nil
 }
 
-func (p *Proc) wait(cmd *exec.Cmd, done chan struct{}) {
-	defer close(done)
-	err := cmd.Wait()
-	p.log.flush()
-	if err == nil || p.intentionalStop.Load() {
-		return
-	}
-	logger.Errorf("sidecar: %s process exited: %v", p.name, err)
-	p.mu.Lock()
-	p.exitErr = err
-	p.mu.Unlock()
-}
-
-// Stop terminates the process gracefully, falling back to a kill.
+// Stop ends the child: TERM then KILL after the grace window on Unix, an
+// immediate kill on Windows. Both platforms wait for the exit notification.
 func (p *Proc) Stop() error {
-	if !p.IsRunning() {
-		return errors.New("service is not running")
+	p.mu.Lock()
+	cmd := p.cmd
+	done := p.done
+	if !p.running || cmd == nil || done == nil {
+		p.mu.Unlock()
+		return errProcNotRunning
 	}
-	p.intentionalStop.Store(true)
-	p.mu.RLock()
-	cmd, done := p.cmd, p.done
-	p.mu.RUnlock()
-	if cmd == nil || cmd.Process == nil {
-		return errors.New("service is not running")
-	}
+	// Mark the stop intentional before signalling so the watcher cannot log a
+	// crash for it.
+	p.stopping = true
+	p.mu.Unlock()
 
 	if runtime.GOOS == "windows" {
-		if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-			return err
+		_ = cmd.Process.Kill()
+		if !awaitDone(done, stopKillTime) {
+			return errProcStopTimed
 		}
-		return waitForExit(done, forceStopTimeout)
+		return nil
 	}
 
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		if errors.Is(err, os.ErrProcessDone) {
-			return waitForExit(done, forceStopTimeout)
+		// Already gone: only the short window is left to wait for.
+		if !awaitDone(done, stopKillTime) {
+			return errProcStopTimed
 		}
-		return err
+		return nil
 	}
-	if err := waitForExit(done, gracefulStopTimeout); err == nil {
+	if awaitDone(done, stopGraceTime) {
 		logger.Infof("sidecar: %s stopped", p.name)
 		return nil
 	}
-
 	logger.Warningf("sidecar: %s did not stop after SIGTERM, killing", p.name)
-	if err := cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-		return err
+	_ = cmd.Process.Kill()
+	if !awaitDone(done, stopKillTime) {
+		return errProcStopTimed
 	}
-	return waitForExit(done, forceStopTimeout)
+	return nil
 }
 
-func waitForExit(done <-chan struct{}, timeout time.Duration) error {
-	if done == nil {
-		return nil
+// watch reaps the child, publishes the exit and reports an unexpected exit.
+func (p *Proc) watch(cmd *exec.Cmd, done chan struct{}) {
+	err := cmd.Wait()
+	p.out.flush()
+
+	p.mu.Lock()
+	if p.cmd == cmd {
+		p.running = false
 	}
+	stopping := p.stopping
+	p.mu.Unlock()
+	close(done)
+
+	if stopping {
+		return
+	}
+	cause := "exit status 0"
+	if err != nil {
+		cause = err.Error()
+	}
+	logger.Errorf("sidecar: %s process exited: %v", p.name, cause)
+}
+
+func (p *Proc) pid() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.cmd == nil || p.cmd.Process == nil {
+		return 0
+	}
+	return p.cmd.Process.Pid
+}
+
+func awaitDone(done <-chan struct{}, timeout time.Duration) bool {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
 	case <-done:
-		return nil
+		return true
 	case <-timer.C:
-		return errors.New("timed out waiting for process to stop")
+		return false
 	}
+}
+
+// lineBuffer keeps the last lineLimit lines of one child and forwards them to
+// the panel log. Bytes arrive in arbitrary chunks and are split on newlines.
+type lineBuffer struct {
+	name string
+
+	mu      sync.Mutex
+	lines   []string
+	pending []byte
+}
+
+func newLineBuffer(name string) *lineBuffer { return &lineBuffer{name: name} }
+
+func (b *lineBuffer) Write(data []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.pending = append(b.pending, data...)
+	for {
+		idx := bytes.IndexByte(b.pending, '\n')
+		if idx < 0 {
+			break
+		}
+		line := strings.TrimSpace(string(b.pending[:idx]))
+		b.pending = b.pending[idx+1:]
+		b.storeLocked(line)
+	}
+	return len(data), nil
+}
+
+// flush pushes a non-blank trailing fragment as the final line of the run.
+func (b *lineBuffer) flush() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	rest := strings.TrimSpace(string(b.pending))
+	b.pending = nil
+	if rest != "" {
+		b.storeLocked(rest)
+	}
+}
+
+func (b *lineBuffer) storeLocked(line string) {
+	if len(b.lines) >= lineLimit {
+		b.lines = b.lines[1:]
+	}
+	b.lines = append(b.lines, line)
+	if !forwardLogLine(line) {
+		return
+	}
+	logger.Infof("sidecar[%s]: %s", b.name, line)
+}
+
+// forwardLogLine drops the two core log levels the panel never mirrors and
+// empty lines, which are retained but not forwarded.
+func forwardLogLine(line string) bool {
+	if line == "" {
+		return false
+	}
+	return !strings.Contains(line, "] TRACE:") && !strings.Contains(line, "] DEBUG:")
+}
+
+func (b *lineBuffer) last() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.lines) == 0 {
+		return ""
+	}
+	return b.lines[len(b.lines)-1]
+}
+
+func (b *lineBuffer) snapshot(max int) []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.lines) == 0 {
+		return nil
+	}
+	start := 0
+	if max > 0 && max < len(b.lines) {
+		start = len(b.lines) - max
+	}
+	out := make([]string, len(b.lines)-start)
+	copy(out, b.lines[start:])
+	return out
 }

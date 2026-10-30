@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
@@ -59,6 +60,40 @@ type XrayAPI struct {
 	grpcClient           *grpc.ClientConn
 	isConnected          bool
 	StatsLastValues      map[string]int64
+	// apiTag names the API inbound so its own counter is not reported as user
+	// traffic. Empty means the default "api".
+	apiTag string
+	// mu serializes Init/work/Close so overlapping callers on one service
+	// instance cannot close each other's connection or race StatsLastValues.
+	mu sync.Mutex
+}
+
+// WithClient dials the Xray API, runs fn against the connected client and
+// closes it again. The sequence holds the instance lock for its whole duration.
+func (x *XrayAPI) WithClient(apiPort int, fn func(api *XrayAPI) error) error {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if err := x.Init(apiPort); err != nil {
+		return err
+	}
+	defer x.Close()
+	return fn(x)
+}
+
+// SetAPITag tells the stats parser which inbound tag belongs to the API, so a
+// config with a non-default api.tag does not report the API inbound as traffic.
+func (x *XrayAPI) SetAPITag(tag string) {
+	if tag == "" {
+		tag = "api"
+	}
+	x.apiTag = tag
+}
+
+// ResetStats drops the per-name traffic baseline, e.g. after a core restart.
+func (x *XrayAPI) ResetStats() {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	x.StatsLastValues = nil
 }
 
 func getRequiredUserString(user map[string]any, key string) (string, error) {
@@ -101,6 +136,11 @@ func (x *XrayAPI) Init(apiPort int) error {
 		return fmt.Errorf("failed to connect to Xray API: %w", err)
 	}
 
+	// Never drop a previous connection on the floor: its sockets and reconnect
+	// goroutine would leak for the lifetime of the panel.
+	if x.grpcClient != nil {
+		_ = x.grpcClient.Close()
+	}
 	x.grpcClient = conn
 	x.isConnected = true
 	if x.StatsLastValues == nil {
@@ -122,6 +162,7 @@ func (x *XrayAPI) Init(apiPort int) error {
 func (x *XrayAPI) Close() {
 	if x.grpcClient != nil {
 		x.grpcClient.Close()
+		x.grpcClient = nil
 	}
 	x.HandlerServiceClient = nil
 	x.StatsServiceClient = nil
@@ -510,7 +551,7 @@ func localizeNoiseScripts(stream *conf.StreamConfig) {
 // childLuaScriptPath resolves a relative Lua script the way the xray child does: it shares the
 // panel's working directory, then looks in its own bin folder instead of the panel's.
 func childLuaScriptPath(script string) string {
-	if script == "" || filepath.IsAbs(script) {
+	if script == "" || filepath.IsAbs(script) || !filepath.IsLocal(script) {
 		return script
 	}
 	if _, err := platform.ResolveLuaFile(script); err == nil {
@@ -864,6 +905,12 @@ func (x *XrayAPI) RemoveUser(inboundTag, email string) error {
 	return nil
 }
 
+// TrafficBaseline holds the counter values one GetTraffic call replaced. A
+// caller that could not persist the deltas hands it back with
+// RestoreTrafficBaseline, so the next poll reports the same interval again
+// instead of silently dropping it.
+type TrafficBaseline map[string]int64
+
 // GetTraffic queries traffic statistics from the Xray core and reports what
 // accrued since the previous call; the counters themselves are never reset.
 // The first call of a process only records baselines, since it may be reading
@@ -872,27 +919,35 @@ func (x *XrayAPI) RemoveUser(inboundTag, email string) error {
 // and a counter that moved backwards because the core restarted both count
 // from zero, so no client's traffic is dropped for a whole polling interval.
 func (x *XrayAPI) GetTraffic() ([]*Traffic, []*ClientTraffic, error) {
+	traffics, clientTraffics, _, err := x.GetTrafficWithBaseline()
+	return traffics, clientTraffics, err
+}
+
+// GetTrafficWithBaseline is GetTraffic plus the values it overwrote, so a
+// failed database write can be retried against the same interval.
+func (x *XrayAPI) GetTrafficWithBaseline() ([]*Traffic, []*ClientTraffic, TrafficBaseline, error) {
 	if x.grpcClient == nil {
-		return nil, nil, common.NewError("xray api is not initialized")
+		return nil, nil, nil, common.NewError("xray api is not initialized")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	if x.StatsServiceClient == nil {
-		return nil, nil, common.NewError("xray StatusServiceClient is not initialized")
+		return nil, nil, nil, common.NewError("xray StatusServiceClient is not initialized")
 	}
 
 	resp, err := (*x.StatsServiceClient).QueryStats(ctx, &statsService.QueryStatsRequest{Reset_: false})
 	if err != nil {
 		logger.Debug("Failed to query Xray stats:", err)
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	tagTrafficMap := make(map[string]*Traffic)
 	emailTrafficMap := make(map[string]*ClientTraffic)
 
 	baselinePass := len(x.StatsLastValues) == 0
+	baseline := make(TrafficBaseline)
 
 	for _, stat := range resp.GetStat() {
 		lastValue, ok := x.StatsLastValues[stat.Name]
@@ -904,8 +959,13 @@ func (x *XrayAPI) GetTraffic() ([]*Traffic, []*ClientTraffic, error) {
 			lastValue = 0
 		}
 		value := stat.Value - lastValue
+		if value != 0 {
+			// Only counters that actually moved need a rollback entry: the rest
+			// would restore to the value they already hold.
+			baseline[stat.Name] = lastValue
+		}
 		if matches := trafficRegex.FindStringSubmatch(stat.Name); len(matches) == 4 {
-			processTraffic(matches, value, tagTrafficMap)
+			processTraffic(matches, value, tagTrafficMap, x.apiTag)
 		} else if matches := clientTrafficRegex.FindStringSubmatch(stat.Name); len(matches) == 3 {
 			processClientTraffic(matches, value, emailTrafficMap)
 		}
@@ -923,7 +983,23 @@ func (x *XrayAPI) GetTraffic() ([]*Traffic, []*ClientTraffic, error) {
 		x.StatsLastValues = pruned
 	}
 
-	return mapToSlice(tagTrafficMap), mapToSlice(emailTrafficMap), nil
+	return mapToSlice(tagTrafficMap), mapToSlice(emailTrafficMap), baseline, nil
+}
+
+// RestoreTrafficBaseline puts back the counter values a GetTraffic call
+// replaced, so the interval it reported is reported again on the next poll.
+func (x *XrayAPI) RestoreTrafficBaseline(baseline TrafficBaseline) {
+	if len(baseline) == 0 {
+		return
+	}
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if x.StatsLastValues == nil {
+		x.StatsLastValues = make(map[string]int64, len(baseline))
+	}
+	for name, value := range baseline {
+		x.StatsLastValues[name] = value
+	}
 }
 
 // OnlineIP is one source address of a live connection, with the unix time (seconds)
@@ -983,12 +1059,15 @@ func IsUnimplementedErr(err error) bool {
 }
 
 // processTraffic aggregates a traffic stat into trafficMap using regex matches and value.
-func processTraffic(matches []string, value int64, trafficMap map[string]*Traffic) {
+func processTraffic(matches []string, value int64, trafficMap map[string]*Traffic, apiTag string) {
 	isInbound := matches[1] == "inbound"
 	tag := matches[2]
 	isDown := matches[3] == "downlink"
 
-	if tag == "api" {
+	if apiTag == "" {
+		apiTag = "api"
+	}
+	if tag == apiTag {
 		return
 	}
 

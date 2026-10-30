@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Select, Tabs } from 'antd';
@@ -293,10 +293,22 @@ export default function SystemHistoryModal({ open, status, onClose }: SystemHist
     [tsLookup],
   );
 
+  // One poll at a time, and only the newest result may paint: each tick issues
+  // three sequential requests, so on a slow panel a 2s interval would stack
+  // overlapping chains and let an older response land after a newer one.
+  const inFlight = useRef(false);
+  const requestSeq = useRef(0);
+
   const fetchBucket = useCallback(async () => {
-    if (!activeMetric) return;
-    const next = await loadBucket(activeMetric, bucket);
-    setChart(next);
+    if (!activeMetric || inFlight.current) return;
+    inFlight.current = true;
+    const seq = ++requestSeq.current;
+    try {
+      const next = await loadBucket(activeMetric, bucket);
+      if (seq === requestSeq.current) setChart(next);
+    } finally {
+      inFlight.current = false;
+    }
   }, [activeMetric, bucket]);
 
   const [wasOpen, setWasOpen] = useState(false);
@@ -308,9 +320,10 @@ export default function SystemHistoryModal({ open, status, onClose }: SystemHist
   useEffect(() => {
     if (!open || !activeMetric) return;
     let cancelled = false;
+    const seq = ++requestSeq.current;
     void (async () => {
       const next = await loadBucket(activeMetric, bucket);
-      if (!cancelled) setChart(next);
+      if (!cancelled && seq === requestSeq.current) setChart(next);
     })();
     return () => {
       cancelled = true;

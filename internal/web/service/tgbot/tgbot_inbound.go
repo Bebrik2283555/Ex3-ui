@@ -3,6 +3,7 @@ package tgbot
 import (
 	"errors"
 	"fmt"
+	"html"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +26,7 @@ func (t *Tgbot) getInboundUsages() string {
 		return info.String()
 	}
 	for _, inbound := range inbounds {
-		info.WriteString(t.I18nBot("tgbot.messages.inbound", "Remark=="+inbound.Remark))
+		info.WriteString(t.I18nBot("tgbot.messages.inbound", "Remark=="+html.EscapeString(inbound.Remark)))
 		info.WriteString(t.I18nBot("tgbot.messages.port", "Port=="+strconv.Itoa(inbound.Port)))
 		info.WriteString(t.I18nBot("tgbot.messages.traffic", "Total=="+common.FormatTraffic((inbound.Up+inbound.Down)), "Upload=="+common.FormatTraffic(inbound.Up), "Download=="+common.FormatTraffic(inbound.Down)))
 
@@ -127,7 +128,7 @@ func (t *Tgbot) searchInbound(chatId int64, remark string) {
 
 	for _, inbound := range inbounds {
 		info := ""
-		info += t.I18nBot("tgbot.messages.inbound", "Remark=="+inbound.Remark)
+		info += t.I18nBot("tgbot.messages.inbound", "Remark=="+html.EscapeString(inbound.Remark))
 		info += t.I18nBot("tgbot.messages.port", "Port=="+strconv.Itoa(inbound.Port))
 		info += t.I18nBot("tgbot.messages.traffic", "Total=="+common.FormatTraffic((inbound.Up+inbound.Down)), "Upload=="+common.FormatTraffic(inbound.Up), "Download=="+common.FormatTraffic(inbound.Down))
 

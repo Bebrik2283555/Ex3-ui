@@ -342,8 +342,13 @@ func (r *Remote) resolveRemoteID(ctx context.Context, tag string) (int, error) {
 	if id, ok := r.cacheGetTag(tag); ok {
 		return id, nil
 	}
-	return 0, fmt.Errorf("remote inbound with tag %q not found on node %s", tag, r.node.Name)
+	return 0, fmt.Errorf("%w: tag %q on node %s", errRemoteTagNotFound, tag, r.node.Name)
 }
+
+// errRemoteTagNotFound means the node answered with its full inbound list and
+// does not carry the tag at all. Any other resolve error is a transport
+// failure: the node's state is unknown, not empty.
+var errRemoteTagNotFound = errors.New("remote inbound not found")
 
 // nodeInboundTagPrefix is the central-panel alias for an inbound on nodeID.
 // Kept in sync with service.nodeTagPrefix (port_conflict.go); duplicated here
@@ -491,11 +496,21 @@ func (r *Remote) AddInbound(ctx context.Context, ib *model.Inbound) error {
 func (r *Remote) DelInbound(ctx context.Context, ib *model.Inbound) error {
 	id, err := r.resolveRemoteID(ctx, ib.Tag)
 	if err != nil {
-		logger.Warning("remote DelInbound: tag", ib.Tag, "not found on", r.node.Name)
-		return nil
+		if errors.Is(err, errRemoteTagNotFound) {
+			// The node has no such inbound, so the delete is already true.
+			logger.Warning("remote DelInbound: tag", ib.Tag, "not found on", r.node.Name)
+			return nil
+		}
+		// Can't confirm the delete reached the node: surface it so the caller
+		// marks the node dirty and a reconcile converges, instead of dropping the
+		// inbound centrally while it keeps serving people on the node.
+		return fmt.Errorf("remote DelInbound: resolve tag %q: %w", ib.Tag, err)
 	}
 	if _, err := r.do(ctx, http.MethodPost, "panel/api/inbounds/del/"+strconv.Itoa(id), nil); err != nil {
-		return err
+		var apiErr *remoteAPIError
+		if !errors.As(err, &apiErr) || !strings.Contains(strings.ToLower(apiErr.msg), "not found") {
+			return err
+		}
 	}
 	r.cacheDel(ib.Tag)
 	return nil

@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -361,23 +363,23 @@ func NewSUBController(g *gin.RouterGroup, options ...SUBControllerOption) *SUBCo
 // initRouter registers HTTP routes for subscription links and JSON endpoints
 // on the provided router group.
 func (a *SUBController) initRouter(g *gin.RouterGroup) {
-	gLink := g.Group(a.subPath, a.subLimiter.middleware(), setNoCacheHeaders)
+	gLink := g.Group(a.subPath, a.subLimiter.middleware(a.subClientIP), setNoCacheHeaders)
 	gLink.GET(":subid", a.subs)
 	gLink.HEAD(":subid", a.subs)
 	gLink.GET(":subid/hwid-status", a.hwidStatus)
 	gLink.HEAD(":subid/hwid-status", a.hwidStatus)
 	if a.jsonEnabled {
-		gJson := g.Group(a.subJsonPath, a.subLimiter.middleware(), setNoCacheHeaders)
+		gJson := g.Group(a.subJsonPath, a.subLimiter.middleware(a.subClientIP), setNoCacheHeaders)
 		gJson.GET(":subid", a.subJsons)
 		gJson.HEAD(":subid", a.subJsons)
 	}
 	if a.throneEnabled {
-		gThrone := g.Group(a.subThronePath, a.subLimiter.middleware())
+		gThrone := g.Group(a.subThronePath, a.subLimiter.middleware(a.subClientIP))
 		gThrone.GET(":subid", a.subThrones)
 		gThrone.HEAD(":subid", a.subThrones)
 	}
 	if a.clashEnabled {
-		gClash := g.Group(a.subClashPath, a.subLimiter.middleware(), setNoCacheHeaders)
+		gClash := g.Group(a.subClashPath, a.subLimiter.middleware(a.subClientIP), setNoCacheHeaders)
 		gClash.GET(":subid", a.subClashs)
 		gClash.HEAD(":subid", a.subClashs)
 		if sameSubscriptionPath(a.subClashPath, subMihomoPath) {
@@ -501,15 +503,18 @@ func dedupeEmails(emails []string) []string {
 // subs handles HTTP requests for subscription links, returning either HTML page or base64-encoded subscription data.
 func (a *SUBController) subs(c *gin.Context) {
 	userAgent := c.GetHeader("User-Agent")
+	// The gate runs before every branch: the HTML page and ?format=info both
+	// carry per-subscriber data and links, so leaving them ungated let a device
+	// over its limit read the whole subscription (#audit).
+	if !a.enforceHwid(c) {
+		return
+	}
 	if a.maybeServeSubInfo(c) {
 		logSubscriptionRoute(userAgent, "info")
 		return
 	}
 	if a.maybeServeSubPage(c) {
 		logSubscriptionRoute(userAgent, "html")
-		return
-	}
-	if !a.enforceHwid(c) {
 		return
 	}
 	if shouldAutoServeClash(a.subClashAutoDetect, a.clashEnabled, false, userAgent, a.clashUserAgent) && a.serveClashBody(c, false, false) {
@@ -804,6 +809,35 @@ func applyHwidHeaders(c *gin.Context, result service.HwidGateResult) {
 	}
 }
 
+// subClientIP resolves the address the subscription rate limiter buckets on.
+// The socket peer is authoritative; X-Forwarded-For and X-Real-IP are honored
+// only when that peer is inside the configured trustedProxyCIDRs, so a spoofed
+// header cannot mint a fresh bucket per request.
+func (a *SUBController) subClientIP(c *gin.Context) string {
+	remote := hostFromRemoteAddr(c.Request.RemoteAddr)
+	if !a.subService.forwardedClientTrusted(c) {
+		return remote
+	}
+	forwarded := c.GetHeader("X-Forwarded-For")
+	if idx := strings.LastIndex(forwarded, ","); idx >= 0 {
+		// Our proxy appends the peer it saw as the right-most entry.
+		forwarded = forwarded[idx+1:]
+	}
+	for _, candidate := range []string{forwarded, c.GetHeader("X-Real-IP")} {
+		if ip, err := netip.ParseAddr(strings.TrimSpace(candidate)); err == nil {
+			return ip.Unmap().String()
+		}
+	}
+	return remote
+}
+
+func hostFromRemoteAddr(remoteAddr string) string {
+	if host, _, err := net.SplitHostPort(remoteAddr); err == nil {
+		return host
+	}
+	return remoteAddr
+}
+
 // hwidStatus serves read-only device-slot counters for a subscription. It
 // deliberately skips enforceHwid: asking about slots must not consume one.
 func (a *SUBController) hwidStatus(c *gin.Context) {
@@ -869,10 +903,10 @@ func (a *SUBController) loadSubTemplate(themeDir string) (*template.Template, er
 // subJsons handles HTTP requests for JSON subscription configurations. The
 // device limit is enforced on every body route, ?view=raw included (#GHSA-7ww3).
 func (a *SUBController) subJsons(c *gin.Context) {
+	if !a.enforceHwid(c) {
+		return
+	}
 	if strings.EqualFold(c.Query("view"), "raw") {
-		if !a.enforceHwid(c) {
-			return
-		}
 		if !a.serveJsonBody(c, a.jsonAlwaysArray, "application/json; charset=utf-8", true) {
 			writeSubError(c, nil)
 		}
@@ -880,9 +914,6 @@ func (a *SUBController) subJsons(c *gin.Context) {
 		return
 	}
 	if a.maybeServeSubPage(c) {
-		return
-	}
-	if !a.enforceHwid(c) {
 		return
 	}
 	a.serveJson(c, a.jsonAlwaysArray, "text/plain; charset=utf-8")
@@ -931,10 +962,10 @@ func (a *SUBController) subClashLegacy(c *gin.Context) {
 }
 
 func (a *SUBController) subClash(c *gin.Context, legacy bool) {
+	if !a.enforceHwid(c) {
+		return
+	}
 	if strings.EqualFold(c.Query("view"), "raw") {
-		if !a.enforceHwid(c) {
-			return
-		}
 		if !a.serveClashBody(c, true, legacy) {
 			writeSubError(c, nil)
 		}
@@ -942,9 +973,6 @@ func (a *SUBController) subClash(c *gin.Context, legacy bool) {
 		return
 	}
 	if a.maybeServeSubPage(c) {
-		return
-	}
-	if !a.enforceHwid(c) {
 		return
 	}
 	if !a.serveClashBody(c, false, legacy) {

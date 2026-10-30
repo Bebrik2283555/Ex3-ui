@@ -190,3 +190,76 @@ func TestGetTrafficSkipsAPIInboundAndPrunes(t *testing.T) {
 		t.Fatal("baselines for stats that no longer exist were not pruned")
 	}
 }
+
+// TestGetTrafficSkipsConfiguredAPITag covers a renamed api.tag: the exclusion
+// must follow the configured tag, not the literal default "api".
+func TestGetTrafficSkipsConfiguredAPITag(t *testing.T) {
+	api := startFakeStats(t, [][]*statsService.Stat{
+		{
+			stat("inbound>>>panel-api>>>traffic>>>uplink", 10),
+			stat("inbound>>>in-443>>>traffic>>>uplink", 10),
+		},
+		{
+			stat("inbound>>>panel-api>>>traffic>>>uplink", 99),
+			stat("inbound>>>in-443>>>traffic>>>uplink", 60),
+		},
+	})
+	api.SetAPITag("panel-api")
+
+	if _, _, err := api.GetTraffic(); err != nil {
+		t.Fatalf("GetTraffic (baseline): %v", err)
+	}
+	tags, _, err := api.GetTraffic()
+	if err != nil {
+		t.Fatalf("GetTraffic: %v", err)
+	}
+	if len(tags) != 1 || tags[0].Tag != "in-443" {
+		t.Fatalf("tags = %+v, want only in-443 (the configured api tag must be skipped)", tags)
+	}
+}
+
+// TestGetTrafficWithBaselineRestoresLostInterval covers a failed database
+// write: the deltas were computed but never stored, so the baselines have to
+// go back and the same interval must be reported again instead of vanishing.
+func TestGetTrafficWithBaselineRestoresLostInterval(t *testing.T) {
+	api := startFakeStats(t, [][]*statsService.Stat{
+		{stat("user>>>alice>>>traffic>>>uplink", 100)},
+		{stat("user>>>alice>>>traffic>>>uplink", 900)},
+		{stat("user>>>alice>>>traffic>>>uplink", 950)},
+		{stat("user>>>alice>>>traffic>>>uplink", 980)},
+	})
+
+	if _, _, _, err := api.GetTrafficWithBaseline(); err != nil {
+		t.Fatalf("GetTrafficWithBaseline (baseline): %v", err)
+	}
+
+	_, clients, baseline, err := api.GetTrafficWithBaseline()
+	if err != nil {
+		t.Fatalf("GetTrafficWithBaseline: %v", err)
+	}
+	if got := clientTrafficByEmail(t, clients)["alice"]; got == nil || got.Up != 800 {
+		t.Fatalf("first batch = %+v, want 800 bytes for alice", got)
+	}
+	if baseline["user>>>alice>>>traffic>>>uplink"] != 100 {
+		t.Fatalf("baseline = %v, want the pre-call value 100", baseline)
+	}
+
+	// The write failed: restore and poll again.
+	api.RestoreTrafficBaseline(baseline)
+	_, clients, _, err = api.GetTrafficWithBaseline()
+	if err != nil {
+		t.Fatalf("GetTrafficWithBaseline (retry): %v", err)
+	}
+	if got := clientTrafficByEmail(t, clients)["alice"]; got == nil || got.Up != 850 {
+		t.Fatalf("retry batch = %+v, want the whole 850-byte interval", got)
+	}
+
+	// A committed batch is not reported twice.
+	_, clients, _, err = api.GetTrafficWithBaseline()
+	if err != nil {
+		t.Fatalf("GetTrafficWithBaseline (next): %v", err)
+	}
+	if got := clientTrafficByEmail(t, clients)["alice"]; got == nil || got.Up != 30 {
+		t.Fatalf("next batch = %+v, want only the 30 new bytes (no double count)", got)
+	}
+}

@@ -1155,6 +1155,36 @@ func (s *ClientService) bulkDelInboundClients(
 			return res
 		}
 	}
+
+	// Serialize against the traffic poll to avoid the cross-transaction
+	// lock-order deadlock on inbounds/client_records (runSerializedTx). The new
+	// settings are written first: purging stats for a client still listed in the
+	// inbound would leave it unaccounted and make a later traffic reset fail.
+	txErr := runSerializedTx(func(tx *gorm.DB) error {
+		if err := commitInboundClientSettings(tx, oldInbound, prevSettings); err != nil {
+			return err
+		}
+		finalClients, err := inboundSvc.GetClients(oldInbound)
+		if err != nil {
+			return err
+		}
+		if err := s.SyncInbound(tx, inboundId, finalClients); err != nil {
+			return err
+		}
+		if oldInbound.NodeID != nil {
+			return (&NodeService{}).MarkNodeDirtyTx(tx, *oldInbound.NodeID)
+		}
+		return nil
+	})
+	if txErr != nil {
+		for email := range wantedEmails {
+			if _, skip := res.perEmailSkipped[email]; !skip {
+				res.perEmailSkipped[email] = txErr.Error()
+			}
+		}
+		return res
+	}
+
 	if !keepTraffic {
 		purge := make([]string, 0, len(foundEmails))
 		for email := range foundEmails {
@@ -1184,31 +1214,7 @@ func (s *ClientService) bulkDelInboundClients(
 		}
 	}
 
-	// Serialize against the traffic poll to avoid the cross-transaction
-	// lock-order deadlock on inbounds/client_records (runSerializedTx).
-	txErr := runSerializedTx(func(tx *gorm.DB) error {
-		if err := commitInboundClientSettings(tx, oldInbound, prevSettings); err != nil {
-			return err
-		}
-		finalClients, err := inboundSvc.GetClients(oldInbound)
-		if err != nil {
-			return err
-		}
-		if err := s.SyncInbound(tx, inboundId, finalClients); err != nil {
-			return err
-		}
-		if oldInbound.NodeID != nil {
-			return (&NodeService{}).MarkNodeDirtyTx(tx, *oldInbound.NodeID)
-		}
-		return nil
-	})
-	if txErr != nil {
-		for email := range wantedEmails {
-			if _, skip := res.perEmailSkipped[email]; !skip {
-				res.perEmailSkipped[email] = txErr.Error()
-			}
-		}
-	} else if oldInbound.NodeID == nil {
+	if oldInbound.NodeID == nil {
 		rt, rterr := inboundSvc.runtimeFor(oldInbound)
 		if rterr != nil {
 			res.needRestart = true

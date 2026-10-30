@@ -393,39 +393,63 @@ func NewUDPRelay(relay SocksRelay, gstack *stack.Stack) *UDPRelay {
 	return &UDPRelay{relay: relay, gstack: gstack, sessions: map[netip.AddrPort]*socks5UDPSession{}}
 }
 
+// udpRelayMaxSessions caps concurrent SOCKS5 UDP sessions per inbound stack:
+// a peer varying its source ports (QUIC, DNS) would otherwise create one TCP
+// control connection, one UDP socket and one goroutine per port, forever.
+const udpRelayMaxSessions = 1024
+
 // Handle relays one packet from src (the peer's tunnel-internal source) to
 // dst (its real, recovered destination), opening a fresh SOCKS5 UDP
 // ASSOCIATE session for src the first time it's seen (authenticating as
 // email, so Xray attributes the whole flow's stats to the right peer) and
 // reusing it for subsequent packets from the same src.
+//
+// A new session is established in the background: the associate handshake
+// takes up to 5s and runs on the tunnel's shared delivery path, so the first
+// datagrams of a new flow are dropped instead of stalling every other flow.
 func (u *UDPRelay) Handle(src, dst netip.AddrPort, email string, payload []byte) {
 	u.mu.Lock()
 	sess, ok := u.sessions[src]
+	full := !ok && len(u.sessions) >= udpRelayMaxSessions
 	u.mu.Unlock()
 
 	if !ok {
-		fresh, err := newSocks5UDPSession(u.relay.Addr, email, u.relay.Password)
-		if err != nil {
-			logger.Warningf("amneziawgnet: UDPRelay: SOCKS5 associate for %q: %v", email, err)
+		if full {
 			return
 		}
-		u.mu.Lock()
-		// Associating happens off-lock, so a concurrent Handle for the same src
-		// may already have published one; keep it, so the key has a single pump.
-		if existing, dup := u.sessions[src]; dup {
-			u.mu.Unlock()
-			fresh.Close()
-			sess = existing
-		} else {
-			u.sessions[src] = fresh
-			u.mu.Unlock()
-			sess = fresh
-			go u.pump(src, fresh)
-		}
+		go u.associate(src, email)
+		return
 	}
 	if err := sess.sendTo(dst, payload); err != nil {
 		logger.Warningf("amneziawgnet: UDPRelay: send to %s: %v", dst, err)
 	}
+}
+
+// associate opens the session for src and publishes it, then starts its reply
+// pump. Failures only mean the flow stays unestablished; the next datagram
+// retries.
+func (u *UDPRelay) associate(src netip.AddrPort, email string) {
+	fresh, err := newSocks5UDPSession(u.relay.Addr, email, u.relay.Password)
+	if err != nil {
+		logger.Warningf("amneziawgnet: UDPRelay: SOCKS5 associate for %q: %v", email, err)
+		return
+	}
+	u.mu.Lock()
+	// Another datagram may have published this src meanwhile, and the cap may
+	// have been reached while we were dialing.
+	if _, dup := u.sessions[src]; dup {
+		u.mu.Unlock()
+		fresh.Close()
+		return
+	}
+	if len(u.sessions) >= udpRelayMaxSessions {
+		u.mu.Unlock()
+		fresh.Close()
+		return
+	}
+	u.sessions[src] = fresh
+	u.mu.Unlock()
+	go u.pump(src, fresh)
 }
 
 // pump reads replies from sess and writes them back into the tunnel toward

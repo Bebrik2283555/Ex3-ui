@@ -38,6 +38,12 @@ func stallingListener(t *testing.T) (addr string, release func()) {
 }
 
 func TestExternalInformClient_StalledReceiverTimesOut(t *testing.T) {
+	// The production dialer blocks loopback by design; this test needs a local
+	// receiver, so it drives the client through a plain dialer.
+	restore := externalInformDial
+	externalInformDial = (&net.Dialer{}).DialContext
+	t.Cleanup(func() { externalInformDial = restore })
+
 	addr, release := stallingListener(t)
 	defer release()
 
@@ -73,6 +79,27 @@ func TestExternalInformClient_HasDeadlines(t *testing.T) {
 	}
 	if externalInformTimeout >= 5*time.Second {
 		t.Errorf("the call budget (%v) must stay under the 5s traffic poll cadence", externalInformTimeout)
+	}
+}
+
+// The URL is validated by SanitizePublicHTTPURL, but the connect must not
+// resolve it again: a rebinding host would otherwise reach loopback.
+func TestExternalInformClient_BlocksLoopback(t *testing.T) {
+	addr, release := stallingListener(t)
+	defer release()
+
+	request := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(request)
+	request.Header.SetMethod("POST")
+	request.SetBody([]byte(`{}`))
+	request.SetRequestURI("http://" + addr + "/inform")
+	request.Header.SetConnectionClose()
+
+	response := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(response)
+
+	if err := externalInformClient.DoTimeout(request, response, externalInformTimeout); err == nil {
+		t.Fatal("the inform client must refuse a loopback address at dial time")
 	}
 }
 

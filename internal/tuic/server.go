@@ -1016,9 +1016,23 @@ func (s *Server) Close() error {
 
 	s.closeAllConns()
 
-	s.wg.Wait()
+	// Bound the drain: a relay goroutine blocked on a dead upstream must not
+	// freeze the caller forever (panel shutdown, inbound restart).
+	drained := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+	case <-time.After(tuicCloseDrainTimeout):
+		s.logf(tuicLogWarn, "relay goroutines still running %s after close; continuing", tuicCloseDrainTimeout)
+	}
 	return err
 }
+
+// tuicCloseDrainTimeout bounds how long Close waits for relay goroutines.
+const tuicCloseDrainTimeout = 5 * time.Second
 
 const (
 	tuicLogDebug uint32 = iota

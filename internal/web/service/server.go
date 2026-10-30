@@ -804,10 +804,17 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 		if lastStatus != nil {
 			duration := now.Sub(lastStatus.T)
 			seconds := float64(duration) / float64(time.Second)
-			up := uint64(float64(status.NetTraffic.Sent-lastStatus.NetTraffic.Sent) / seconds)
-			down := uint64(float64(status.NetTraffic.Recv-lastStatus.NetTraffic.Recv) / seconds)
-			status.NetIO.Up = up
-			status.NetIO.Down = down
+			// Same guard as the packet/disk counters: an interface leaving the
+			// list (e.g. an AmneziaWG device removed) makes the total shrink,
+			// and the unsigned subtraction would wrap to ~1.8e19.
+			if seconds > 0 {
+				if status.NetTraffic.Sent >= lastStatus.NetTraffic.Sent {
+					status.NetIO.Up = uint64(float64(status.NetTraffic.Sent-lastStatus.NetTraffic.Sent) / seconds)
+				}
+				if status.NetTraffic.Recv >= lastStatus.NetTraffic.Recv {
+					status.NetIO.Down = uint64(float64(status.NetTraffic.Recv-lastStatus.NetTraffic.Recv) / seconds)
+				}
+			}
 			if seconds > 0 && status.NetTraffic.PktSent >= lastStatus.NetTraffic.PktSent {
 				status.NetIO.PktUp = uint64(float64(status.NetTraffic.PktSent-lastStatus.NetTraffic.PktSent) / seconds)
 			}

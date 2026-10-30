@@ -12,6 +12,7 @@ import {
   CodeOutlined,
   DatabaseOutlined,
   DiscordOutlined,
+  ExportOutlined,
   GithubOutlined,
   HddOutlined,
   HeartOutlined,
@@ -27,6 +28,7 @@ import {
   SearchOutlined,
   SettingOutlined,
   SunOutlined,
+  SwapOutlined,
   TelegramFilled,
 } from '@ant-design/icons';
 
@@ -271,6 +273,16 @@ export default function AppSidebar() {
         key: '/xray#basic',
         icon: <SettingOutlined aria-hidden />,
         label: t('pages.xray.basicTemplate'),
+      },
+      {
+        key: '/xray#routing',
+        icon: <SwapOutlined aria-hidden />,
+        label: t('menu.routing'),
+      },
+      {
+        key: '/xray#outbound',
+        icon: <ExportOutlined aria-hidden />,
+        label: t('menu.outbounds'),
       },
       {
         key: '/xray#balancer',

@@ -15,7 +15,7 @@ See [`../LICENSING.md`](../LICENSING.md) for the project-level license split.
 | mtg | MIT | `LICENSE-mtg-multi-MIT.txt` |
 | zapret | MIT | `LICENSE-zapret-linux-easy-MIT.txt` |
 | CSQTT | PolyForm Noncommercial 1.0.0 | `LICENSE-csqtt-PolyForm-Noncommercial-1.0.0.txt` |
-| LucX-UI components | PolyForm Noncommercial 1.0.0; upstream 3x-ui code remains GPL-3.0 | `LICENSE-lucx-PolyForm-Noncommercial-1.0.0.txt`, `LICENSE-lucx-GPL-3.0.txt` |
+| LucX-UI components (releases up to 1.5.0 only; not part of the current tree) | PolyForm Noncommercial 1.0.0; upstream 3x-ui code remains GPL-3.0 | `LICENSE-lucx-PolyForm-Noncommercial-1.0.0.txt`, `LICENSE-lucx-GPL-3.0.txt` |
 
 ## CSQTT
 
@@ -36,19 +36,21 @@ Required notices from the CSQTT license:
 EX3-UI's own distribution terms do not grant any commercial rights to CSQTT.
 Commercial use of CSQTT requires a separate written license from amurcanov.
 
-## LucX-UI components
+## LucX-UI components (historical)
 
 - Source: <https://github.com/AlexeyLCP/lucx-ui>
 - Copyright (c) 2025-2026 LucX-UI Project.
 - LucX-specific components are licensed under the PolyForm Noncommercial
   License 1.0.0. Upstream 3x-ui code remains under GPL-3.0.
-- EX3-UI's core/sidecar management code in `internal/sidecar/` is adapted from
-  LucX-UI's `internal/lucx/tunnel/` package and related core-management code.
-  The original LucX-UI copyright and license notices are retained here.
+- Releases up to and including 1.5.0 shipped core/sidecar management code in
+  `internal/sidecar/` and the related panel layer adapted from LucX-UI's
+  `internal/lucx/tunnel/` package. That code has been replaced by an independent
+  implementation written from a behavioural specification, so the current tree
+  no longer contains LucX-UI code. The notices are retained here for the earlier
+  releases.
 
-The PolyForm Noncommercial components are not sublicensed under GPL-3.0.
-Commercial use (including paid VPN resale or embedding in a commercial product)
-requires explicit written permission from the LucX-UI author.
+The PolyForm Noncommercial terms above do not apply to the current tree; they
+govern the releases that still contained the adapted code.
 
 ## TUIC
 

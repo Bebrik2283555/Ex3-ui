@@ -53,8 +53,18 @@ func TestCSQTTBuildArgsHasNoDeviceID(t *testing.T) {
 	if slices.Contains(args, "--device-id") {
 		t.Fatalf("BuildArgs must not pass --device-id: %v", strings.Join(args, " "))
 	}
-	if !slices.Contains(args, "--password") {
-		t.Fatalf("BuildArgs lost the shared password: %v", strings.Join(args, " "))
+	// Credentials belong in the child's environment: argv is readable by every
+	// local user through /proc/<pid>/cmdline.
+	for _, flag := range []string{"--password", "--web-user", "--web-pass"} {
+		if slices.Contains(args, flag) {
+			t.Fatalf("BuildArgs must not pass %s: %v", flag, strings.Join(args, " "))
+		}
+	}
+	env := inst.SecretEnv()
+	for _, want := range []string{"CSQTT_MAIN_PASSWORD=main-pass", "CSQTT_WEB_USER=ex3ui", "CSQTT_WEB_PASS=web-pass"} {
+		if !slices.Contains(env, want) {
+			t.Fatalf("SecretEnv = %v, want %s", env, want)
+		}
 	}
 }
 
@@ -76,9 +86,12 @@ func TestCSQTTKeepsStoredMainPassword(t *testing.T) {
 	if got := inst.CSQTT.MainPass; got != "old-main" {
 		t.Fatalf("MainPass = %q, want the stored main password", got)
 	}
-	args := strings.Join(inst.BuildArgs(), " ")
-	if !strings.Contains(args, "--password old-main") {
-		t.Fatalf("BuildArgs = %q, want --password old-main", args)
+	args := inst.BuildArgs()
+	if strings.Contains(strings.Join(args, " "), "old-main") {
+		t.Fatalf("BuildArgs leaks the main password: %v", args)
+	}
+	if !slices.Contains(inst.SecretEnv(), "CSQTT_MAIN_PASSWORD=old-main") {
+		t.Fatalf("SecretEnv = %v, want the stored main password", inst.SecretEnv())
 	}
 	links := inst.Links(inst.Clients[0])
 	if len(links) != 1 || !strings.Contains(links[0], "password=client-pass") {
@@ -169,6 +182,9 @@ func TestCSQTTPerClientPasswords(t *testing.T) {
 		if !strings.Contains(links[0], "password="+want) {
 			t.Fatalf("client %d link = %q, want password=%s", i, links[0], want)
 		}
+		if !strings.Contains(links[0], "&name="+urlEncode(inst.Clients[i].Email)) {
+			t.Fatalf("client %d link = %q, want a profile name", i, links[0])
+		}
 	}
 	if links := inst.Links(inst.Clients[2]); len(links) != 0 {
 		t.Fatalf("client without CsqttPassword got links %v", links)
@@ -199,5 +215,30 @@ func TestQWDTTOnlyHelpersAreNilSafe(t *testing.T) {
 	}
 	if got := inst.qwdttPassword(model.Client{}); got != "" {
 		t.Fatalf("qwdttPassword = %q, want empty", got)
+	}
+}
+
+// The panel writes the olcRTC config as root: an operator-supplied path outside
+// the panel data folder must be rejected instead of overwriting a system file.
+func TestOLCRTCPathsMustStayInPanelData(t *testing.T) {
+	for name, settings := range map[string]string{
+		"config file": `{"sidecar":{"configFile":"/etc/passwd"}}`,
+		"data dir":    `{"sidecar":{"dataDir":"/etc"}}`,
+	} {
+		ib := &model.Inbound{
+			Id:       9,
+			Protocol: model.OLCRTC,
+			Listen:   "0.0.0.0",
+			Port:     47000,
+			Settings: settings,
+		}
+		if _, err := InstanceFromInbound(ib); err == nil {
+			t.Fatalf("%s: InstanceFromInbound accepted a path outside the panel data folder", name)
+		}
+	}
+
+	ib := &model.Inbound{Id: 9, Protocol: model.OLCRTC, Listen: "0.0.0.0", Port: 47000, Settings: `{}`}
+	if _, err := InstanceFromInbound(ib); err != nil {
+		t.Fatalf("default olcRTC paths must stay valid: %v", err)
 	}
 }

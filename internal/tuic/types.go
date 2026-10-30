@@ -51,6 +51,9 @@ type Instance struct {
 	MaxUdpRelayPacketSize int
 	SNI                   string // Exported to client links; it doesn't change the native listener certificate.
 	Clients               []TuicClientSettings
+	// Sniffing is the operator's block from the inbound row; the generated
+	// relay bridge applies it instead of its built-in default when set.
+	Sniffing string
 }
 
 func (inst Instance) BindTo() string {
@@ -266,6 +269,7 @@ func instanceFromInbound(ib *model.Inbound, includeDisabled bool) (Instance, boo
 		MaxUdpRelayPacketSize: maxPacketSize,
 		SNI:                   sni,
 		Clients:               clients,
+		Sniffing:              ib.Sniffing,
 	}, true
 }
 

@@ -42,14 +42,20 @@ var defaultDomains = []string{
 	"chatgpt.com",
 	"oaistatic.com",
 	"cdn.oaistatic.com",
+	"persistent.oaistatic.com",
 	"oaiusercontent.com",
 	"files.oaiusercontent.com",
 	"openai.com",
 	"api.openai.com",
 	"auth0.openai.com",
+	"auth.openai.com",
+	"cdn.openai.com",
 	"chat.openai.com",
+	"android.chat.openai.com",
+	"ios.chat.openai.com",
 	"platform.openai.com",
 	"ab.chatgpt.com",
+	"chatgpt.livekit.cloud",
 
 	// Claude & Anthropic
 	"claude.ai",
@@ -105,9 +111,12 @@ type DnsTestResult struct {
 
 // ResolvedEntry represents one resolved domain-to-IP mapping.
 type ResolvedEntry struct {
-	Domain string `json:"domain"`
-	IP     string `json:"ip"`
-	Status string `json:"status"`
+	Domain    string `json:"domain"`
+	IP        string `json:"ip"`
+	Status    string `json:"status"`
+	Region    string `json:"region,omitempty"`
+	LatencyMs int64  `json:"latencyMs,omitempty"`
+	Error     string `json:"error,omitempty"`
 }
 
 // Status represents the runtime status and current entries of DNS resolver.
@@ -314,8 +323,9 @@ func Resolve(ctx context.Context) error {
 		mu.Unlock()
 	}()
 
-	// Hard timeout on the overall resolution process so it never hangs indefinitely
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	// Hard timeout on the overall resolution process so it never hangs indefinitely.
+	// Verification dials every candidate, so this allows more than a bare query.
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 
 	logger.Infof("SmartDNS: resolving %d domains via %s", len(domainList), dnsSrv)
@@ -323,7 +333,7 @@ func Resolve(ctx context.Context) error {
 	type queryResult struct {
 		index  int
 		domain string
-		ip     string
+		probe  probe
 		err    error
 	}
 
@@ -347,18 +357,25 @@ func Resolve(ctx context.Context) error {
 				return
 			}
 
-			qCtx, qCancel := context.WithTimeout(ctx, 3500*time.Millisecond)
-			defer qCancel()
-
-			ip, err := resolveOne(qCtx, dnsSrv, dom)
-			results[idx] = queryResult{index: idx, domain: dom, ip: ip, err: err}
+			p, err := resolveBest(ctx, dnsSrv, dom)
+			results[idx] = queryResult{index: idx, domain: dom, probe: p, err: err}
 		}(i, domain)
 	}
 
 	wg.Wait()
 
+	mu.Lock()
+	previous := make(map[string]ResolvedEntry, len(currentEntries))
+	for _, e := range currentEntries {
+		if e.IP != "" {
+			previous[e.Domain] = e
+		}
+	}
+	mu.Unlock()
+
 	entries := make([]ResolvedEntry, 0, len(domainList))
 	successCount := 0
+	staleCount := 0
 
 	for i, dom := range domainList {
 		dom = strings.TrimSpace(dom)
@@ -367,32 +384,53 @@ func Resolve(ctx context.Context) error {
 		}
 		res := results[i]
 		if res.err != nil {
+			// A broken or emptied block would break a domain that still worked
+			// on the previous pass, so keep the last known-good address.
+			if old, ok := previous[dom]; ok {
+				staleCount++
+				logger.Warningf("SmartDNS: probe failed for %s (%v), keeping %s", dom, res.err, old.IP)
+				entries = append(entries, ResolvedEntry{
+					Domain:    dom,
+					IP:        old.IP,
+					Status:    "STALE",
+					Region:    old.Region,
+					LatencyMs: old.LatencyMs,
+					Error:     res.err.Error(),
+				})
+				continue
+			}
 			logger.Warningf("SmartDNS: failed to resolve %s: %v", dom, res.err)
 			entries = append(entries, ResolvedEntry{
 				Domain: dom,
-				IP:     "",
-				Status: res.err.Error(),
+				Status: "FAILED",
+				Error:  res.err.Error(),
 			})
-		} else {
-			successCount++
-			entries = append(entries, ResolvedEntry{
-				Domain: dom,
-				IP:     res.ip,
-				Status: "OK",
-			})
+			continue
 		}
+		successCount++
+		entries = append(entries, ResolvedEntry{
+			Domain:    dom,
+			IP:        res.probe.IP,
+			Status:    "OK",
+			Region:    res.probe.Region,
+			LatencyMs: res.probe.Latency.Milliseconds(),
+		})
 	}
 
 	nowStr := time.Now().Format("02.01.2006 15:04:05")
 	var resultStr, errStr string
-	if successCount == len(domainList) {
-		resultStr = fmt.Sprintf("Успешно: отрезолвлено %d из %d доменов", successCount, len(domainList))
-	} else if successCount > 0 {
-		resultStr = fmt.Sprintf("Частично: отрезолвлено %d из %d доменов", successCount, len(domainList))
-		errStr = fmt.Sprintf("Не удалось отрезолвить %d доменов", len(domainList)-successCount)
-	} else {
-		resultStr = "Ошибка: не удалось отрезолвить домены"
-		errStr = "Не удалось отрезолвить ни один домен через указанный DNS-сервер (таймаут или сервер недоступен)"
+	switch {
+	case successCount == len(domainList):
+		resultStr = fmt.Sprintf("Успешно: проверено %d из %d доменов", successCount, len(domainList))
+	case successCount > 0:
+		resultStr = fmt.Sprintf("Частично: проверено %d из %d доменов", successCount, len(domainList))
+		errStr = fmt.Sprintf("Не удалось проверить %d доменов", len(domainList)-successCount)
+	default:
+		resultStr = "Ошибка: не удалось проверить домены"
+		errStr = "Ни один домен не ответил корректно через указанный DNS-сервер (таймаут, неверный сертификат или заблокированный регион)"
+	}
+	if staleCount > 0 && errStr == "" {
+		resultStr = fmt.Sprintf("%s (оставлен предыдущий IP для %d)", resultStr, staleCount)
 	}
 
 	mu.Lock()
@@ -449,22 +487,33 @@ func TestDNS(server string) DnsTestResult {
 }
 
 func resolveOne(ctx context.Context, server, domain string) (string, error) {
+	ips, err := resolveAll(ctx, server, domain)
+	if err != nil {
+		return "", err
+	}
+	return ips[0], nil
+}
+
+// resolveAll returns every A record of domain, not just the first one: the
+// geo-unblock proxies behind the same name differ in health and region, so the
+// caller needs the whole set to pick a working address.
+func resolveAll(ctx context.Context, server, domain string) ([]string, error) {
 	if strings.HasPrefix(server, "https://") || strings.HasPrefix(server, "http://") {
 		return resolveDoH(ctx, server, domain)
 	}
 	return resolveUDP(ctx, server, domain)
 }
 
-func resolveDoH(ctx context.Context, endpoint, domain string) (string, error) {
+func resolveDoH(ctx context.Context, endpoint, domain string) ([]string, error) {
 	reqMsg := buildDnsQuery(domain)
 	raw, err := reqMsg.Pack()
 	if err != nil {
-		return "", fmt.Errorf("pack dns query: %w", err)
+		return nil, fmt.Errorf("pack dns query: %w", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(raw))
 	if err != nil {
-		return "", fmt.Errorf("create doh request: %w", err)
+		return nil, fmt.Errorf("create doh request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/dns-message")
 	httpReq.Header.Set("Accept", "application/dns-message")
@@ -485,23 +534,23 @@ func resolveDoH(ctx context.Context, endpoint, domain string) (string, error) {
 	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("doh request: %w", err)
+		return nil, fmt.Errorf("doh request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("doh status %d", resp.StatusCode)
+		return nil, fmt.Errorf("doh status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
-		return "", fmt.Errorf("read doh response: %w", err)
+		return nil, fmt.Errorf("read doh response: %w", err)
 	}
 
-	return extractIP(body)
+	return extractIPs(body)
 }
 
-func resolveUDP(ctx context.Context, server, domain string) (string, error) {
+func resolveUDP(ctx context.Context, server, domain string) ([]string, error) {
 	target := server
 	if !strings.Contains(target, ":") {
 		target = net.JoinHostPort(target, "53")
@@ -510,28 +559,28 @@ func resolveUDP(ctx context.Context, server, domain string) (string, error) {
 	reqMsg := buildDnsQuery(domain)
 	raw, err := reqMsg.Pack()
 	if err != nil {
-		return "", fmt.Errorf("pack dns query: %w", err)
+		return nil, fmt.Errorf("pack dns query: %w", err)
 	}
 
 	d := net.Dialer{Timeout: 2500 * time.Millisecond}
 	conn, err := d.DialContext(ctx, "udp", target)
 	if err != nil {
-		return "", fmt.Errorf("udp dial: %w", err)
+		return nil, fmt.Errorf("udp dial: %w", err)
 	}
 	defer conn.Close()
 
 	_ = conn.SetDeadline(time.Now().Add(2500 * time.Millisecond))
 	if _, err := conn.Write(raw); err != nil {
-		return "", fmt.Errorf("udp write: %w", err)
+		return nil, fmt.Errorf("udp write: %w", err)
 	}
 
 	buf := make([]byte, 4096)
 	n, err := conn.Read(buf)
 	if err != nil {
-		return "", fmt.Errorf("udp read: %w", err)
+		return nil, fmt.Errorf("udp read: %w", err)
 	}
 
-	return extractIP(buf[:n])
+	return extractIPs(buf[:n])
 }
 
 func buildDnsQuery(domain string) dnsmessage.Message {
@@ -558,19 +607,28 @@ func buildDnsQuery(domain string) dnsmessage.Message {
 	}
 }
 
-func extractIP(data []byte) (string, error) {
+// extractIPs collects every unique A record in a DNS response.
+func extractIPs(data []byte) ([]string, error) {
 	var msg dnsmessage.Message
 	if err := msg.Unpack(data); err != nil {
-		return "", fmt.Errorf("unpack dns: %w", err)
+		return nil, fmt.Errorf("unpack dns: %w", err)
 	}
 
+	seen := make(map[string]bool, len(msg.Answers))
+	ips := make([]string, 0, len(msg.Answers))
 	for _, ans := range msg.Answers {
 		if a, ok := ans.Body.(*dnsmessage.AResource); ok {
-			ip := net.IP(a.A[:])
-			return ip.String(), nil
+			ip := net.IP(a.A[:]).String()
+			if !seen[ip] {
+				seen[ip] = true
+				ips = append(ips, ip)
+			}
 		}
 	}
-	return "", fmt.Errorf("no A record in response")
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("no A record in response")
+	}
+	return ips, nil
 }
 
 // updateHostsBlock writes or updates the 3-line comment separated block in /etc/hosts.
@@ -624,45 +682,58 @@ func removeHostsBlock() error {
 	return os.WriteFile(hostsFilePath, []byte(cleaned), 0o644)
 }
 
+// stripHostsBlock removes the panel's SmartDNS block. The markers are matched
+// as whole lines inside a complete header/footer pair, and an unterminated
+// header leaves the file untouched: a stray comment must never truncate the
+// rest of /etc/hosts.
 func stripHostsBlock(content string) string {
-	const marker1 = "Auto-generated by Ex3-UI SmartDNS"
-	const marker2 = "Auto-generated by Ex3-UI DNS Resolver"
-	idx := strings.Index(content, marker1)
-	if idx == -1 {
-		idx = strings.Index(content, marker2)
-	}
-	if idx == -1 {
+	lines := strings.SplitAfter(content, "\n")
+	start, end := hostsBlockRange(lines)
+	if start < 0 {
 		return content
 	}
-
-	// Find the start of the block (marker line or # === preceding it)
-	start := strings.LastIndex(content[:idx], "# ===")
-	if start == -1 {
-		start = strings.LastIndex(content[:idx], "\n")
-		if start == -1 {
-			start = 0
+	var sb strings.Builder
+	sb.Grow(len(content))
+	for i, line := range lines {
+		if i >= start && i < end {
+			continue
 		}
+		sb.WriteString(line)
 	}
+	return sb.String()
+}
 
-	// Find the closing marker after idx
-	endIdx := strings.Index(content[idx:], blockFooter)
-	if endIdx == -1 {
-		return content[:start]
+// hostsBlockRange returns the half-open line range of the panel's block, or
+// (-1, -1) when the file holds no complete block.
+func hostsBlockRange(lines []string) (int, int) {
+	for i, line := range lines {
+		if !isHostsBlockMarker(line) {
+			continue
+		}
+		if i == 0 || !isHostsSeparator(lines[i-1]) {
+			continue
+		}
+		if i+1 >= len(lines) || !strings.HasPrefix(strings.TrimSpace(lines[i+1]), "# Do not edit manually") {
+			continue
+		}
+		for j := i + 2; j < len(lines); j++ {
+			if isHostsSeparator(lines[j]) {
+				return i - 1, j + 1
+			}
+		}
+		// Header without its footer: the file was edited or truncated, so do
+		// not guess where user content starts.
+		return -1, -1
 	}
-	end := idx + endIdx + len(blockFooter)
-	// Skip newline after footer if present
-	if end < len(content) && content[end] == '\n' {
-		end++
-	}
+	return -1, -1
+}
 
-	before := strings.TrimRight(content[:start], "\n")
-	after := strings.TrimLeft(content[end:], "\n")
+func isHostsBlockMarker(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return strings.HasPrefix(trimmed, "# Auto-generated by Ex3-UI SmartDNS") ||
+		strings.HasPrefix(trimmed, "# Auto-generated by Ex3-UI DNS Resolver")
+}
 
-	if before != "" && after != "" {
-		return before + "\n" + after
-	}
-	if before != "" {
-		return before + "\n"
-	}
-	return after
+func isHostsSeparator(line string) bool {
+	return strings.TrimSpace(line) == blockFooter
 }

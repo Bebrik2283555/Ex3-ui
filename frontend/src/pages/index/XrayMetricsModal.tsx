@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Modal, Select, Tabs, Tag } from 'antd';
@@ -212,6 +212,7 @@ export default function XrayMetricsModal({ open, onClose }: XrayMetricsModalProp
   const [obsTags, setObsTags] = useState<ObservatoryTag[]>([]);
   const [obsActiveTag, setObsActiveTag] = useState('');
   const [obsTick, setObsTick] = useState(0);
+  const inFlight = useRef(false);
 
   const activeMetric = useMemo(() => METRICS.find((m) => m.key === activeKey), [activeKey]);
   const isObservatory = activeKey === OBS_KEY;
@@ -260,11 +261,19 @@ export default function XrayMetricsModal({ open, onClose }: XrayMetricsModalProp
     if (!open || !isObservatory) return;
     let cancelled = false;
     const tick = async () => {
-      const tags = await loadObservatory();
-      if (cancelled) return;
-      setObsTags(tags);
-      setObsActiveTag((prev) => (tags.find((tg) => tg.tag === prev) ? prev : tags[0]?.tag || ''));
-      setObsTick((n) => n + 1);
+      // Skip a tick while the previous one is still in flight: on a slow panel
+      // the 2s interval would otherwise stack requests without bound.
+      if (inFlight.current) return;
+      inFlight.current = true;
+      try {
+        const tags = await loadObservatory();
+        if (cancelled) return;
+        setObsTags(tags);
+        setObsActiveTag((prev) => (tags.find((tg) => tg.tag === prev) ? prev : tags[0]?.tag || ''));
+        setObsTick((n) => n + 1);
+      } finally {
+        inFlight.current = false;
+      }
     };
     void tick();
     const id = window.setInterval(() => void tick(), 2000);

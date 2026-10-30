@@ -37,11 +37,19 @@ func (l *subRateLimiter) allow(ip string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.now()
-	if len(l.counts) >= subRateLimitMaxIPs {
+	if _, known := l.counts[ip]; !known && len(l.counts) >= subRateLimitMaxIPs {
 		// At the ceiling, reclaim expired windows before admitting a new IP.
 		for key, rec := range l.counts {
 			if now.Sub(rec.windowStart) >= time.Minute {
 				delete(l.counts, key)
+			}
+		}
+		// Still full: every tracked IP is live, so drop one arbitrary entry to
+		// keep the map bounded instead of growing past the cap.
+		if len(l.counts) >= subRateLimitMaxIPs {
+			for key := range l.counts {
+				delete(l.counts, key)
+				break
 			}
 		}
 	}
@@ -55,11 +63,13 @@ func (l *subRateLimiter) allow(ip string) bool {
 }
 
 // middleware throttles the public subscription endpoints per client IP. The
-// sub server runs with no trusted proxies, so gin's ClientIP is the socket
-// peer, not a spoofable header.
-func (l *subRateLimiter) middleware() gin.HandlerFunc {
+// key comes from keyFor, which treats the socket peer as authoritative and
+// only honors forwarded headers from a trusted proxy: gin's ClientIP trusts
+// every X-Forwarded-For by default, so a spoofed header would otherwise give
+// an attacker a fresh bucket per request.
+func (l *subRateLimiter) middleware(keyFor func(*gin.Context) string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ip := c.ClientIP()
+		ip := keyFor(c)
 		if net.ParseIP(ip) == nil {
 			ip = c.Request.RemoteAddr
 		}

@@ -6,12 +6,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// CoreController exposes the sidecar cores shown in Settings → Cores.
+// CoreController serves Settings -> Cores: the state of the qWDTT, olcRTC and
+// CSQTT cores plus the start/stop/restart actions on the inbounds they run.
 type CoreController struct {
 	coreService service.CoreService
 }
 
-// NewCoreController wires the core management routes into /panel/api.
+// NewCoreController creates a new CoreController and initializes its routes.
 func NewCoreController(g *gin.RouterGroup) *CoreController {
 	a := &CoreController{}
 	a.initRouter(g)
@@ -21,6 +22,8 @@ func NewCoreController(g *gin.RouterGroup) *CoreController {
 func (a *CoreController) initRouter(g *gin.RouterGroup) {
 	g.GET("/cores", a.list)
 	g.GET("/cores/:name/details", a.details)
+	// The log view is the details payload: line retention belongs to the core
+	// supervisor, so there is no separate line count to honour here.
 	g.GET("/cores/:name/logs", a.details)
 	g.POST("/cores/:name/start", a.start)
 	g.POST("/cores/:name/stop", a.stop)
@@ -28,8 +31,8 @@ func (a *CoreController) initRouter(g *gin.RouterGroup) {
 }
 
 func (a *CoreController) list(c *gin.Context) {
-	rows, err := a.coreService.List()
-	jsonObj(c, rows, err)
+	cores, err := a.coreService.List()
+	jsonObj(c, cores, err)
 }
 
 func (a *CoreController) details(c *gin.Context) {

@@ -13,6 +13,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 
@@ -305,7 +306,13 @@ func (s *InboundService) adjustTraffics(tx *gorm.DB, dbClientTraffics []*xray.Cl
 		if ok {
 			var newClients []any
 			for client_index := range clients {
-				c := clients[client_index].(map[string]any)
+				c, isMap := clients[client_index].(map[string]any)
+				if !isMap {
+					// Preserve an unexpected element: dropping it here would
+					// rewrite the inbound without that client.
+					newClients = append(newClients, clients[client_index])
+					continue
+				}
 				email, _ := c["email"].(string)
 				if newExpiry, ok := newExpiryByEmail[email]; ok {
 					c["expiryTime"] = newExpiry
@@ -483,7 +490,10 @@ func (s *InboundService) autoRenewClients(tx *gorm.DB, mutationBatch *trafficMut
 			cipher, _ = settings["method"].(string)
 		}
 		for client_index := range clients {
-			c := clients[client_index].(map[string]any)
+			c, isMap := clients[client_index].(map[string]any)
+			if !isMap {
+				continue
+			}
 			email, _ := c["email"].(string)
 			traffic, ok := trafficByEmail[email]
 			if !ok {
@@ -694,13 +704,24 @@ func (s *InboundService) ResetClientTrafficByEmail(clientEmail string) error {
 
 func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (needRestart bool, err error) {
 	var ownNode *int
+	var quotaDisabled bool
 	err = submitTrafficWrite(func() error {
 		var inner error
-		needRestart, ownNode, inner = s.resetClientTrafficLocked(id, clientEmail)
+		needRestart, ownNode, quotaDisabled, inner = s.resetClientTrafficLocked(id, clientEmail)
 		return inner
 	})
 	if err == nil {
 		s.resetMtprotoClientQuota(clientEmail)
+		// Only the quota switched this client off, so the reset restores it: the
+		// settings entry has to come back too, or the panel shows an off client
+		// that accounting treats as on. Uses the same path as the bulk resets.
+		if quotaDisabled {
+			if _, nr, eErr := s.clientService.BulkSetEnable(s, []string{clientEmail}, true); eErr != nil {
+				logger.Warning("Failed to re-enable quota-disabled client after traffic reset:", eErr)
+			} else if nr {
+				needRestart = true
+			}
+		}
 		// Siblings on other nodes are delivered by their own inbound's reset.
 		if ownNode != nil {
 			s.deliverNodeResetsNow([]int{*ownNode})
@@ -709,33 +730,50 @@ func (s *InboundService) ResetClientTraffic(id int, clientEmail string) (needRes
 	return
 }
 
-func (s *InboundService) resetClientTrafficLocked(id int, clientEmail string) (bool, *int, error) {
+func (s *InboundService) resetClientTrafficLocked(id int, clientEmail string) (bool, *int, bool, error) {
 	needRestart := false
 	var reenablePlan *trafficLocalApplyPlan
 	var reenableNodeID *int
 
 	traffic, err := s.GetClientTrafficByEmail(clientEmail)
 	if err != nil {
-		return false, nil, err
+		return false, nil, false, err
+	}
+	if traffic == nil {
+		// A known client id can still have no stats row (deleted while the
+		// request was in flight); reading traffic.Enable below would panic.
+		return false, nil, false, common.NewError("no traffic row for " + clientEmail)
 	}
 
-	if !traffic.Enable {
+	// A reset clears counters; it must not turn a client the operator switched
+	// off back on, so the lifecycle flag only follows the settings entry. The
+	// exception is a client the quota itself latched off: read that before the
+	// counters are zeroed, which hides why it is off.
+	depleted, err := quotaDisabledEmails(database.GetDB(), []string{clientEmail})
+	if err != nil {
+		return false, nil, false, err
+	}
+	quotaDisabled := len(depleted) > 0
+	clientEnabled := traffic.Enable || quotaDisabled
+
+	if !traffic.Enable && !quotaDisabled {
 		inbound, err := s.GetInbound(id)
 		if err != nil {
-			return false, nil, err
+			return false, nil, false, err
 		}
 		clients, err := s.GetClients(inbound)
 		if err != nil {
-			return false, nil, err
+			return false, nil, false, err
 		}
 		for _, client := range clients {
 			if client.Email == clientEmail && client.Enable {
+				clientEnabled = true
 				cipher := ""
 				if string(inbound.Protocol) == "shadowsocks" {
 					var oldSettings map[string]any
 					err = json.Unmarshal([]byte(inbound.Settings), &oldSettings)
 					if err != nil {
-						return false, nil, err
+						return false, nil, false, err
 					}
 					cipher, _ = oldSettings["method"].(string)
 				}
@@ -761,13 +799,13 @@ func (s *InboundService) resetClientTrafficLocked(id int, clientEmail string) (b
 
 	traffic.Up = 0
 	traffic.Down = 0
-	traffic.Enable = true
+	traffic.Enable = clientEnabled
 
 	db := database.GetDB()
 	now := time.Now().UnixMilli()
 	inbound, err := s.GetInbound(id)
 	if err != nil {
-		return false, nil, err
+		return false, nil, false, err
 	}
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		if err := adjustGroupBaselinesForRemovedTraffic(tx, []string{clientEmail}); err != nil {
@@ -798,7 +836,7 @@ func (s *InboundService) resetClientTrafficLocked(id int, clientEmail string) (b
 		}
 		return nil
 	}); err != nil {
-		return false, nil, err
+		return false, nil, false, err
 	}
 
 	if reenablePlan != nil {
@@ -814,9 +852,9 @@ func (s *InboundService) resetClientTrafficLocked(id int, clientEmail string) (b
 	}
 
 	if inbound != nil {
-		return needRestart, inbound.NodeID, nil
+		return needRestart, inbound.NodeID, quotaDisabled, nil
 	}
-	return needRestart, nil, nil
+	return needRestart, nil, quotaDisabled, nil
 }
 
 func (s *InboundService) ResetAllTraffics() error {
@@ -1182,10 +1220,21 @@ func (s *InboundService) GetClientTrafficByEmail(email string) (traffic *xray.Cl
 		return nil, err
 	}
 	if len(traffics) == 0 {
+		// The purge and reset paths match emails case-insensitively, so an
+		// older row may be stored under a different case than the client.
+		if err := db.Model(xray.ClientTraffic{}).
+			Where("LOWER(email) = ?", strings.ToLower(strings.TrimSpace(email))).
+			Find(&traffics).Error; err != nil {
+			logger.Warningf("Error retrieving ClientTraffic with email %s: %v", email, err)
+			return nil, err
+		}
+	}
+	if len(traffics) == 0 {
 		return nil, nil
 	}
 	overlayGlobalTraffic(db, traffics)
 	t := traffics[0]
+	email = t.Email
 
 	if rec, rErr := s.clientService.GetRecordByEmail(db, email); rErr == nil && rec != nil {
 		c := rec.ToClient()

@@ -101,6 +101,17 @@ func effectiveHwidLimitForSubID(tx *gorm.DB, subID string) (int, error) {
 	return limit, err
 }
 
+// subIDHasEnabledClient is the trust check behind unlimited-device tracking: a
+// sub id with no enabled client is either unknown or disabled, and a public
+// request must not create client_hwids rows for it.
+func subIDHasEnabledClient(db *gorm.DB, subID string) (bool, error) {
+	var count int64
+	err := db.Model(&model.ClientRecord{}).
+		Where("sub_id = ? AND enable = ?", subID, true).
+		Count(&count).Error
+	return count > 0, err
+}
+
 func (s *ClientService) EnforceHwidForSubID(subID string, req HwidRequest) (HwidGateResult, error) {
 	var res HwidGateResult
 	subID = strings.TrimSpace(subID)
@@ -118,7 +129,13 @@ func (s *ClientService) EnforceHwidForSubID(subID string, req HwidRequest) (Hwid
 	if limit <= 0 {
 		res.Allowed = true
 		if len(req.Hwid) >= minHwidLength {
-			trackUnlimitedHwid(db, subID, req)
+			enabled, err := subIDHasEnabledClient(db, subID)
+			if err != nil {
+				return res, err
+			}
+			if enabled {
+				trackUnlimitedHwid(db, subID, req)
+			}
 		}
 		return res, nil
 	}

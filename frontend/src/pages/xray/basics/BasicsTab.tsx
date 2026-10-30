@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+﻿import { useCallback } from 'react';
 import { onNumber } from '@/utils/onNumber';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Input, InputNumber, Modal, Select, Space, Switch, Tabs } from 'antd';
@@ -451,7 +451,7 @@ export default function BasicsTab({
                 value={(log.error as string) || ''}
                 style={{ width: '100%' }}
                 options={[
-                  { value: '', label: t('empty') },
+                  { value: '', label: t('none') },
                   ...ERROR_LOG.map((s) => ({ value: s, label: s })),
                 ]}
                 onChange={(v) =>
@@ -471,7 +471,7 @@ export default function BasicsTab({
                 value={(log.maskAddress as string) || ''}
                 style={{ width: '100%' }}
                 options={[
-                  { value: '', label: t('empty') },
+                  { value: '', label: t('none') },
                   ...MASK_ADDRESS.map((s) => ({ value: s, label: s })),
                 ]}
                 onChange={(v) =>

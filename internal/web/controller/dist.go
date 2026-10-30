@@ -110,14 +110,17 @@ func serveDistPage(c *gin.Context, name string) {
 		body = bytes.ReplaceAll(body, []byte(`href="/assets/`), []byte(`href="`+basePath+`assets/`))
 	}
 
+	// Escapes for a JS string literal inside the inline <script> below. The
+	// angle brackets must become \u003c/\u003e, not stay literal, or a
+	// webBasePath containing "</script>" terminates the block.
 	jsEscape := strings.NewReplacer(
 		`\`, `\\`,
 		`"`, `\"`,
 		"\n", `\n`,
 		"\r", `\r`,
-		"<", `<`,
-		">", `>`,
-		"&", `&`,
+		"<", `\u003c`,
+		">", `\u003e`,
+		"&", `\u0026`,
 	)
 	escapedBase := jsEscape.Replace(basePath)
 	csrfToken, err := session.EnsureCSRFToken(c)

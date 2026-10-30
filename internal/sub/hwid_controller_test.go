@@ -133,15 +133,38 @@ func TestSubscriptionHwidGateAcrossBodyRoutes(t *testing.T) {
 	}
 }
 
-func TestSubscriptionHwidGateSkipsHtmlInfoPage(t *testing.T) {
+// The HTML info page and the ?format=info JSON both carry per-subscriber data
+// and links, so they are gated like every body route instead of leaking a
+// subscription to a device that is over its limit.
+func TestSubscriptionHwidGateCoversHtmlAndInfoPages(t *testing.T) {
 	router, subID := initHwidSubRouter(t, 1)
 
-	rec := requestSub(t, router, http.MethodGet, "/sub/"+subID, "", "text/html")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("HTML sub page status = %d, want 200, body=%q", rec.Code, rec.Body.String())
+	pageRoutes := []string{
+		"/sub/" + subID,
+		"/sub/" + subID + "?html=1",
+		"/sub/" + subID + "?view=html",
+		"/sub/" + subID + "?format=info",
+		"/json/" + subID + "?html=1",
+		"/clash/" + subID + "?html=1",
 	}
-	if rec.Header().Get("X-Hwid-Not-Supported") != "" {
-		t.Fatalf("HTML sub page should not be HWID-gated: %#v", rec.Header())
+	for _, path := range pageRoutes {
+		rec := requestSub(t, router, http.MethodGet, path, "", "text/html")
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("%s without HWID = %d, want 404", path, rec.Code)
+		}
+		if rec.Header().Get("X-Hwid-Active") != "true" || rec.Header().Get("X-Hwid-Not-Supported") != "true" {
+			t.Fatalf("%s missing HWID headers = %#v", path, rec.Header())
+		}
+	}
+
+	// A client that proves its device still gets the page: the gate blocks the
+	// limit, not the feature.
+	rec := requestSub(t, router, http.MethodGet, "/sub/"+subID+"?html=1", "device-one", "text/html")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HTML sub page with HWID = %d, want 200, body=%q", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("X-Hwid-Active") != "true" {
+		t.Fatalf("HTML sub page missing active HWID header: %#v", rec.Header())
 	}
 }
 

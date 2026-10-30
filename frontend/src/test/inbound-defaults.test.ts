@@ -17,6 +17,7 @@ import {
   createDefaultVmessClient,
   createDefaultVmessInboundSettings,
   createDefaultWireguardInboundSettings,
+  defaultBridgeSniffing,
 } from '@/lib/xray/inbound-defaults';
 import {
   createHysteriaTlsSettingsWithDefaultCert,
@@ -252,5 +253,31 @@ describe('createTlsSettingsWithDefaultCert', () => {
     expect(tls.alpn).toEqual(['http/1.1']);
     // The overridden value must still satisfy the TLS settings schema.
     expect(TlsStreamSettingsSchema.parse(tls).alpn).toEqual(['http/1.1']);
+  });
+});
+
+describe('defaultBridgeSniffing', () => {
+  it('mirrors the sidecar bridge defaults (no routeOnly)', () => {
+    for (const protocol of ['qwdtt', 'csqtt', 'olcrtc']) {
+      expect(defaultBridgeSniffing(protocol)).toMatchObject({
+        enabled: true,
+        destOverride: ['http', 'tls', 'quic'],
+        routeOnly: false,
+      });
+    }
+  });
+
+  it('mirrors the TUIC relay default (routeOnly on, fakedns included)', () => {
+    expect(defaultBridgeSniffing('tuic')).toMatchObject({
+      enabled: true,
+      destOverride: ['http', 'tls', 'quic', 'fakedns'],
+      routeOnly: true,
+    });
+  });
+
+  it('returns nothing for protocols without a generated bridge', () => {
+    for (const protocol of ['vless', 'trojan', 'mtproto', 'amneziawg']) {
+      expect(defaultBridgeSniffing(protocol)).toBeUndefined();
+    }
   });
 });

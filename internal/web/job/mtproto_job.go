@@ -1,6 +1,8 @@
 package job
 
 import (
+	"sync"
+
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/mtproto"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
@@ -13,6 +15,9 @@ import (
 // and inbound traffic accounting.
 type MtprotoJob struct {
 	inboundService service.InboundService
+	// running serializes the startup kick with the cron ticks: two overlapping
+	// scrapes would both count the same mtg counter delta.
+	running sync.Mutex
 }
 
 // NewMtprotoJob creates a new mtproto reconcile/traffic job instance.
@@ -23,6 +28,10 @@ func NewMtprotoJob() *MtprotoJob {
 // Run reconciles desired mtproto inbounds with running mtg processes and records
 // per-client traffic deltas and online status.
 func (j *MtprotoJob) Run() {
+	if !j.running.TryLock() {
+		return
+	}
+	defer j.running.Unlock()
 	desired, err := j.inboundService.DesiredMtprotoInstances()
 	if err != nil {
 		logger.Warning("mtproto job: get desired instances failed:", err)

@@ -80,8 +80,6 @@ export const PALETTE_KEYWORDS: Record<string, string[]> = {
   '/groups': ['groups', 'tags', 'batch'],
   '/nodes': ['nodes', 'servers', 'cluster', 'remote nodes'],
   '/hosts': ['hosts', 'sni', 'domains'],
-  '/outbound': ['outbounds', 'freedom', 'blackhole', 'socks', 'http', 'warp', 'nord', 'pia'],
-  '/routing': ['routing', 'rules', 'geoip', 'geosite', 'direct', 'block'],
   '/settings': ['settings', 'config', 'port', 'password', 'ssl', 'telegram'],
   '/xray': ['xray', 'templates', 'balancer', 'dns'],
   '/optimize': ['optimize', 'optimization', 'bbr', 'dns', 'swap', 'sysctl', 'tcp', 'vps'],

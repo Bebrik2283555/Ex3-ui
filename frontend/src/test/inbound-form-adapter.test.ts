@@ -472,3 +472,36 @@ describe('xhttp xmux maxConcurrency survives a load/re-save round-trip', () => {
     expect(xmux.maxConcurrency).toBe('1-2');
   });
 });
+
+describe('bridge-served protocols seed the sniffing block the backend applies', () => {
+  const qwdttRow: RawInboundRow = {
+    ...vlessRow,
+    protocol: 'qwdtt',
+    sniffing: '',
+    settings: '{"clients":[],"sidecar":{"routeThroughXray":true}}',
+  };
+
+  it('rawInboundToFormValues fills an empty block from the protocol default', () => {
+    const values = rawInboundToFormValues(qwdttRow);
+    expect(values.sniffing).toMatchObject({
+      enabled: true,
+      destOverride: ['http', 'tls', 'quic'],
+      routeOnly: false,
+    });
+  });
+
+  it('formValuesToWirePayload persists that block instead of an empty string', () => {
+    const payload = formValuesToWirePayload(rawInboundToFormValues(qwdttRow));
+    // routeOnly=false is the schema default, so the wire form omits it.
+    expect(JSON.parse(payload.sniffing)).toMatchObject({
+      enabled: true,
+      destOverride: ['http', 'tls', 'quic'],
+    });
+  });
+
+  it('keeps an explicit disabled block', () => {
+    const values = rawInboundToFormValues({ ...qwdttRow, sniffing: '{"enabled":false}' });
+    expect(values.sniffing.enabled).toBe(false);
+    expect(JSON.parse(formValuesToWirePayload(values).sniffing)).toEqual({ enabled: false });
+  });
+});

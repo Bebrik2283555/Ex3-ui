@@ -1,5 +1,9 @@
 package sidecar
 
+// Loopback admin-API client for the CSQTT core: login, client reconciliation
+// and counter reads. The child caps concurrent web sessions, so one client
+// instance (and its cookie jar) is shared per admin port.
+
 import (
 	"bytes"
 	"context"
@@ -9,10 +13,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
-	"os"
-	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,170 +24,34 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
 
-type csqttAuthMode int
+const (
+	csqttAPITimeout     = 8 * time.Second
+	csqttAPIMaxBody     = 1 << 20
+	csqttAPILockout     = 3 * time.Minute
+	csqttAPILoginPath   = "/api/login"
+	csqttAPIClientsPath = "/api/clients"
+	csqttAPIDeletePath  = "/api/clients/batch-delete"
+	csqttAPITogglePath  = "/api/clients/batch-toggle"
+	csqttAPIDaysMax     = 3650
+	csqttAPIDayMillis   = int64(86_400_000)
+	csqttAPICredPrefix  = "c1:"
+	csqttAPIByteShift   = 47
+)
+
+// ErrCSQTTNotReady is kept for callers that used to probe readiness; the API
+// reports a plain transport error before the child listens.
+var ErrCSQTTNotReady = errors.New("csqtt admin api is not ready")
+
+// csqttAuthState tracks which dialect the child accepted.
+type csqttAuthState int
 
 const (
-	csqttAuthUnknown csqttAuthMode = iota
+	csqttAuthUnknown csqttAuthState = iota
 	csqttAuthAPIKey
 	csqttAuthCookie
 )
 
-// CSQTTClient talks to the csqtt admin HTTP API on loopback.
-type CSQTTClient struct {
-	baseURL string
-	user    string
-	pass    string
-	http    *http.Client
-
-	mu      sync.Mutex
-	mode    csqttAuthMode
-	authErr error
-	retryAt time.Time
-}
-
-// Clients are cached per endpoint and credential pair: csqtt limits active web
-// sessions, so stats polls must reuse one cookie instead of logging in each time.
-var (
-	csqttClientsMu sync.Mutex
-	csqttClients   = map[string]*CSQTTClient{}
-)
-
-// NewCSQTTClient builds a client for a csqtt instance listening on port.
-func NewCSQTTClient(port int, user, pass string) *CSQTTClient {
-	key := fmt.Sprintf("%d\x00%s\x00%s", port, user, pass)
-	csqttClientsMu.Lock()
-	defer csqttClientsMu.Unlock()
-	if c, ok := csqttClients[key]; ok {
-		return c
-	}
-	c := newCSQTTClient(fmt.Sprintf("https://127.0.0.1:%d", port), user, pass)
-	csqttClients[key] = c
-	return c
-}
-
-func newCSQTTClient(baseURL, user, pass string) *CSQTTClient {
-	// The admin panel uses a self-signed certificate, so verification is
-	// skipped for this loopback-only connection.
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // loopback self-signed admin API
-	}
-	jar, _ := cookiejar.New(nil)
-	return &CSQTTClient{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		user:    user,
-		pass:    pass,
-		http: &http.Client{
-			Timeout:   8 * time.Second,
-			Transport: transport,
-			Jar:       jar,
-		},
-	}
-}
-
-func (c *CSQTTClient) do(method, path string, body any) ([]byte, error) {
-	var raw []byte
-	if body != nil {
-		var err error
-		if raw, err = json.Marshal(body); err != nil {
-			return nil, err
-		}
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	data, status, err := c.request(method, path, raw)
-	if err != nil {
-		return nil, err
-	}
-	if status >= 200 && status < 300 {
-		if c.mode == csqttAuthUnknown {
-			c.mode = csqttAuthAPIKey
-		}
-		return data, nil
-	}
-	if status != http.StatusUnauthorized && status != http.StatusForbidden {
-		return data, fmt.Errorf("csqtt api %s %s: %s", method, path, strings.TrimSpace(string(data)))
-	}
-
-	// 2.1.9 replaced X-API-Key with a Caesar-encoded login cookie.
-	if err := c.loginLocked(); err != nil {
-		return data, err
-	}
-	data, status, err = c.request(method, path, raw)
-	if err != nil {
-		return nil, err
-	}
-	if status < 200 || status >= 300 {
-		return data, fmt.Errorf("csqtt api %s %s: %s", method, path, strings.TrimSpace(string(data)))
-	}
-	return data, nil
-}
-
-func (c *CSQTTClient) request(method, path string, raw []byte) ([]byte, int, error) {
-	var reader io.Reader
-	if raw != nil {
-		reader = bytes.NewReader(raw)
-	}
-	req, err := http.NewRequestWithContext(context.Background(), method, c.baseURL+path, reader)
-	if err != nil {
-		return nil, 0, err
-	}
-	// csqtt 2.5.0 accepts the admin password through X-API-Key (or a Bearer
-	// token); 2.1.9 ignores it and needs the cookie session instead.
-	if c.mode != csqttAuthCookie && c.pass != "" {
-		req.Header.Set("X-API-Key", c.pass)
-	}
-	if raw != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer resp.Body.Close()
-	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	return data, resp.StatusCode, nil
-}
-
-func (c *CSQTTClient) loginLocked() error {
-	now := time.Now()
-	if c.authErr != nil && now.Before(c.retryAt) {
-		return c.authErr
-	}
-	body, _ := json.Marshal(map[string]string{
-		"user": csqttCaesar(c.user),
-		"pass": csqttCaesar(c.pass),
-	})
-	data, status, err := c.request(http.MethodPost, "/api/login", body)
-	if err != nil {
-		return err
-	}
-	if status >= 200 && status < 300 {
-		c.mode = csqttAuthCookie
-		c.authErr = nil
-		return nil
-	}
-	err = fmt.Errorf("csqtt api login: %s", strings.TrimSpace(string(data)))
-	if status == http.StatusUnauthorized || status == http.StatusForbidden || status == http.StatusTooManyRequests {
-		// A wrong password will not fix itself; a 429 clears once the
-		// server's three-minute lockout window expires.
-		c.authErr = err
-		c.retryAt = now.Add(3 * time.Minute)
-	}
-	return err
-}
-
-// csqttCaesar mirrors the obfuscation the 2.1.9 login form applies before the
-// credentials leave the browser.
-func csqttCaesar(s string) string {
-	raw := []byte(s)
-	for i := range raw {
-		raw[i] += 47
-	}
-	return "c1:" + base64.StdEncoding.EncodeToString(raw)
-}
-
+// csqttClientInfo is the subset of one core-side client the panel consumes.
 type csqttClientInfo struct {
 	Password       string `json:"password"`
 	Name           string `json:"name"`
@@ -193,174 +61,359 @@ type csqttClientInfo struct {
 	ActiveSessions int    `json:"active_sessions"`
 }
 
-// ClientTraffic reads the cumulative per-client counters and active session
-// counts from the csqtt admin API.
-func (c *CSQTTClient) ClientTraffic() ([]csqttClientInfo, error) {
-	raw, err := c.do(http.MethodGet, "/api/clients", nil)
-	if err != nil {
-		return nil, err
-	}
-	var clients []csqttClientInfo
-	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &clients); err != nil {
-			return nil, fmt.Errorf("decode client traffic: %w", err)
-		}
-	}
-	return clients, nil
+// Request bodies, in the child's documented key order.
+type csqttLoginPayload struct {
+	User string `json:"user"`
+	Pass string `json:"pass"`
 }
 
-// SyncClients makes the csqtt store match the panel client list. Only entries
-// the panel previously created are removed, so clients added through csqtt's
-// own admin panel survive. 2.1.9 generates passwords server-side and has no
-// batch API; links there all share the main password, so nothing to sync.
+type csqttCreatePayload struct {
+	Name     string `json:"name"`
+	Days     int    `json:"days"`
+	Password string `json:"password"`
+	Hash     string `json:"hash"`
+}
+
+type csqttPasswordsPayload struct {
+	Passwords []string `json:"passwords"`
+}
+
+type csqttTogglePayload struct {
+	Passwords []string `json:"passwords"`
+	Active    bool     `json:"active"`
+}
+
+// CSQTTClient talks to one core's admin API.
+type CSQTTClient struct {
+	baseURL string
+	user    string
+	pass    string
+	http    *http.Client
+
+	mu            sync.Mutex
+	state         csqttAuthState
+	loginError    string
+	loginErrorTil time.Time
+}
+
+var (
+	csqttClientsMu sync.Mutex
+	csqttClients   = make(map[int]*CSQTTClient)
+)
+
+// NewCSQTTClient returns the shared client for an admin port, replacing the
+// cached one when the credentials changed.
+func NewCSQTTClient(port int, user, pass string) *CSQTTClient {
+	csqttClientsMu.Lock()
+	defer csqttClientsMu.Unlock()
+	if cached := csqttClients[port]; cached != nil {
+		if cached.user == user && cached.pass == pass {
+			return cached
+		}
+		cached.http.CloseIdleConnections()
+	}
+	base := "https://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	client := newCSQTTClient(base, user, pass)
+	csqttClients[port] = client
+	return client
+}
+
+// newCSQTTClient builds a client for an admin base URL.
+func newCSQTTClient(baseURL, user, pass string) *CSQTTClient {
+	jar, _ := cookiejar.New(nil)
+	return &CSQTTClient{
+		baseURL: strings.TrimRight(baseURL, "/"),
+		user:    user,
+		pass:    pass,
+		http: &http.Client{
+			Timeout: csqttAPITimeout,
+			Jar:     jar,
+			// The core serves its admin panel from a self-signed loopback
+			// certificate, so verification cannot succeed by design.
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		},
+	}
+}
+
+// ClientTraffic reads every client's cumulative counters.
+func (c *CSQTTClient) ClientTraffic() ([]csqttClientInfo, error) {
+	return c.listClients("decode client traffic")
+}
+
+// SyncClients converges the core's client set onto the panel's.
 func (c *CSQTTClient) SyncClients(clients []model.Client, ledgerPath, mainPass, defaultHash string, hashesByEmail map[string]string) error {
-	raw, err := c.do(http.MethodGet, "/api/clients", nil)
+	coreClients, err := c.listClients("decode clients")
 	if err != nil {
 		return err
 	}
-	c.mu.Lock()
-	legacy := c.mode == csqttAuthCookie
-	c.mu.Unlock()
-	if legacy {
+	// The cookie dialect generates passwords itself and has no batch API.
+	if c.authState() == csqttAuthCookie {
 		return nil
 	}
-	var existing []csqttClientInfo
-	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &existing); err != nil {
-			return fmt.Errorf("decode clients: %w", err)
-		}
-	}
-	have := make(map[string]csqttClientInfo, len(existing))
-	for _, cl := range existing {
-		have[cl.Password] = cl
-	}
-	ledger := readLedger(ledgerPath)
-	mainPass = strings.TrimSpace(mainPass)
-	keep := map[string]bool{}
-	for _, cl := range clients {
-		if pass := csqttPasswordForClient(cl); pass != "" && pass != mainPass {
-			keep[pass] = true
-		}
-	}
-	// Remove stale panel clients first: editing a client's password creates a
-	// new entry, and csqtt rejects duplicate names, so the old one has to go.
-	var remove []string
-	for pass := range ledger {
-		if pass == mainPass {
-			// The main password is not a client entry; never batch-delete it.
-			delete(ledger, pass)
+
+	existing := make(map[string]csqttClientInfo, len(coreClients))
+	for _, info := range coreClients {
+		credential := strings.TrimSpace(info.Password)
+		if credential == "" {
 			continue
 		}
-		if !keep[pass] {
-			remove = append(remove, pass)
-			delete(ledger, pass)
-		}
+		existing[credential] = info
 	}
-	if len(remove) > 0 {
-		if _, err := c.do(http.MethodPost, "/api/clients/batch-delete",
-			map[string]any{"passwords": remove}); err != nil {
+
+	now := time.Now().UnixMilli()
+	mainCredential := strings.TrimSpace(mainPass)
+	type wantedClient struct {
+		credential string
+		client     model.Client
+		active     bool
+	}
+	wanted := make([]wantedClient, 0, len(clients))
+	wantedSet := make(map[string]struct{}, len(clients))
+	for _, client := range clients {
+		credential := csqttCredential(client)
+		if credential == "" || credential == mainCredential {
+			continue
+		}
+		wanted = append(wanted, wantedClient{
+			credential: credential,
+			client:     client,
+			active:     client.Enable && (client.ExpiryTime <= 0 || client.ExpiryTime > now),
+		})
+		wantedSet[credential] = struct{}{}
+	}
+
+	ledger := readLedger(ledgerPath)
+	ledgerSet := make(map[string]struct{}, len(ledger))
+	removals := make([]string, 0, len(ledger))
+	for _, entry := range ledger {
+		credential := strings.TrimSpace(entry)
+		if credential == "" || credential == mainCredential {
+			continue
+		}
+		if _, keep := wantedSet[credential]; keep {
+			ledgerSet[credential] = struct{}{}
+			continue
+		}
+		removals = append(removals, credential)
+	}
+	// Removals go first: a renamed client still holds its old display name.
+	if len(removals) > 0 {
+		if err := c.post(csqttAPIDeletePath, csqttPasswordsPayload{Passwords: removals}); err != nil {
 			return err
 		}
 	}
-	for _, cl := range clients {
-		pass := csqttPasswordForClient(cl)
-		if pass == "" || pass == mainPass {
-			// A main credential is not a panel client entry.
-			continue
-		}
-		want := cl.Enable && (cl.ExpiryTime <= 0 || cl.ExpiryTime > time.Now().UnixMilli())
-		if _, ok := have[pass]; !ok {
-			hash := strings.TrimSpace(hashesByEmail[cl.Email])
-			if hash == "" {
-				hash = strings.TrimSpace(defaultHash)
+
+	for _, item := range wanted {
+		info, found := existing[item.credential]
+		if !found {
+			payload := csqttCreatePayload{
+				Name:     item.client.Email,
+				Days:     csqttDays(item.client.ExpiryTime, now),
+				Password: item.credential,
+				Hash:     hashFor(hashesByEmail, item.client.Email, defaultHash),
 			}
-			cl.Password = pass
-			if err := c.createClient(cl, hash); err != nil {
+			if err := c.post(csqttAPIClientsPath, payload); err != nil {
 				return err
 			}
-			ledger[pass] = true
-			if !want {
-				if _, err := c.do(http.MethodPost, "/api/clients/batch-toggle",
-					map[string]any{"passwords": []string{pass}, "active": false}); err != nil {
+			ledgerSet[item.credential] = struct{}{}
+			existing[item.credential] = csqttClientInfo{Password: item.credential, Active: true}
+			if !item.active {
+				if err := c.toggle(item.credential, false); err != nil {
 					return err
 				}
+				existing[item.credential] = csqttClientInfo{Password: item.credential, Active: false}
 			}
 			continue
 		}
-		if have[pass].Active != want {
-			if _, err := c.do(http.MethodPost, "/api/clients/batch-toggle",
-				map[string]any{"passwords": []string{pass}, "active": want}); err != nil {
-				return err
+		if info.Active == item.active {
+			continue
+		}
+		if err := c.toggle(item.credential, item.active); err != nil {
+			return err
+		}
+		info.Active = item.active
+		existing[item.credential] = info
+	}
+
+	return writeLedger(ledgerPath, setKeys(ledgerSet))
+}
+
+func (c *CSQTTClient) toggle(credential string, active bool) error {
+	return c.post(csqttAPITogglePath, csqttTogglePayload{
+		Passwords: []string{credential},
+		Active:    active,
+	})
+}
+
+func (c *CSQTTClient) post(path string, payload any) error {
+	_, err := c.request(http.MethodPost, path, payload)
+	return err
+}
+
+func (c *CSQTTClient) listClients(decodeLabel string) ([]csqttClientInfo, error) {
+	body, err := c.request(http.MethodGet, csqttAPIClientsPath, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil, nil
+	}
+	var entries []json.RawMessage
+	if err := json.Unmarshal(body, &entries); err != nil {
+		return nil, fmt.Errorf("%s: %w", decodeLabel, err)
+	}
+	out := make([]csqttClientInfo, 0, len(entries))
+	for _, entry := range entries {
+		var info csqttClientInfo
+		if err := json.Unmarshal(entry, &info); err != nil {
+			continue
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+// request performs one call and, on an authentication failure, logs in once
+// and retries the same call exactly once.
+func (c *CSQTTClient) request(method, path string, payload any) ([]byte, error) {
+	var body []byte
+	if payload != nil {
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return nil, err
+		}
+		body = encoded
+	}
+	for attempt := 0; ; attempt++ {
+		status, responseBody, err := c.send(method, path, body)
+		if err != nil {
+			return nil, err
+		}
+		if status >= http.StatusOK && status < http.StatusMultipleChoices {
+			c.markAccepted()
+			return responseBody, nil
+		}
+		if (status == http.StatusUnauthorized || status == http.StatusForbidden) && attempt == 0 {
+			if err := c.login(); err != nil {
+				return nil, err
 			}
+			continue
 		}
+		return nil, fmt.Errorf("csqtt api %s %s: %s", method, path, strings.TrimSpace(string(responseBody)))
 	}
-	return writeLedger(ledgerPath, ledger)
 }
 
-// csqttPasswordForClient returns the client's own CSQTT credential. The main
-// password and the generic client password are not client fallbacks.
-func csqttPasswordForClient(cl model.Client) string {
-	return strings.TrimSpace(cl.CsqttPassword)
+func (c *CSQTTClient) send(method, path string, body []byte) (int, []byte, error) {
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(context.Background(), method, c.baseURL+path, reader)
+	if err != nil {
+		return 0, nil, err
+	}
+	state, pass := c.authSnapshot()
+	if state != csqttAuthCookie && pass != "" {
+		req.Header.Set("X-API-Key", pass)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	// An oversized body is truncated here and fails to decode upstream.
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, csqttAPIMaxBody))
+	return resp.StatusCode, data, nil
 }
 
-func (c *CSQTTClient) createClient(cl model.Client, hash string) error {
-	// csqtt accepts 0 (never expires) or 1..3650 days.
-	days := int64(0)
-	if cl.ExpiryTime > 0 {
-		days = (cl.ExpiryTime - time.Now().UnixMilli()) / (24 * 60 * 60 * 1000)
-		if days < 1 {
-			days = 1
-		} else if days > 3650 {
-			days = 3650
-		}
+// login authenticates and caches the child's lockout answer so a wrong
+// password does not hammer the endpoint.
+func (c *CSQTTClient) login() error {
+	c.mu.Lock()
+	if c.loginError != "" && time.Now().Before(c.loginErrorTil) {
+		cached := c.loginError
+		c.mu.Unlock()
+		return errors.New(cached)
 	}
-	body := map[string]any{
-		"name":     cl.Email,
-		"days":     days,
-		"password": cl.Password,
-		"hash":     hash,
-	}
-	if _, err := c.do(http.MethodPost, "/api/clients", body); err != nil {
+	c.mu.Unlock()
+
+	payload, err := json.Marshal(csqttLoginPayload{
+		User: csqttCaesar(c.user),
+		Pass: csqttCaesar(c.pass),
+	})
+	if err != nil {
 		return err
 	}
-	return nil
-}
-
-func readLedger(path string) map[string]bool {
-	out := map[string]bool{}
-	if path == "" {
-		return out
-	}
-	data, err := os.ReadFile(path)
+	status, body, err := c.send(http.MethodPost, csqttAPILoginPath, payload)
 	if err != nil {
-		return out
+		return err
 	}
-	var list []string
-	if json.Unmarshal(data, &list) == nil {
-		for _, p := range list {
-			out[p] = true
-		}
-	}
-	return out
-}
-
-func writeLedger(path string, ledger map[string]bool) error {
-	if path == "" {
+	if status >= http.StatusOK && status < http.StatusMultipleChoices {
+		c.mu.Lock()
+		c.state = csqttAuthCookie
+		c.loginError = ""
+		c.loginErrorTil = time.Time{}
+		c.mu.Unlock()
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
+
+	failure := errors.New("csqtt api login: " + strings.TrimSpace(string(body)))
+	switch status {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests:
+		c.mu.Lock()
+		c.loginError = failure.Error()
+		c.loginErrorTil = time.Now().Add(csqttAPILockout)
+		c.mu.Unlock()
 	}
-	list := make([]string, 0, len(ledger))
-	for p := range ledger {
-		list = append(list, p)
-	}
-	data, err := json.Marshal(list)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o600)
+	return failure
 }
 
-// ErrCSQTTNotReady is returned before the admin API starts listening.
-var ErrCSQTTNotReady = errors.New("csqtt admin api is not ready")
+func (c *CSQTTClient) authSnapshot() (csqttAuthState, string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.state, c.pass
+}
+
+func (c *CSQTTClient) authState() csqttAuthState {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.state
+}
+
+// markAccepted records that the plain X-API-Key header was enough.
+func (c *CSQTTClient) markAccepted() {
+	c.mu.Lock()
+	if c.state == csqttAuthUnknown {
+		c.state = csqttAuthAPIKey
+	}
+	c.mu.Unlock()
+}
+
+// csqttCaesar reproduces the login form's byte-offset + base64 obfuscation.
+func csqttCaesar(value string) string {
+	shifted := []byte(value)
+	for i := range shifted {
+		shifted[i] += csqttAPIByteShift
+	}
+	return csqttAPICredPrefix + base64.StdEncoding.EncodeToString(shifted)
+}
+
+// csqttDays converts an expiry timestamp into the request's day count.
+func csqttDays(expiry, now int64) int {
+	if expiry <= 0 {
+		return 0
+	}
+	days := (expiry - now) / csqttAPIDayMillis
+	if days < 1 {
+		return 1
+	}
+	if days > csqttAPIDaysMax {
+		return csqttAPIDaysMax
+	}
+	return int(days)
+}

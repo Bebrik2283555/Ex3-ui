@@ -85,18 +85,12 @@ export function canEnableStream(values: { protocol: string }): boolean {
   return STREAM_PROTOCOLS.includes(values.protocol);
 }
 
-// mtproto and amneziawg are served by an external process/interface, not
-// Xray, so the Xray sniffing block does not apply to either. Every other
-// inbound supports sniffing.
+// mtproto and amneziawg are served by an external process/interface with no
+// Xray bridge, so the Xray sniffing block cannot apply to either. TUIC, qWDTT,
+// CSQTT and olcRTC do have a generated bridge (relay SOCKS or TUN), so the
+// block applies to that bridge and is editable per inbound.
 export function canEnableSniffing(values: { protocol: string }): boolean {
-  return (
-    values.protocol !== 'mtproto' &&
-    values.protocol !== 'amneziawg' &&
-    values.protocol !== 'tuic' &&
-    values.protocol !== 'qwdtt' &&
-    values.protocol !== 'olcrtc' &&
-    values.protocol !== 'csqtt'
-  );
+  return values.protocol !== 'mtproto' && values.protocol !== 'amneziawg';
 }
 
 // Vision seed applies only when XTLS Vision (TCP/TLS) flow is selected

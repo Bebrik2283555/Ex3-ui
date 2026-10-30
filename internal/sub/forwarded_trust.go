@@ -47,6 +47,22 @@ func hasForwardedHeaders(c *gin.Context) bool {
 	return false
 }
 
+// forwardedClientTrusted reports whether the socket peer may name the client
+// address. Unlike forwardedHeadersTrusted it never fails open: an empty or
+// unreadable CIDR setting means "no trusted proxy", because accepting a
+// spoofed X-Forwarded-For would hand out a fresh rate-limit bucket per request.
+func (s *SubService) forwardedClientTrusted(c *gin.Context) bool {
+	configured, err := s.settingService.GetTrustedProxyCIDRs()
+	if err != nil {
+		return false
+	}
+	configured = strings.TrimSpace(configured)
+	if configured == "" {
+		return false
+	}
+	return remoteAddrInCIDRs(c.Request.RemoteAddr, configured)
+}
+
 func warnSuppressedForwardedHeaders(c *gin.Context) {
 	present := make([]string, 0, 3)
 	for _, name := range forwardedHeaderNames {

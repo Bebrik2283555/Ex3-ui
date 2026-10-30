@@ -1,6 +1,7 @@
 import { RandomUtil, Wireguard } from '@/utils';
 import { generateAwgObfuscation } from '@/lib/xray/amneziawg-obfuscation';
 
+import type { Sniffing } from '@/schemas/primitives';
 import type { AmneziawgInboundSettings } from '@/schemas/protocols/inbound/amneziawg';
 import type { HttpInboundSettings } from '@/schemas/protocols/inbound/http';
 import type { HysteriaClient, HysteriaInboundSettings } from '@/schemas/protocols/inbound/hysteria';
@@ -26,6 +27,39 @@ import type { TunnelInboundSettings } from '@/schemas/protocols/inbound/tunnel';
 import type { VlessClient, VlessInboundSettings } from '@/schemas/protocols/inbound/vless';
 import type { VmessClient, VmessInboundSettings } from '@/schemas/protocols/inbound/vmess';
 import type { WireguardInboundSettings } from '@/schemas/protocols/inbound/wireguard';
+
+// Generated bridges (TUIC relay SOCKS, qWDTT/CSQTT TUN, olcRTC SOCKS) sniff
+// even when the row stores no block, so the form seeds the same values the
+// backend falls back to - what the tab shows is what actually runs. Sidecars
+// keep routeOnly off: replacing the dial target with the sniffed SNI is what
+// lets SmartDNS hosts pins apply. The TUIC relay keeps routeOnly on until the
+// operator opts out, matching its long-standing routing behaviour.
+export function defaultBridgeSniffing(protocol: string): Sniffing | undefined {
+  switch (protocol) {
+    case 'tuic':
+      return {
+        enabled: true,
+        destOverride: ['http', 'tls', 'quic', 'fakedns'],
+        metadataOnly: false,
+        routeOnly: true,
+        ipsExcluded: [],
+        domainsExcluded: [],
+      };
+    case 'qwdtt':
+    case 'csqtt':
+    case 'olcrtc':
+      return {
+        enabled: true,
+        destOverride: ['http', 'tls', 'quic'],
+        metadataOnly: false,
+        routeOnly: false,
+        ipsExcluded: [],
+        domainsExcluded: [],
+      };
+    default:
+      return undefined;
+  }
+}
 
 // Plain-object factories for protocol clients. Each returns a Zod-parsable
 // object matching the wire shape. Random fields (id, password, auth,

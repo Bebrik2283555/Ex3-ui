@@ -25,8 +25,18 @@ func recoverBotPanic() {
 
 // runBotHandler runs a bot handler on a worker slot and recovers panics: a bad
 // callback must not take down the whole panel, the way a cron panic would not.
+//
+// The slot is claimed without blocking. All three dispatch sites spawn their
+// own goroutine, so a blocking claim would only pile those goroutines (and the
+// update payloads they hold) up forever whenever handlers are slower than
+// updates arrive — the semaphore would cap executors but not memory.
 func runBotHandler(fn func()) {
-	messageWorkerPool <- struct{}{}
+	select {
+	case messageWorkerPool <- struct{}{}:
+	default:
+		logger.Warning("Telegram bot is busy; dropping update")
+		return
+	}
 	defer func() { <-messageWorkerPool }()
 	defer recoverBotPanic()
 	fn()
@@ -1235,7 +1245,7 @@ func isClientSelfCallback(data string) bool {
 	// "hide" is how any recipient puts a message away: it carries no target of its
 	// own (it is the message it sits on), so it is safe for anyone to reach.
 	case "home", "hide", "client_traffic", "client_commands", "client_sub_links",
-		"client_individual_links", "client_qr_links":
+		"client_individual_links", "client_qr_links", "pg:next", "pg:prev", "pg:none":
 		return true
 	}
 	_, _, ok := splitClientLinkCallback(data)

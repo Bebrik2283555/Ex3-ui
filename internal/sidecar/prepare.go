@@ -1,5 +1,8 @@
 package sidecar
 
+// Runtime files written into an inbound's data directory before its core is
+// spawned.
+
 import (
 	"encoding/json"
 	"errors"
@@ -7,169 +10,277 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 )
 
-// Prepare writes the runtime files the sidecar binary reads before start.
+// Names of the files this stage owns inside a core's config directory.
+const (
+	qwdttStoreName         = "passwords.json"
+	qwdttOwnerPasswordName = "owner-password"
+	csqttStampFileName     = "ex3ui-store"
+	csqttStoreStamp        = "csqtt-2.5.0-ex3ui-2"
+	csqttLegacyName        = "ex3ui-password"
+	csqttLegacyExact       = "csqtt-2.5.0"
+	csqttLegacyPrefix      = "csqtt-2.5.0-legacy|"
+	olcrtcNamesName        = "names"
+	olcrtcSurnamesName     = "surnames"
+)
+
+// Prepare writes the files one core needs before it is started.
 func (i Instance) Prepare() error {
 	switch i.Protocol {
 	case model.QWDTT:
-		return i.writeQWDTTStore()
+		return i.prepareQWDTT()
 	case model.OLCRTC:
-		return i.writeOLCRTCConfig()
+		return i.prepareOLCRTC()
 	case model.CSQTT:
-		// csqtt owns its SQLite database and creates it on first start.
-		if i.CSQTT != nil {
-			if err := os.MkdirAll(i.CSQTT.ConfigDir, 0o700); err != nil {
-				return err
-			}
-			syncCSQTTStoreVersion(i.CSQTT.ConfigDir)
-		}
+		return i.prepareCSQTT()
 	}
 	return nil
 }
 
-// csqttStoreStamp identifies the bundled csqtt build and its SQLite layout.
-// Keep it independent of the main password: changing a client or main password
-// must not wipe traffic counters and operator-created clients.
-const csqttStoreStamp = "csqtt-2.5.0-ex3ui-2"
-
-// syncCSQTTStoreVersion drops the cached SQLite store only when the bundled
-// csqtt build changes. Stores written by 1.4.2 used a password-bound stamp;
-// they are compatible, so the database is kept and only the stamp is rewritten.
-func syncCSQTTStoreVersion(dir string) {
-	if dir == "" {
-		return
+// qwdttCredential is the per-client secret the qWDTT child keys everything by.
+func qwdttCredential(client model.Client) string {
+	if secret := strings.TrimSpace(client.QwdttPassword); secret != "" {
+		return secret
 	}
-	stamp := filepath.Join(dir, "ex3ui-store")
-	legacyStamp := filepath.Join(dir, "ex3ui-password")
-	if data, err := os.ReadFile(stamp); err == nil {
-		prev := strings.TrimSpace(string(data))
-		if prev == csqttStoreStamp {
-			return
-		}
-		if isLegacyCSQTTStamp(prev) {
-			_ = os.Remove(legacyStamp)
-			_ = os.WriteFile(stamp, []byte(csqttStoreStamp), 0o600)
-			return
-		}
-	} else if data, err := os.ReadFile(legacyStamp); err == nil {
-		if isLegacyCSQTTStamp(strings.TrimSpace(string(data))) {
-			_ = os.Remove(legacyStamp)
-			_ = os.WriteFile(stamp, []byte(csqttStoreStamp), 0o600)
-			return
-		}
-	}
-	// Also drop stores written before the stamp existed.
-	for _, name := range []string{"csqtt.db", "csqtt.db-wal", "csqtt.db-shm"} {
-		_ = os.Remove(filepath.Join(dir, name))
-	}
-	_ = os.Remove(legacyStamp)
-	_ = os.WriteFile(stamp, []byte(csqttStoreStamp), 0o600)
+	return strings.TrimSpace(client.Password)
 }
 
-func isLegacyCSQTTStamp(stamp string) bool {
-	return strings.HasPrefix(stamp, "csqtt-2.5.0-legacy|") ||
-		stamp == "csqtt-2.5.0"
+// csqttCredential has no fallback: a share-only member has no admin identity.
+func csqttCredential(client model.Client) string {
+	return csqttPasswordForClient(client)
 }
 
-// writeQWDTTStore merges the panel clients into {configDir}/passwords.json.
-// Unknown fields (including device bindings) are preserved; disabled clients
-// are removed so a disabled connection cannot stay usable.
+// sidecarClientPassword is the panel-side core credential of one client.
+func sidecarClientPassword(protocol model.Protocol, client model.Client) string {
+	switch protocol {
+	case model.QWDTT:
+		return qwdttCredential(client)
+	case model.CSQTT:
+		return csqttPasswordForClient(client)
+	}
+	return ""
+}
+
+// csqttPasswordForClient is the trimmed CSQTT credential; there is no fallback.
+func csqttPasswordForClient(client model.Client) string {
+	return strings.TrimSpace(client.CsqttPassword)
+}
+
+// prepareQWDTT writes the merged store, the owner-password file and the ledger
+// of credentials the panel has created in that core.
+func (i Instance) prepareQWDTT() error {
+	if err := i.writeQWDTTStore(); err != nil {
+		return err
+	}
+	if i.QWDTT == nil {
+		return nil
+	}
+	return writeQwdttOwnerPassword(i.QWDTT.ConfigDir, i.QWDTT.MainPass)
+}
+
+// qwdttOwnerPasswordPath is the file that carries the owner password to the
+// child; argv is readable by every local user in /proc/<pid>/cmdline.
+func qwdttOwnerPasswordPath(dir string) string {
+	return filepath.Join(dir, qwdttOwnerPasswordName)
+}
+
+// writeQwdttOwnerPassword rewrites the 0600 password file, or removes it when
+// no password is configured so the child never reads a stale secret.
+func writeQwdttOwnerPassword(dir, password string) error {
+	path := qwdttOwnerPasswordPath(dir)
+	if strings.TrimSpace(password) == "" {
+		removeQuietly(path)
+		return nil
+	}
+	if err := os.WriteFile(path, []byte(password), 0o600); err != nil {
+		return fmt.Errorf("qWDTT: write owner password: %w", err)
+	}
+	return os.Chmod(path, 0o600)
+}
+
+// writeQWDTTStore merges the panel's clients into the child's password store
+// without ever discarding keys the child owns, then records the ledger.
 func (i Instance) writeQWDTTStore() error {
 	cfg := i.QWDTT
 	if cfg == nil || strings.TrimSpace(cfg.ConfigDir) == "" {
 		return errors.New("qWDTT: config dir is not set")
 	}
-	if strings.Contains(cfg.ConfigDir, "..") {
+	dir := cfg.ConfigDir
+	if strings.Contains(dir, "..") {
 		return errors.New("qWDTT: invalid config dir")
 	}
-	path := filepath.Join(cfg.ConfigDir, "passwords.json")
-	// Keep the whole root: qwdtt stores device bindings and traffic counters
-	// next to "passwords", and dropping them would unbind every device.
-	root := map[string]json.RawMessage{}
-	passwords := map[string]map[string]any{}
-	if data, err := os.ReadFile(path); err == nil {
-		if err := json.Unmarshal(data, &root); err != nil {
-			return fmt.Errorf("qWDTT: invalid passwords.json: %w", err)
-		}
-		if raw, ok := root["passwords"]; ok && len(raw) > 0 {
-			if err := json.Unmarshal(raw, &passwords); err != nil {
-				return fmt.Errorf("qWDTT: invalid passwords.json: %w", err)
-			}
-		}
-	}
-	if passwords == nil {
-		passwords = map[string]map[string]any{}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
 	}
 
-	// qwdtt rewrites passwords.json with its own struct, so a per-entry marker
-	// would be lost. Keep the panel-owned password list in a separate ledger.
-	ledgerPath := filepath.Join(cfg.ConfigDir, "ex3ui-clients.json")
-	ledger := readLedger(ledgerPath)
-	keep := make(map[string]bool, len(i.Clients))
-	for _, cl := range i.Clients {
-		pass := strings.TrimSpace(cl.QwdttPassword)
-		if pass == "" {
-			pass = strings.TrimSpace(cl.Password)
-		}
-		if pass == "" || !cl.Enable {
+	storePath := filepath.Join(dir, qwdttStoreName)
+	document, passwords, err := loadQWDTTStore(storePath)
+	if err != nil {
+		return err
+	}
+
+	ledger := readLedger(filepath.Join(dir, csqttLedgerFileSuffix))
+	wanted := make(map[string]struct{}, len(i.Clients))
+	for _, client := range i.Clients {
+		credential := qwdttCredential(client)
+		if credential == "" || !client.Enable {
 			continue
 		}
-		keep[pass] = true
-		ledger[pass] = true
-		entry := passwords[pass]
+		wanted[credential] = struct{}{}
+		entry := passwords[credential]
 		if entry == nil {
-			entry = map[string]any{}
+			entry = make(map[string]json.RawMessage)
 		}
-		entry["label"] = strings.TrimSpace(cl.Email)
-		entry["is_deactivated"] = false
-		if cl.ExpiryTime > 0 {
-			entry["expires_at"] = cl.ExpiryTime / 1000
+		entry["label"] = rawJSON(strings.TrimSpace(client.Email))
+		entry["is_deactivated"] = json.RawMessage("false")
+		if client.ExpiryTime > 0 {
+			entry["expires_at"] = rawJSON(client.ExpiryTime / 1000)
 		} else {
 			delete(entry, "expires_at")
 		}
-		hashes := cfg.Hashes
-		if v := cfg.HashesByEmail[cl.Email]; strings.TrimSpace(v) != "" {
-			hashes = v
-		}
-		if hashes = strings.TrimSpace(hashes); hashes != "" {
-			entry["vk_hash"] = hashes
+		if hash := hashFor(cfg.HashesByEmail, client.Email, cfg.Hashes); hash != "" {
+			entry["vk_hash"] = rawJSON(hash)
 		} else {
 			delete(entry, "vk_hash")
 		}
-		passwords[pass] = entry
+		passwords[credential] = entry
 	}
-	for pass := range ledger {
-		if !keep[pass] {
-			delete(passwords, pass)
-			delete(ledger, pass)
+	for _, credential := range ledger {
+		if _, keep := wanted[credential]; keep {
+			continue
 		}
+		delete(passwords, credential)
 	}
-	rawPasswords, err := json.Marshal(passwords)
+
+	merged, err := json.Marshal(passwords)
 	if err != nil {
 		return err
 	}
-	root["passwords"] = rawPasswords
+	document["passwords"] = json.RawMessage(merged)
+	rendered, err := json.MarshalIndent(document, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(storePath, rendered, 0o600); err != nil {
+		return err
+	}
+	return writeLedger(filepath.Join(dir, csqttLedgerFileSuffix), setKeys(wanted))
+}
+
+// loadQWDTTStore reads the child's store as raw values so untouched keys keep
+// their exact meaning. A missing or unreadable file is an empty document.
+func loadQWDTTStore(path string) (map[string]json.RawMessage, map[string]map[string]json.RawMessage, error) {
+	document := make(map[string]json.RawMessage)
+	passwords := make(map[string]map[string]json.RawMessage)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return document, passwords, nil
+	}
+	if err := json.Unmarshal(data, &document); err != nil {
+		return nil, nil, fmt.Errorf("qWDTT: invalid passwords.json: %w", err)
+	}
+	if document == nil {
+		document = make(map[string]json.RawMessage)
+	}
+	raw, ok := document["passwords"]
+	if !ok {
+		return document, passwords, nil
+	}
+	if err := json.Unmarshal(raw, &passwords); err != nil {
+		return nil, nil, fmt.Errorf("qWDTT: invalid passwords.json: %w", err)
+	}
+	if passwords == nil {
+		passwords = make(map[string]map[string]json.RawMessage)
+	}
+	return document, passwords, nil
+}
+
+func rawJSON(value any) json.RawMessage {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return json.RawMessage("null")
+	}
+	return json.RawMessage(encoded)
+}
+
+// hashFor resolves the per-email override, then the default hash list.
+func hashFor(byEmail map[string]string, email, fallback string) string {
+	if hash := strings.TrimSpace(byEmail[email]); hash != "" {
+		return hash
+	}
+	return strings.TrimSpace(fallback)
+}
+
+// prepareCSQTT only guarantees the directory and the store stamp; the child
+// creates its SQLite database on first start.
+func (i Instance) prepareCSQTT() error {
+	cfg := i.CSQTT
+	if cfg == nil || strings.TrimSpace(cfg.ConfigDir) == "" {
+		return nil
+	}
 	if err := os.MkdirAll(cfg.ConfigDir, 0o700); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(root, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		return err
-	}
-	return writeLedger(ledgerPath, ledger)
+	syncCSQTTStoreVersion(cfg.ConfigDir)
+	return nil
 }
 
-// writeOLCRTCConfig renders the server YAML and seeds the display-name
-// dictionaries the bundled olcrtc build requires.
-func (i Instance) writeOLCRTCConfig() error {
+// syncCSQTTStoreVersion reconciles the store stamp. Every failure is invisible: a
+// broken stamp must never fail a start.
+func syncCSQTTStoreVersion(dir string) {
+	stampPath := filepath.Join(dir, csqttStampFileName)
+	legacyPath := filepath.Join(dir, csqttLegacyName)
+
+	if data, err := os.ReadFile(stampPath); err == nil {
+		switch value := strings.TrimSpace(string(data)); {
+		case value == csqttStoreStamp:
+			return
+		case csqttLegacyCompatible(value):
+			removeQuietly(legacyPath)
+		default:
+			dropCSQTTStore(dir)
+			removeQuietly(legacyPath)
+		}
+		writeStamp(stampPath)
+		return
+	}
+
+	if data, err := os.ReadFile(legacyPath); err == nil && csqttLegacyCompatible(strings.TrimSpace(string(data))) {
+		removeQuietly(legacyPath)
+	} else {
+		dropCSQTTStore(dir)
+		removeQuietly(legacyPath)
+	}
+	writeStamp(stampPath)
+}
+
+func csqttLegacyCompatible(value string) bool {
+	return value == csqttLegacyExact || strings.HasPrefix(value, csqttLegacyPrefix)
+}
+
+// dropCSQTTStore discards the cached database so the child rebuilds it.
+func dropCSQTTStore(dir string) {
+	for _, name := range []string{"csqtt.db", "csqtt.db-wal", "csqtt.db-shm"} {
+		removeQuietly(filepath.Join(dir, name))
+	}
+}
+
+func removeQuietly(path string) {
+	_ = os.Remove(path)
+}
+
+func writeStamp(path string) {
+	_ = os.WriteFile(path, []byte(csqttStoreStamp), 0o600)
+}
+
+// prepareOLCRTC seeds the core's dictionaries once and regenerates the YAML
+// that describes this inbound.
+func (i Instance) prepareOLCRTC() error {
 	cfg := i.OLCRTC
 	if cfg == nil || strings.TrimSpace(cfg.ConfigFile) == "" {
 		return errors.New("olcRTC: config file is not set")
@@ -177,8 +288,10 @@ func (i Instance) writeOLCRTCConfig() error {
 	if strings.Contains(cfg.ConfigFile, "..") || strings.Contains(cfg.DataDir, "..") {
 		return errors.New("olcRTC: invalid path")
 	}
-	if err := ensureNameDictionaries(cfg.DataDir); err != nil {
-		return fmt.Errorf("olcRTC: seed data dir: %w", err)
+	if strings.TrimSpace(cfg.DataDir) != "" {
+		if err := seedOLCRTCDataDir(cfg.DataDir); err != nil {
+			return fmt.Errorf("olcRTC: seed data dir: %w", err)
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(cfg.ConfigFile), 0o700); err != nil {
 		return fmt.Errorf("olcRTC: create config dir: %w", err)
@@ -186,173 +299,155 @@ func (i Instance) writeOLCRTCConfig() error {
 	return os.WriteFile(cfg.ConfigFile, []byte(olcrtcYAML(cfg)), 0o600)
 }
 
-func olcrtcYAML(cfg *OLCRTCConfig) string {
-	var b strings.Builder
-	b.WriteString("mode: srv\n")
-	b.WriteString("auth:\n  provider: " + yamlString(cfg.Provider) + "\n")
-	b.WriteString("room:\n  id: " + yamlString(cfg.RoomID) + "\n")
-	if cfg.CryptoKey != "" {
-		b.WriteString("crypto:\n  key: " + yamlString(cfg.CryptoKey) + "\n")
-	}
-	b.WriteString("net:\n  transport: " + yamlString(cfg.Transport) + "\n")
-	if cfg.DNS != "" {
-		b.WriteString("  dns: " + yamlString(cfg.DNS) + "\n")
-	}
-	switch cfg.Transport {
-	case "vp8channel":
-		b.WriteString("vp8:\n  fps: " + strconv.Itoa(clampInt(cfg.VP8Fps, 1, 120)) +
-			"\n  batch_size: " + strconv.Itoa(clampInt(cfg.VP8Batch, 1, 64)) + "\n")
-	case "seichannel":
-		b.WriteString("sei:\n  fps: " + strconv.Itoa(clampInt(cfg.SeiFps, 1, 120)) +
-			"\n  batch_size: " + strconv.Itoa(clampInt(cfg.SeiBatch, 1, 64)) +
-			"\n  fragment_size: " + strconv.Itoa(cfg.SeiFrag) +
-			"\n  ack_timeout_ms: " + strconv.Itoa(cfg.SeiAck) + "\n")
-	case "videochannel":
-		codec := cfg.VideoCodec
-		if codec != "tile" {
-			codec = "qrcode"
-		}
-		b.WriteString("video:\n  width: " + strconv.Itoa(cfg.VideoW) +
-			"\n  height: " + strconv.Itoa(cfg.VideoH) +
-			"\n  fps: " + strconv.Itoa(clampInt(cfg.VideoFps, 1, 120)) +
-			"\n  codec: " + yamlString(codec) + "\n")
-	}
-	if cfg.RouteThroughXray && cfg.RouteXrayPort > 0 {
-		b.WriteString("socks:\n  proxy_addr: \"127.0.0.1\"\n  proxy_port: " + strconv.Itoa(cfg.RouteXrayPort) +
-			"\n  proxy_user: \"\"\n  proxy_pass: \"\"\n")
-	}
-	b.WriteString("liveness:\n  interval: 10s\n  timeout: 15s\n  failures: 4\n")
-	b.WriteString("data: " + yamlString(cfg.DataDir) + "\n")
-	b.WriteString("debug: " + strconv.FormatBool(cfg.Debug) + "\n")
-	return b.String()
-}
-
-func clampInt(v, min, max int) int {
-	if v < min {
-		return min
-	}
-	if v > max {
-		return max
-	}
-	return v
-}
-
-func yamlString(s string) string {
-	s = strings.ReplaceAll(s, "\\", "\\\\")
-	s = strings.ReplaceAll(s, "\"", "\\\"")
-	s = strings.ReplaceAll(s, "\n", "\\n")
-	return "\"" + s + "\""
-}
-
-const (
-	defaultNames = `Alexander
-Alexey
-Anatoly
-Andrey
-Anton
-Artyom
-Boris
-Denis
-Dmitry
-Egor
-Evgeny
-Ivan
-Igor
-Ilya
-Kirill
-Leonid
-Maxim
-Mikhail
-Nikita
-Nikolay
-Oleg
-Pavel
-Roman
-Sergei
-Stepan
-Timofey
-Viktor
-Vladimir
-Anna
-Anastasia
-Daria
-Ekaterina
-Elena
-Irina
-Ksenia
-Maria
-Natalia
-Olga
-Polina
-Svetlana
-Tatiana
-Vera
-Victoria
-Yulia`
-	defaultSurnames = `Antonov
-Belov
-Volkov
-Gavrilov
-Danilov
-Egorov
-Efimov
-Zhukov
-Zaitsev
-Ivanov
-Ilyin
-Kozlov
-Kuznetsov
-Lebedev
-Makarov
-Melnikov
-Morozov
-Nikolaev
-Novikov
-Orlov
-Pavlov
-Petrov
-Popov
-Romanov
-Savin
-Smirnov
-Sokolov
-Stepanov
-Tarasov
-Titov
-Fedorov
-Filatov
-Gusev
-Tsvetkov
-Chernov
-Shevtsov
-Shcherbakov
-Yuriev
-Yakovlev`
-)
-
-func ensureNameDictionaries(dir string) error {
-	if strings.TrimSpace(dir) == "" {
-		return nil
-	}
+// seedOLCRTCDataDir writes each dictionary only when no regular file is there
+// yet: an operator-edited file is never overwritten.
+func seedOLCRTCDataDir(dir string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	for _, pair := range [...]struct{ name, dict string }{
-		{"names", defaultNames},
-		{"surnames", defaultSurnames},
+	for _, file := range []struct{ name, body string }{
+		{olcrtcNamesName, olcrtcNames},
+		{olcrtcSurnamesName, olcrtcSurnames},
 	} {
-		path := filepath.Join(dir, pair.name)
-		if st, err := os.Stat(path); err == nil && !st.IsDir() {
+		path := filepath.Join(dir, file.name)
+		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
 			continue
 		}
-		if err := os.WriteFile(path, []byte(pair.dict), 0o600); err != nil {
+		if err := os.WriteFile(path, []byte(file.body), 0o600); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// ensureExecutable fixes the exec bit lost by scp/zip uploads.
+// olcrtcYAML renders the child's server configuration.
+func olcrtcYAML(cfg *OLCRTCConfig) string {
+	var b strings.Builder
+	line := func(format string, args ...any) {
+		fmt.Fprintf(&b, format, args...)
+		b.WriteByte('\n')
+	}
+
+	line("mode: srv")
+	line("auth:")
+	line("  provider: %s", yamlQuoted(cfg.Provider))
+	line("room:")
+	line("  id: %s", yamlQuoted(cfg.RoomID))
+	if cfg.CryptoKey != "" {
+		line("crypto:")
+		line("  key: %s", yamlQuoted(cfg.CryptoKey))
+	}
+	line("net:")
+	line("  transport: %s", yamlQuoted(cfg.Transport))
+	if cfg.DNS != "" {
+		line("  dns: %s", yamlQuoted(cfg.DNS))
+	}
+	switch cfg.Transport {
+	case "vp8channel":
+		line("vp8:")
+		line("  fps: %d", clampInt(cfg.VP8Fps, 1, 120))
+		line("  batch_size: %d", clampInt(cfg.VP8Batch, 1, 64))
+	case "seichannel":
+		line("sei:")
+		line("  fps: %d", clampInt(cfg.SeiFps, 1, 120))
+		line("  batch_size: %d", clampInt(cfg.SeiBatch, 1, 64))
+		line("  fragment_size: %d", cfg.SeiFrag)
+		line("  ack_timeout_ms: %d", cfg.SeiAck)
+	case "videochannel":
+		line("video:")
+		line("  width: %d", cfg.VideoW)
+		line("  height: %d", cfg.VideoH)
+		line("  fps: %d", clampInt(cfg.VideoFps, 1, 120))
+		line("  codec: %s", yamlQuoted(cfg.VideoCodec))
+	}
+	if cfg.RouteThroughXray && cfg.RouteXrayPort > 0 {
+		line("socks:")
+		line("  proxy_addr: \"127.0.0.1\"")
+		line("  proxy_port: %d", cfg.RouteXrayPort)
+		line("  proxy_user: \"\"")
+		line("  proxy_pass: \"\"")
+	}
+	line("liveness:")
+	line("  interval: 10s")
+	line("  timeout: 15s")
+	line("  failures: 4")
+	line("data: %s", yamlQuoted(cfg.DataDir))
+	line("debug: %t", cfg.Debug)
+	return b.String()
+}
+
+// yamlQuoted escapes only backslash, quote and newline, in that order; every
+// other byte, including non-ASCII, is copied through untouched.
+func yamlQuoted(value string) string {
+	var b strings.Builder
+	b.Grow(len(value) + 2)
+	b.WriteByte('"')
+	for i := 0; i < len(value); i++ {
+		switch c := value[i]; c {
+		case '\\':
+			b.WriteString(`\\`)
+		case '"':
+			b.WriteString(`\"`)
+		case '\n':
+			b.WriteString(`\n`)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+func clampInt(value, low, high int) int {
+	if value < low {
+		return low
+	}
+	if value > high {
+		return high
+	}
+	return value
+}
+
+// readLedger loads the panel-authored credential list. Anything unusable is an
+// empty ledger, never an error.
+func readLedger(path string) []string {
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var ledger []string
+	if err := json.Unmarshal(data, &ledger); err != nil {
+		return nil
+	}
+	return ledger
+}
+
+func writeLedger(path string, credentials []string) error {
+	if path == "" {
+		return nil
+	}
+	if credentials == nil {
+		credentials = []string{}
+	}
+	data, err := json.Marshal(credentials)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
+
+func setKeys(set map[string]struct{}) []string {
+	out := make([]string, 0, len(set))
+	for key := range set {
+		out = append(out, key)
+	}
+	return out
+}
+
+// ensureExecutable makes the core binary runnable; Windows has no exec bit.
 func ensureExecutable(path string) error {
 	if runtime.GOOS == "windows" {
 		return nil

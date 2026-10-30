@@ -26,6 +26,7 @@ import {
   normalizeStreamSettingsForWire,
 } from '@/lib/xray/stream-wire-normalize';
 import { canEnableSniffing } from '@/lib/xray/protocol-capabilities';
+import { defaultBridgeSniffing } from '@/lib/xray/inbound-defaults';
 import { tlsCertUsesFiles } from '@/schemas/protocols/security/tls';
 import { SockoptStreamSettingsSchema } from '@/schemas/protocols/stream/sockopt';
 import { XHttpStreamSettingsSchema, XHttpXmuxSchema } from '@/schemas/protocols/stream/xhttp';
@@ -215,7 +216,13 @@ export function rawInboundToFormValues(row: RawInboundRow): InboundFormValues {
       }
     }
   }
-  const sniffing = coerceJsonObject(row.sniffing) as unknown as Sniffing;
+  // A bridge row may predate the sniffing tab; show the protocol default the
+  // backend is already applying instead of an empty "off" block.
+  const storedSniffing = typeof row.sniffing === 'string' ? row.sniffing.trim() : '';
+  const sniffing =
+    (storedSniffing === '' || storedSniffing === 'null'
+      ? defaultBridgeSniffing(protocol)
+      : undefined) ?? (coerceJsonObject(row.sniffing) as unknown as Sniffing);
 
   return {
     remark: row.remark ?? '',

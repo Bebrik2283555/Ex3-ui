@@ -4,6 +4,7 @@ package sidecar
 
 import (
 	"context"
+	"net"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -13,21 +14,17 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 )
 
-// Sidecar interface and subnet constants. They mirror what the external
-// binaries create on the host.
+// Routing convergence windows and retry budgets.
 const (
-	qwdttIfaceWG   = "wdtt0"
-	qwdttIfaceRaw  = "wdttraw0"
-	qwdttSubnetWG  = "10.68.0.0/16"
-	qwdttSubnetOld = "10.66.0.0/16"
-	qwdttSubnetRaw = "10.70.0.0/16"
-	csqttIface     = "csqtt1"
-	csqttSubnet    = "10.66.67.0/24"
+	interfaceWaitTimeout = 3 * time.Second
+	interfacePollPeriod  = 200 * time.Millisecond
+	natDeleteAttempts    = 4
+	managedMasqRounds    = 8
+	managedMasqPause     = 150 * time.Millisecond
 )
 
-// EnsureRoutingForInbounds reapplies policy routing after Xray starts: the
-// TUN devices only exist once the core is up, so the sidecar start path alone
-// cannot finish the bridge.
+// EnsureRoutingForInbounds re-applies policy routing after Xray starts: the
+// TUN devices only exist once the core is up.
 func EnsureRoutingForInbounds(inbounds []*model.Inbound) {
 	for _, ib := range inbounds {
 		if ib == nil || !Supported(ib.Protocol) || !ib.Enable || ib.NodeID != nil {
@@ -41,228 +38,223 @@ func EnsureRoutingForInbounds(inbounds []*model.Inbound) {
 	}
 }
 
-// ensureRouting converges the kernel state that steers a sidecar's client
-// interface into its Xray TUN. Idempotent and tolerant of a not-yet-created
-// link, so it is safe to call after every start or config change.
+// EnsureRouting applies the routing and firewall state of one instance.
+func EnsureRouting(inst Instance) { ensureRouting(inst) }
+
 func ensureRouting(inst Instance) {
 	if !inst.RouteThroughXray {
-		// Turning the Xray bridge off must drop the stale iif rule, otherwise
-		// packets still enter a table whose TUN no longer exists. csqtt also
-		// needs the NAT rule its upstream deploy script normally installs.
 		ClearRouting(inst)
 		if inst.Protocol == model.CSQTT {
-			applyFirewall(csqttDirectFirewall()...)
+			applyCSQTTFirewall(inst, false)
 		}
 		return
 	}
-	if strings.TrimSpace(inst.TunName) == "" || inst.RouteTable <= 0 {
+	if strings.TrimSpace(inst.TunName) == "" || inst.RouteTable <= 0 || len(inst.RouteIfaces) == 0 {
 		return
 	}
-	ifaces := inst.RouteIfaces
-	if len(ifaces) == 0 {
-		if inst.Protocol == model.CSQTT {
-			ifaces = []string{csqttIface}
-		} else {
-			ifaces = []string{qwdttIfaceWG, qwdttIfaceRaw}
-		}
-	}
-	waitLink(ifaces[0], 3*time.Second)
-	if !linkExists(inst.TunName) {
+	if !waitForInterface(inst.RouteIfaces[0], interfaceWaitTimeout) {
+		// The core has not created its client interface yet; nothing to steer.
 		return
 	}
-
+	tun := inst.TunName
+	if !interfaceExists(tun) {
+		// The TUN belongs to Xray and appears later; the Xray-start hook or the
+		// five-minute refresh completes the job.
+		return
+	}
 	table := strconv.Itoa(inst.RouteTable)
-	runCmd("ip", "route", "replace", "default", "dev", inst.TunName, "table", table)
-	runCmd("sysctl", "-qw", "net.ipv4.conf."+inst.TunName+".rp_filter=2")
-	runCmd("sysctl", "-qw", "net.ipv4.ip_forward=1")
+	routingApply("ip", "route", "replace", "default", "dev", tun, "table", table)
+	routingApply("sysctl", "-qw", "net.ipv4.conf."+tun+".rp_filter=2")
+	routingApply("sysctl", "-qw", "net.ipv4.ip_forward=1")
 
-	for _, iface := range ifaces {
-		if !linkExists(iface) {
+	for _, iface := range inst.RouteIfaces {
+		if !interfaceExists(iface) || routingRuleExists(iface, table) {
 			continue
 		}
-		if !ruleExists(iface, inst.RouteTable) {
-			runCmd("ip", "rule", "add", "iif", iface, "lookup", table)
-		}
+		routingApply("ip", "rule", "add", "iif", iface, "lookup", table)
 	}
 
 	switch inst.Protocol {
 	case model.QWDTT:
-		stripMasquerade(qwdttSubnetWG, qwdttSubnetOld, qwdttSubnetRaw)
-	case model.CSQTT:
-		stripMasquerade(csqttSubnet)
-		// csqtt 2.5+ installs its own CSQTT_MANAGED MASQUERADE as soon as its
-		// TUN appears, which pre-empts the Xray TUN bridge. The binary starts
-		// right after the link is created, so retry briefly.
-		for i := 0; i < 8; i++ {
-			if stripManagedCSQTTNAT() {
-				break
-			}
-			time.Sleep(150 * time.Millisecond)
+		// Drop the core's own source NAT so its packets enter the TUN.
+		for _, subnet := range []string{"10.68.0.0/16", "10.66.0.0/16", "10.70.0.0/16"} {
+			removeMasquerade(subnet)
 		}
-		applyFirewall(csqttFirewall(inst.TunName)...)
+	case model.CSQTT:
+		removeMasquerade("10.66.67.0/24")
+		removeManagedMasquerade()
+		applyCSQTTFirewall(inst, true)
 	}
 }
 
-// ClearRouting removes the policy rule and table owned by this inbound.
+// ClearRouting removes only the policy rule and the table the panel owns.
+// Firewall rules and sysctl values are left in place.
 func ClearRouting(inst Instance) {
 	if inst.RouteTable <= 0 {
 		return
 	}
-	ifaces := inst.RouteIfaces
-	if len(ifaces) == 0 {
-		if inst.Protocol == model.CSQTT {
-			ifaces = []string{csqttIface}
-		} else {
-			ifaces = []string{qwdttIfaceWG, qwdttIfaceRaw}
+	table := strconv.Itoa(inst.RouteTable)
+	for _, iface := range inst.RouteIfaces {
+		routingQuiet("ip", "rule", "del", "iif", iface, "lookup", table)
+	}
+	routingQuiet("ip", "route", "flush", "table", table)
+}
+
+// applyCSQTTFirewall installs the idempotent accept and MSS clamp rules. The
+// direct set also appends the masquerade its own deploy script would install.
+func applyCSQTTFirewall(inst Instance, routed bool) {
+	const clientInterface = "csqtt1"
+	routingApply("sysctl", "-qw", "net.ipv4.conf."+clientInterface+".rp_filter=2")
+
+	interfaces := []string{clientInterface}
+	if routed && strings.TrimSpace(inst.TunName) != "" {
+		interfaces = append(interfaces, inst.TunName)
+	}
+	for _, iface := range interfaces {
+		ensureForwardRule(iface, "-i")
+		ensureForwardRule(iface, "-o")
+		ensureMSSClampRule(iface, "-i")
+		ensureMSSClampRule(iface, "-o")
+	}
+	if !routed {
+		routingApply("iptables", "-t", "nat", "-A", "POSTROUTING", "-s", "10.66.67.0/24", "-j", "MASQUERADE")
+	}
+}
+
+func ensureForwardRule(iface, direction string) {
+	if routingOK("iptables", "-C", "FORWARD", direction, iface, "-j", "ACCEPT") {
+		return
+	}
+	routingApply("iptables", "-I", "FORWARD", "1", direction, iface, "-j", "ACCEPT")
+}
+
+func ensureMSSClampRule(iface, direction string) {
+	match := []string{"-p", "tcp", "--tcp-flags", "SYN,RST", "SYN", direction, iface, "-j", "TCPMSS", "--clamp-mss-to-pmtu"}
+	check := append([]string{"-t", "mangle", "-C", "FORWARD"}, match...)
+	if routingOK("iptables", check...) {
+		return
+	}
+	insert := append([]string{"-t", "mangle", "-I", "FORWARD", "1"}, match...)
+	routingApply("iptables", insert...)
+}
+
+// removeMasquerade deletes one subnet's source NAT up to a few times; the
+// core may have installed duplicates.
+func removeMasquerade(subnet string) {
+	for attempt := 0; attempt < natDeleteAttempts; attempt++ {
+		if !routingOK("iptables", "-t", "nat", "-D", "POSTROUTING", "-s", subnet, "-j", "MASQUERADE") {
+			return
 		}
 	}
-	table := strconv.Itoa(inst.RouteTable)
-	for _, iface := range ifaces {
-		_ = exec.CommandContext(context.Background(), "ip", "rule", "del", "iif", iface, "lookup", table).Run()
-	}
-	_ = exec.CommandContext(context.Background(), "ip", "route", "flush", "table", table).Run()
 }
 
-func waitLink(iface string, timeout time.Duration) {
-	deadline := time.Now().Add(timeout)
-	for !linkExists(iface) && time.Now().Before(deadline) {
-		time.Sleep(200 * time.Millisecond)
+// removeManagedMasquerade deletes the rules the CSQTT binary installs for
+// itself. It re-adds them right after its interface appears, hence the rounds.
+func removeManagedMasquerade() {
+	for round := 0; round < managedMasqRounds; round++ {
+		if round > 0 {
+			time.Sleep(managedMasqPause)
+		}
+		if removeManagedMasqueradeRound() > 0 {
+			return
+		}
 	}
 }
 
-func linkExists(iface string) bool {
-	if iface == "" {
+func removeManagedMasqueradeRound() int {
+	output, ok := routingOutput("iptables", "-t", "nat", "-S", "POSTROUTING")
+	if !ok {
+		return 0
+	}
+	removed := 0
+	for _, line := range strings.Split(output, "\n") {
+		args, ok := managedNATDeleteArgs(line)
+		if !ok {
+			continue
+		}
+		if routingOK("iptables", args...) {
+			removed++
+		}
+	}
+	return removed
+}
+
+// managedNATDeleteArgs renders the delete form of a managed `-A POSTROUTING`
+// rule line and reports whether the line is such a rule at all.
+func managedNATDeleteArgs(line string) ([]string, bool) {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "-A POSTROUTING") ||
+		!strings.Contains(line, "CSQTT_MANAGED") ||
+		!strings.Contains(line, "MASQUERADE") {
+		return nil, false
+	}
+	fields := strings.Fields(line)
+	return append([]string{"-t", "nat", "-D"}, fields[1:]...), true
+}
+
+func routingRuleExists(iface, table string) bool {
+	output, ok := routingOutput("ip", "rule", "show", "iif", iface)
+	if !ok {
 		return false
 	}
-	return exec.CommandContext(context.Background(), "ip", "link", "show", iface).Run() == nil
-}
-
-func ruleExists(iface string, table int) bool {
-	out, err := exec.CommandContext(context.Background(), "ip", "rule", "show", "iif", iface).Output()
-	if err != nil {
-		return false
-	}
-	needle := "lookup " + strconv.Itoa(table)
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.HasSuffix(strings.TrimSpace(line), needle) {
+	suffix := "lookup " + table
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasSuffix(strings.TrimSpace(line), suffix) {
 			return true
 		}
 	}
 	return false
 }
 
-func stripMasquerade(subnets ...string) {
-	for _, subnet := range subnets {
-		for i := 0; i < 4; i++ {
-			if err := exec.CommandContext(context.Background(), "iptables", "-t", "nat", "-D", "POSTROUTING",
-				"-s", subnet, "-j", "MASQUERADE").Run(); err != nil {
-				break
-			}
-		}
-	}
-}
-
-// stripManagedCSQTTNAT removes the NAT rules csqtt installs itself. In Xray
-// mode they must go, otherwise packets are SNATed before reaching the TUN.
-func stripManagedCSQTTNAT() bool {
-	out, err := exec.CommandContext(context.Background(), "iptables", "-t", "nat", "-S", "POSTROUTING").Output()
-	if err != nil {
+func interfaceExists(name string) bool {
+	if strings.TrimSpace(name) == "" {
 		return false
 	}
-	removed := false
-	for _, line := range strings.Split(string(out), "\n") {
-		args, ok := managedNATDeleteArgs(line)
-		if !ok {
-			continue
+	_, err := net.InterfaceByName(name)
+	return err == nil
+}
+
+func waitForInterface(name string, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if interfaceExists(name) {
+			return true
 		}
-		runCmd("iptables", args...)
-		removed = true
-	}
-	return removed
-}
-
-// managedNATDeleteArgs turns an iptables -S POSTROUTING line into the matching
-// delete invocation, but only for csqtt's own NAT rule.
-func managedNATDeleteArgs(line string) ([]string, bool) {
-	fields := strings.Fields(line)
-	if len(fields) < 3 || fields[0] != "-A" || fields[1] != "POSTROUTING" {
-		return nil, false
-	}
-	if !strings.Contains(line, "CSQTT_MANAGED") || !strings.Contains(line, "MASQUERADE") {
-		return nil, false
-	}
-	for i, field := range fields {
-		if strings.Trim(field, `"`) == "CSQTT_MANAGED" {
-			fields[i] = "CSQTT_MANAGED"
+		if !time.Now().Before(deadline) {
+			return false
 		}
-	}
-	args := []string{"-t", "nat", "-D", "POSTROUTING"}
-	return append(args, fields[2:]...), true
-}
-
-type firewallRule struct {
-	table string
-	chain string
-	spec  []string
-}
-
-func ifaceRules(iface string) []firewallRule {
-	return []firewallRule{
-		{"", "FORWARD", []string{"-i", iface, "-j", "ACCEPT"}},
-		{"", "FORWARD", []string{"-o", iface, "-j", "ACCEPT"}},
-		{"mangle", "FORWARD", []string{"-p", "tcp", "--tcp-flags", "SYN,RST", "SYN", "-i", iface, "-j", "TCPMSS", "--clamp-mss-to-pmtu"}},
-		{"mangle", "FORWARD", []string{"-p", "tcp", "--tcp-flags", "SYN,RST", "SYN", "-o", iface, "-j", "TCPMSS", "--clamp-mss-to-pmtu"}},
+		time.Sleep(interfacePollPeriod)
 	}
 }
 
-func csqttFirewall(tun string) []firewallRule {
-	rules := ifaceRules(csqttIface)
-	if tun != "" {
-		rules = append(rules, ifaceRules(tun)...)
+// routingApply runs a mutating command and logs a warning when it fails.
+func routingApply(name string, args ...string) bool {
+	output, err := runRoutingCommand(name, args...)
+	if err != nil {
+		logger.Warningf("sidecar routing: %s %s: %v\n%s", name, strings.Join(args, " "), err, strings.TrimSpace(output))
+		return false
 	}
-	return rules
+	return true
 }
 
-// csqttDirectFirewall is the routeThroughXray=off path: csqtt's own deploy.sh
-// installs this NAT rule, and the panel does not run deploy.sh.
-func csqttDirectFirewall() []firewallRule {
-	return append(ifaceRules(csqttIface), firewallRule{
-		table: "nat", chain: "POSTROUTING",
-		spec: []string{"-s", csqttSubnet, "-j", "MASQUERADE"},
-	})
+// routingOK runs an existence check where a non-zero exit is a normal answer.
+func routingOK(name string, args ...string) bool {
+	_, err := runRoutingCommand(name, args...)
+	return err == nil
 }
 
-func applyFirewall(rules ...firewallRule) {
-	runCmd("sysctl", "-qw", "net.ipv4.conf."+csqttIface+".rp_filter=2")
-	for _, r := range rules {
-		check := iptablesArgs(r.table, "-C", r.chain, r.spec...)
-		if exec.CommandContext(context.Background(), "iptables", check...).Run() == nil {
-			continue
-		}
-		// Prepend FORWARD rules so a later UFW reject cannot win.
-		if r.chain == "FORWARD" {
-			insert := iptablesArgs(r.table, "-I", r.chain, append([]string{"1"}, r.spec...)...)
-			runCmd("iptables", insert...)
-			continue
-		}
-		runCmd("iptables", iptablesArgs(r.table, "-A", r.chain, r.spec...)...)
-	}
+func routingOutput(name string, args ...string) (string, bool) {
+	output, err := runRoutingCommand(name, args...)
+	return output, err == nil
 }
 
-func iptablesArgs(table, op, chain string, spec ...string) []string {
-	args := make([]string, 0, 6+len(spec))
-	if table != "" && table != "filter" {
-		args = append(args, "-t", table)
-	}
-	args = append(args, op, chain)
-	return append(args, spec...)
+// routingQuiet deletes state whose absence is expected and not worth a log.
+func routingQuiet(name string, args ...string) {
+	_, _ = runRoutingCommand(name, args...)
 }
 
-func runCmd(name string, args ...string) {
-	if out, err := exec.CommandContext(context.Background(), name, args...).CombinedOutput(); err != nil {
-		logger.Warningf("sidecar routing: %s %s: %v\n%s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
-	}
+func runRoutingCommand(name string, args ...string) (string, error) {
+	cmd := exec.CommandContext(context.Background(), name, args...)
+	output, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(output)), err
 }
-
-// EnsureRouting is the package entry point used by the manager.
-func EnsureRouting(inst Instance) { ensureRouting(inst) }

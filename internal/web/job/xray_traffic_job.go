@@ -1,10 +1,13 @@
 package job
 
 import (
+	"context"
 	"encoding/json"
+	"net"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service/outbound"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/websocket"
@@ -56,11 +59,21 @@ func splitMovedClientTraffics(clientTraffics []*xray.ClientTraffic) ([]*xray.Cli
 
 const externalInformTimeout = 3 * time.Second
 
+// externalInformDial is a seam for tests; in production every connect goes
+// through the SSRF guard, so a DNS-rebinding host that passed
+// SanitizePublicHTTPURL cannot be re-resolved into loopback/private space.
+var externalInformDial = func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return netsafe.SSRFGuardedDialContext(ctx, network, addr)
+}
+
 var externalInformClient = &fasthttp.Client{
 	ReadTimeout:         externalInformTimeout,
 	WriteTimeout:        externalInformTimeout,
 	MaxIdleConnDuration: time.Minute,
 	MaxConnsPerHost:     4,
+	Dial: func(addr string) (net.Conn, error) {
+		return externalInformDial(context.Background(), "tcp", addr)
+	},
 }
 
 // NewXrayTrafficJob creates a new traffic collection job instance.
@@ -75,13 +88,17 @@ func (j *XrayTrafficJob) Run() {
 	if !j.xrayService.IsXrayRunning() {
 		return
 	}
-	traffics, clientTraffics, err := j.xrayService.GetXrayTraffic()
+	traffics, clientTraffics, baseline, err := j.xrayService.GetXrayTraffic()
 	if err != nil {
 		return
 	}
 	needRestart0, clientsDisabled, err := j.inboundService.AddTraffic(traffics, clientTraffics)
 	if err != nil {
+		// The counters already moved, so hand the old baselines back: the next
+		// poll then reports this same interval instead of dropping it.
+		j.xrayService.RestoreXrayTrafficBaseline(baseline)
 		logger.Warning("add inbound traffic failed:", err)
+		return
 	}
 	err, needRestart1 := j.outboundService.AddTraffic(traffics, clientTraffics)
 	if err != nil {

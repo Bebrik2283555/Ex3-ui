@@ -6,7 +6,9 @@ package hostsfile
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -70,7 +72,67 @@ func Set(content string) error {
 	if len(content) == 0 {
 		return fmt.Errorf("refusing to write an empty hosts file")
 	}
-	return os.WriteFile(path, []byte(content), 0o644)
+	if err := validateHostsContent(content); err != nil {
+		return err
+	}
+	return writeAtomic(path, []byte(content), 0o644)
+}
+
+// validateHostsContent rejects text the resolver cannot parse, so a downloaded
+// or pasted file cannot leave /etc/hosts in a broken state.
+func validateHostsContent(content string) error {
+	if strings.ContainsRune(content, 0) {
+		return fmt.Errorf("hosts content contains a NUL byte")
+	}
+	for i, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		fields := strings.Fields(trimmed)
+		if len(fields) < 2 {
+			return fmt.Errorf("hosts line %d: expected an IP address and a hostname", i+1)
+		}
+		if net.ParseIP(fields[0]) == nil {
+			return fmt.Errorf("hosts line %d: %q is not an IP address", i+1, fields[0])
+		}
+	}
+	return nil
+}
+
+// writeAtomic replaces the target through a temp file in the same directory:
+// a crash or a full disk must never leave /etc/hosts truncated. A symlinked
+// target (containers mount their own file) is written through, not replaced.
+func writeAtomic(target string, content []byte, perm os.FileMode) error {
+	if resolved, err := filepath.EvalSymlinks(target); err == nil {
+		target = resolved
+	}
+	if info, err := os.Stat(target); err == nil {
+		perm = info.Mode().Perm()
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(target), ".xui-hosts-")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, target)
 }
 
 // ApplyEntries writes a hosts file built from a header comment, the given

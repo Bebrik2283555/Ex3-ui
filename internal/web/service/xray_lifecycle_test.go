@@ -56,7 +56,7 @@ func TestXrayLifecycleConcurrentStatusResultAndTrafficReads(t *testing.T) {
 			for range 200 {
 				_ = service.IsXrayRunning()
 				_ = service.GetXrayResult()
-				_, _, err := service.GetXrayTraffic()
+				_, _, _, err := service.GetXrayTraffic()
 				if err == nil || err.Error() != "xray is not running" {
 					t.Errorf("GetXrayTraffic error = %v, want xray is not running", err)
 				}

@@ -234,6 +234,9 @@ export interface DnsResolverEntry {
   domain: string;
   ip: string;
   status: string;
+  region?: string;
+  latencyMs?: number;
+  error?: string;
 }
 
 export interface DnsResolverSettings {

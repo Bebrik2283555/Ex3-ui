@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
@@ -111,5 +113,51 @@ func TestWriteQWDTTStoreClearsStaleExpiryAndHash(t *testing.T) {
 	}
 	if entry["vk_hash"] != "new-hash" {
 		t.Fatalf("vk_hash = %v, want new-hash", entry["vk_hash"])
+	}
+}
+
+// The owner password must travel through a 0600 file, never argv, and a cleared
+// password must remove the file so the child cannot read a stale secret.
+func TestPrepareQWDTTWritesOwnerPasswordFile(t *testing.T) {
+	dir := t.TempDir()
+	inst := Instance{
+		Protocol: model.QWDTT,
+		Listen:   "0.0.0.0",
+		Port:     56000,
+		QWDTT:    &QWDTTConfig{ConfigDir: dir, MainPass: "owner-secret"},
+	}
+	if err := inst.Prepare(); err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+
+	path := qwdttOwnerPasswordPath(dir)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read owner password file: %v", err)
+	}
+	if string(data) != "owner-secret" {
+		t.Fatalf("owner password file = %q, want the configured password", data)
+	}
+	if info, err := os.Stat(path); err == nil && runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
+		t.Fatalf("owner password file mode = %o, want 600", info.Mode().Perm())
+	}
+
+	args := inst.BuildArgs()
+	if slices.Contains(args, "-password") {
+		t.Fatalf("BuildArgs leaks the owner password in argv: %v", args)
+	}
+	if !slices.Contains(args, "-password-file") || !slices.Contains(args, path) {
+		t.Fatalf("BuildArgs = %v, want -password-file %s", args, path)
+	}
+
+	inst.QWDTT.MainPass = ""
+	if err := inst.Prepare(); err != nil {
+		t.Fatalf("Prepare after clearing the password: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("owner password file survived an empty password: err = %v", err)
+	}
+	if slices.Contains(inst.BuildArgs(), "-password-file") {
+		t.Fatal("BuildArgs still points at a removed password file")
 	}
 }

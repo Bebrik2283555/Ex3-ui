@@ -2,6 +2,7 @@ package tgbot
 
 import (
 	"fmt"
+	"html"
 	"net"
 	"os"
 	"strconv"
@@ -193,7 +194,14 @@ func (t *Tgbot) prepareServerUsageInfo() string {
 		uptimeUnit = t.I18nBot("tgbot.days")
 	}
 	info += t.I18nBot("tgbot.messages.serverUpTime", "UpTime=="+uptime, "Unit=="+uptimeUnit)
-	info += t.I18nBot("tgbot.messages.serverLoad", "Load1=="+strconv.FormatFloat(t.lastStatus.Loads[0], 'f', 2, 64), "Load2=="+strconv.FormatFloat(t.lastStatus.Loads[1], 'f', 2, 64), "Load3=="+strconv.FormatFloat(t.lastStatus.Loads[2], 'f', 2, 64))
+	loads := t.lastStatus.Loads
+	load1, load2, load3 := "—", "—", "—"
+	if len(loads) >= 3 {
+		load1 = strconv.FormatFloat(loads[0], 'f', 2, 64)
+		load2 = strconv.FormatFloat(loads[1], 'f', 2, 64)
+		load3 = strconv.FormatFloat(loads[2], 'f', 2, 64)
+	}
+	info += t.I18nBot("tgbot.messages.serverLoad", "Load1=="+load1, "Load2=="+load2, "Load3=="+load3)
 	info += t.I18nBot("tgbot.messages.serverMemory", "Current=="+common.FormatTraffic(int64(t.lastStatus.Mem.Current)), "Total=="+common.FormatTraffic(int64(t.lastStatus.Mem.Total)))
 	info += t.I18nBot("tgbot.messages.onlinesCount", "Count=="+fmt.Sprint(len(onlines)))
 	info += t.I18nBot("tgbot.messages.tcpCount", "Count=="+strconv.Itoa(t.lastStatus.TcpCount))
@@ -292,7 +300,7 @@ func (t *Tgbot) notifyExhausted() {
 											output.WriteString(":\r\n")
 											for _, traffic := range disabledClients {
 												output.WriteString(" ")
-												output.WriteString(traffic.Email)
+												output.WriteString(html.EscapeString(traffic.Email))
 											}
 											output.WriteString("\r\n")
 										}

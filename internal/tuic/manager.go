@@ -1,6 +1,7 @@
 package tuic
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -50,18 +51,40 @@ func (m *Manager) HasRunning() bool {
 }
 
 func (m *Manager) Ensure(inst Instance) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.ensureLocked(inst)
+	// A structural change needs the old server closed before the new one can
+	// bind the same port, and Close must run outside m.mu. ensureLocked detaches
+	// the old server and reports it, so retry after the drain.
+	const maxAttempts = 3
+	for attempt := 1; ; attempt++ {
+		m.mu.Lock()
+		detached, err := m.ensureLocked(inst)
+		m.mu.Unlock()
+		m.stopAndDrain(detached)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, errRestartPending) {
+			return err
+		}
+		if attempt >= maxAttempts {
+			return fmt.Errorf("tuic: inbound %d (%s): restart did not converge", inst.Id, inst.Tag)
+		}
+	}
 }
 
-func (m *Manager) ensureLocked(inst Instance) error {
+// errRestartPending means the previous server was detached but is still
+// running: it owns the listening socket until it is closed outside m.mu.
+var errRestartPending = errors.New("tuic: previous server detached for restart")
+
+// ensureLocked reconciles one instance. It returns the previous server it
+// detached (if any) instead of closing it here: Close waits for relay
+// goroutines, which must never happen while m.mu is held.
+func (m *Manager) ensureLocked(inst Instance) (*managed, error) {
 	if err := ValidateClients(inst.Clients); err != nil {
-		return err
+		return nil, err
 	}
 	if len(inst.Clients) == 0 {
-		m.removeLocked(inst.Id)
-		return nil
+		return m.removeLocked(inst.Id), nil
 	}
 
 	structuralFP := inst.StructuralFingerprint()
@@ -75,21 +98,33 @@ func (m *Manager) ensureLocked(inst Instance) error {
 				existing.usersFP = usersFP
 				existing.server.UpdateUsers(inst.Clients)
 			}
-			return nil
+			return nil, nil
 		}
-		m.stopAndDrainLocked(existing)
 		delete(m.servers, inst.Id)
+		if existing.server != nil && existing.server.IsRunning() {
+			// Binding the new server now would race the old one for the same
+			// UDP port; hand it back so Ensure can close it first.
+			return existing, errRestartPending
+		}
+		server, err := m.startLocked(inst)
+		if err != nil {
+			m.recordStartError(inst, err)
+			return existing, err
+		}
+		delete(m.lastStartErr, inst.Id)
+		m.servers[inst.Id] = &managed{
+			server:       server,
+			tag:          inst.Tag,
+			structuralFP: structuralFP,
+			usersFP:      usersFP,
+		}
+		return existing, nil
 	}
 
 	server, err := m.startLocked(inst)
 	if err != nil {
-		if m.lastStartErr[inst.Id] != err.Error() {
-			m.lastStartErr[inst.Id] = err.Error()
-			if tuicLogWarn >= parseLogLevel(inst.LogLevel) {
-				logger.Warningf("tuic: inbound %d (%s): failed to start server: %v", inst.Id, inst.Tag, err)
-			}
-		}
-		return err
+		m.recordStartError(inst, err)
+		return nil, err
 	}
 	delete(m.lastStartErr, inst.Id)
 
@@ -99,7 +134,18 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		structuralFP: structuralFP,
 		usersFP:      usersFP,
 	}
-	return nil
+	return nil, nil
+}
+
+// recordStartError stores and logs the first occurrence of a start failure.
+func (m *Manager) recordStartError(inst Instance, err error) {
+	if m.lastStartErr[inst.Id] == err.Error() {
+		return
+	}
+	m.lastStartErr[inst.Id] = err.Error()
+	if tuicLogWarn >= parseLogLevel(inst.LogLevel) {
+		logger.Warningf("tuic: inbound %d (%s): failed to start server: %v", inst.Id, inst.Tag, err)
+	}
 }
 
 func (m *Manager) startLocked(inst Instance) (*Server, error) {
@@ -119,12 +165,17 @@ func (m *Manager) startLocked(inst Instance) (*Server, error) {
 	return server, nil
 }
 
-func (m *Manager) stopAndDrainLocked(mg *managed) {
+// stopAndDrain closes a detached server and merges its final counters. The
+// caller must not hold m.mu: Close waits for relay goroutines.
+func (m *Manager) stopAndDrain(mg *managed) {
 	if mg == nil || mg.server == nil {
 		return
 	}
 	_ = mg.server.Close()
-	m.appendPendingTrafficLocked(mg.server.CollectClientTraffic())
+	deltas := mg.server.CollectClientTraffic()
+	m.mu.Lock()
+	m.appendPendingTrafficLocked(deltas)
+	m.mu.Unlock()
 }
 
 func (m *Manager) appendPendingTrafficLocked(deltas []ClientTrafficDelta) {
@@ -222,43 +273,56 @@ func (m *Manager) AddTestTraffic(id int, email string, up, down int64) bool {
 
 func (m *Manager) Remove(id int) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.removeLocked(id)
+	detached := m.removeLocked(id)
+	m.mu.Unlock()
+	m.stopAndDrain(detached)
 }
 
-func (m *Manager) removeLocked(id int) {
+// removeLocked detaches the managed server; the caller closes it outside m.mu.
+func (m *Manager) removeLocked(id int) *managed {
 	if existing, ok := m.servers[id]; ok && existing != nil {
-		m.stopAndDrainLocked(existing)
 		delete(m.servers, id)
 		delete(m.lastStartErr, id)
+		return existing
 	}
+	return nil
 }
 
 func (m *Manager) Reconcile(desired []Instance) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	desiredMap := make(map[int]Instance, len(desired))
 	for _, inst := range desired {
 		desiredMap[inst.Id] = inst
 	}
 
+	var detached []*managed
 	for id := range m.servers {
 		if _, ok := desiredMap[id]; !ok {
-			m.removeLocked(id)
+			if mg := m.removeLocked(id); mg != nil {
+				detached = append(detached, mg)
+			}
 		}
 	}
 
 	for _, inst := range desired {
-		_ = m.ensureLocked(inst)
+		if mg, _ := m.ensureLocked(inst); mg != nil {
+			detached = append(detached, mg)
+		}
+	}
+	m.mu.Unlock()
+
+	for _, mg := range detached {
+		m.stopAndDrain(mg)
 	}
 }
 
 func (m *Manager) StopAll() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, mg := range m.servers {
-		m.stopAndDrainLocked(mg)
-	}
+	servers := m.servers
 	m.servers = make(map[int]*managed)
+	m.mu.Unlock()
+	for _, mg := range servers {
+		m.stopAndDrain(mg)
+	}
 }

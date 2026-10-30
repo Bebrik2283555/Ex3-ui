@@ -297,3 +297,49 @@ func TestClientHwidSlotStatus(t *testing.T) {
 		t.Fatalf("disabled subId = (%+v, %v, %v), want zero status and found=false", status, found, err)
 	}
 }
+
+// A public request for an unknown or disabled sub id must not create
+// client_hwids rows: otherwise anyone can grow the table by looping on random
+// ids without authenticating.
+func TestClientHwidGateDoesNotTrackUnknownSubID(t *testing.T) {
+	initClientHwidTestDB(t)
+	svc := &ClientService{}
+	db := database.GetDB()
+
+	for _, subID := range []string{"no-such-sub", "   "} {
+		res, err := svc.EnforceHwidForSubID(subID, HwidRequest{Hwid: "device-one"})
+		if err != nil || !res.Allowed {
+			t.Fatalf("unknown subId %q = (%+v, %v), want allowed", subID, res, err)
+		}
+	}
+	assertHwidRows := func(want int64, what string) {
+		t.Helper()
+		var count int64
+		if err := db.Model(&model.ClientHwid{}).Count(&count).Error; err != nil {
+			t.Fatalf("count hwids: %v", err)
+		}
+		if count != want {
+			t.Fatalf("client_hwids rows after %s = %d, want %d", what, count, want)
+		}
+	}
+	assertHwidRows(0, "requests for unknown sub ids")
+
+	// A disabled client is indistinguishable from an unknown one.
+	rec := seedHwidClient(t, 0)
+	if err := db.Model(&model.ClientRecord{}).Where("id = ?", rec.Id).UpdateColumn("enable", false).Error; err != nil {
+		t.Fatalf("disable client: %v", err)
+	}
+	if _, err := svc.EnforceHwidForSubID(rec.SubID, HwidRequest{Hwid: "device-one"}); err != nil {
+		t.Fatalf("disabled subId: %v", err)
+	}
+	assertHwidRows(0, "a disabled sub id")
+
+	// The tracking itself stays: an enabled client with no limit is listed.
+	if err := db.Model(&model.ClientRecord{}).Where("id = ?", rec.Id).UpdateColumn("enable", true).Error; err != nil {
+		t.Fatalf("re-enable client: %v", err)
+	}
+	if _, err := svc.EnforceHwidForSubID(rec.SubID, HwidRequest{Hwid: "device-one"}); err != nil {
+		t.Fatalf("unlimited subId: %v", err)
+	}
+	assertHwidRows(1, "an enabled client with no limit")
+}

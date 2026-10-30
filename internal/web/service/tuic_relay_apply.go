@@ -109,15 +109,27 @@ func publishTuicRelay(ctx context.Context, inbound *xray.InboundConfig, gate *tu
 		return fmt.Errorf("publish TUIC relay %s readiness: %w", inbound.Tag, err)
 	}
 	// Starting the child process returns before its listeners have bound.
-	// Keep native sessions waiting until the configured accounts really work.
+	// Wait for the port to accept a connection first: re-running the full
+	// account verification on every 20ms tick made a relay that fails to start
+	// open ~100k loopback connections in the 10s budget.
+	if err := waitTuicRelayListener(ctx, inbound.Port); err != nil {
+		update.Finish(inbound.TuicInboundID, nil, false)
+		return fmt.Errorf("TUIC relay %s not ready: %w", inbound.Tag, err)
+	}
+	delay := 20 * time.Millisecond
 	for {
 		err = verifyTuicRelayContext(ctx, nil, inbound)
 		if err == nil || ctx.Err() != nil {
 			break
 		}
 		select {
-		case <-time.After(20 * time.Millisecond):
+		case <-time.After(delay):
 		case <-ctx.Done():
+		}
+		// Each pass probes every configured account, so back off instead of
+		// hammering a core that is still loading its accounts.
+		if delay < 500*time.Millisecond {
+			delay *= 2
 		}
 	}
 	if err != nil {
@@ -126,6 +138,28 @@ func publishTuicRelay(ctx context.Context, inbound *xray.InboundConfig, gate *tu
 	}
 	finishTuicRelayUpdate(update, inbound)
 	return nil
+}
+
+// waitTuicRelayListener polls a cheap TCP connect to the relay's loopback port
+// until the child process is listening or ctx expires.
+func waitTuicRelayListener(ctx context.Context, port int) error {
+	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	var dialer net.Dialer
+	for {
+		conn, err := dialer.DialContext(ctx, "tcp", addr)
+		if err == nil {
+			_ = conn.Close()
+			return nil
+		}
+		if ctx.Err() != nil {
+			return fmt.Errorf("listener on %s not ready: %w", addr, ctx.Err())
+		}
+		select {
+		case <-time.After(20 * time.Millisecond):
+		case <-ctx.Done():
+			return fmt.Errorf("listener on %s not ready: %w", addr, ctx.Err())
+		}
+	}
 }
 
 func unavailableTuicRepairs(cfg *xray.Config) []xray.InboundReplacement {

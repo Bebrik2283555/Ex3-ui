@@ -75,20 +75,44 @@ func (s *ClientService) BulkResetTraffic(inboundSvc *InboundService, emails []st
 	}
 	affected := 0
 	var resetNodes []int
+	var reenable []string
 	err = submitTrafficWrite(func() error {
 		db := database.GetDB()
 		return db.Transaction(func(tx *gorm.DB) error {
+			// Read why each client is off before the counters are zeroed, which
+			// hides whether the quota or the operator switched it off.
+			depleted, qErr := quotaDisabledEmails(tx, cleanEmails)
+			if qErr != nil {
+				return qErr
+			}
+			reenable = reenable[:0]
+			for _, e := range cleanEmails {
+				if rec := recordsByEmail[e]; rec != nil && rec.Enable {
+					reenable = append(reenable, e)
+				}
+			}
+			reenable = append(reenable, depleted...)
 			if err := adjustGroupBaselinesForRemovedTraffic(tx, cleanEmails); err != nil {
 				return err
 			}
 			for _, batch := range chunkStrings(cleanEmails, sqlInChunk) {
 				res := tx.Model(xray.ClientTraffic{}).
 					Where("email IN ?", batch).
-					Updates(map[string]any{"enable": true, "up": 0, "down": 0})
+					Updates(map[string]any{"up": 0, "down": 0})
 				if res.Error != nil {
 					return res.Error
 				}
 				affected += int(res.RowsAffected)
+			}
+			// Only clients that were enabled, or that the quota switched off,
+			// come back: a bulk reset must not revive a client the operator
+			// disabled by hand.
+			for _, batch := range chunkStrings(reenable, sqlInChunk) {
+				if err := tx.Model(xray.ClientTraffic{}).
+					Where("email IN ?", batch).
+					Update("enable", true).Error; err != nil {
+					return err
+				}
 			}
 			if err := clearGlobalTraffic(tx, cleanEmails...); err != nil {
 				return err
@@ -98,7 +122,6 @@ func (s *ClientService) BulkResetTraffic(inboundSvc *InboundService, emails []st
 					return err
 				}
 			}
-			var qErr error
 			resetNodes, qErr = queueNodeResets(tx, cleanEmails)
 			return qErr
 		})
@@ -110,7 +133,7 @@ func (s *ClientService) BulkResetTraffic(inboundSvc *InboundService, emails []st
 	inboundSvc.deliverNodeResetsNow(resetNodes)
 	// After the zeroing, as in ResetTrafficByEmail: enabling a still-depleted
 	// client first lets the next traffic tick switch it off again.
-	for _, e := range cleanEmails {
+	for _, e := range reenable {
 		rec := recordsByEmail[e]
 		if rec == nil || rec.Enable {
 			continue

@@ -584,15 +584,29 @@ func (p *Process) GetUptime() uint64 {
 // refreshAPIPort updates the API port from the inbound configs.
 func (p *process) refreshAPIPort() {
 	port := 0
-	for _, inbound := range p.config.InboundConfigs {
-		if inbound.Tag == "api" {
-			port = inbound.Port
-			break
+	if p.config != nil {
+		// The API inbound tag is configurable, so match the configured one
+		// instead of assuming the default "api".
+		apiTag := apiTagFromConfig(p.config.API)
+		for _, inbound := range p.config.InboundConfigs {
+			if inbound.Tag == apiTag {
+				port = inbound.Port
+				break
+			}
 		}
 	}
 	p.mu.Lock()
 	p.apiPort = port
 	p.mu.Unlock()
+}
+
+// GetAPITag returns the tag of the API inbound in the running config.
+func (p *Process) GetAPITag() string {
+	cfg := p.GetConfig()
+	if cfg == nil {
+		return "api"
+	}
+	return apiTagFromConfig(cfg.API)
 }
 
 // refreshVersion updates the version string by running the Xray binary with -version.

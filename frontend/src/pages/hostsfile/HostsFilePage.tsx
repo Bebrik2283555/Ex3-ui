@@ -18,6 +18,7 @@ import {
   Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd';
@@ -317,16 +318,37 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
       title: <Text type="secondary">{t('pages.dnsresolver.colStatus')}</Text>,
       dataIndex: 'status',
       key: 'status',
-      render: (st: string) =>
-        st === 'OK' ? (
-          <Tag color="green" icon={<CheckCircleOutlined aria-hidden />}>
-            OK
-          </Tag>
-        ) : (
-          <Tag color="red" icon={<CloseCircleOutlined aria-hidden />}>
-            {st}
-          </Tag>
-        ),
+      render: (st: string, row: DnsResolverEntry) => {
+        const tag =
+          st === 'OK' ? (
+            <Tag color="green" icon={<CheckCircleOutlined aria-hidden />}>
+              OK
+            </Tag>
+          ) : st === 'STALE' ? (
+            <Tag color="orange" icon={<SyncOutlined aria-hidden />}>
+              STALE
+            </Tag>
+          ) : (
+            <Tag color="red" icon={<CloseCircleOutlined aria-hidden />}>
+              {st}
+            </Tag>
+          );
+        // Region and handshake time come from the post-resolution probe, so the
+        // operator can see why an address was picked or rejected.
+        const details = [row.region, row.latencyMs ? `${row.latencyMs} ms` : '']
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <Space direction="vertical" size={2}>
+            {row.error ? <Tooltip title={row.error}>{tag}</Tooltip> : tag}
+            {details && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {details}
+              </Text>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 

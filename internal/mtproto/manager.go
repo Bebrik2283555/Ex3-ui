@@ -148,6 +148,10 @@ type managed struct {
 type Manager struct {
 	mu    sync.Mutex
 	procs map[int]*managed
+	// starts serializes Ensure per inbound id: the stop of an old process must
+	// happen outside mu (it waits for SIGTERM), yet a new process may only
+	// start once that port is actually free.
+	starts map[int]*sync.Mutex
 	// swept records that the one-time startup cleanup of orphaned mtg
 	// processes (survivors of a previous x-ui run) has already run.
 	swept bool
@@ -161,7 +165,7 @@ var (
 // GetManager returns the process-wide mtg manager singleton.
 func GetManager() *Manager {
 	managerOnce.Do(func() {
-		manager = &Manager{procs: map[int]*managed{}}
+		manager = &Manager{procs: map[int]*managed{}, starts: map[int]*sync.Mutex{}}
 	})
 	return manager
 }
@@ -256,10 +260,50 @@ func usableAdTag(tag string) string {
 // Ensure starts the mtg process for an instance, or restarts it when its
 // configuration changed. A no-op when the desired process is already running.
 func (m *Manager) Ensure(inst Instance) error {
+	lk := m.lockFor(inst.Id)
+	lk.Lock()
+	defer lk.Unlock()
+
+	m.mu.Lock()
+	m.sweepOrphansLocked()
+	detached, err := m.ensureLocked(inst)
+	m.mu.Unlock()
+	if detached == nil {
+		return err
+	}
+	// Stop outside mu, then start: the new process needs the port the old one
+	// still holds, so the stop must complete before the second pass.
+	stopDetached(detached)
+	m.mu.Lock()
+	second, secondErr := m.ensureLocked(inst)
+	m.mu.Unlock()
+	stopDetached(second)
+	return secondErr
+}
+
+// lockFor returns the per-inbound ensure mutex, creating it on first use.
+func (m *Manager) lockFor(id int) *sync.Mutex {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.sweepOrphansLocked()
-	return m.ensureLocked(inst)
+	if m.starts == nil {
+		m.starts = map[int]*sync.Mutex{}
+	}
+	lk, ok := m.starts[id]
+	if !ok {
+		lk = &sync.Mutex{}
+		m.starts[id] = lk
+	}
+	return lk
+}
+
+// stopDetached waits out a process that was already removed from m.procs.
+// Stop can block for seconds (SIGTERM grace + kill), so it must not run while
+// m.mu is held — that would stall every other inbound's ensure and the traffic
+// scrape.
+func stopDetached(mg *managed) {
+	if mg != nil && mg.proc != nil {
+		_ = mg.proc.Stop()
+	}
 }
 
 // sweepOrphansLocked kills mtg processes left running by a previous x-ui run,
@@ -301,46 +345,50 @@ func ensureActionFor(running bool, curStructFP, curSecretsFP, newStructFP, newSe
 	return ensureNoop
 }
 
-func (m *Manager) ensureLocked(inst Instance) error {
+// ensureLocked reconciles the managed process. It returns a process it
+// detached (already removed from m.procs) instead of stopping it here: Stop
+// waits for SIGTERM and must run outside m.mu.
+func (m *Manager) ensureLocked(inst Instance) (*managed, error) {
 	structFP := inst.structuralFingerprint()
 	secFP := inst.secretsFingerprint()
+	var detached *managed
 	if cur, ok := m.procs[inst.Id]; ok {
 		switch ensureActionFor(cur.proc.IsRunning(), cur.structuralFP, cur.secretsFP, structFP, secFP) {
 		case ensureNoop:
 			cur.tag = inst.Tag
-			return nil
+			return nil, nil
 		case ensureReload:
 			if err := writeConfig(configPathForID(inst.Id), inst, cur.apiPort, cur.apiToken); err != nil {
-				return err
+				return nil, err
 			}
 			if applySecrets(cur.apiPort, cur.apiToken, inst) {
 				cur.tag = inst.Tag
 				cur.secretsFP = secFP
 				logger.Infof("mtproto: applied secret update to inbound %d in place", inst.Id)
-				return nil
+				return nil, nil
 			}
 			logger.Warningf("mtproto: live secret update unavailable for inbound %d, restarting", inst.Id)
 			fallthrough
 		case ensureRestart:
-			_ = cur.proc.Stop()
+			detached = cur
 			delete(m.procs, inst.Id)
 		}
 	}
 	apiPort, err := FreeLocalPort()
 	if err != nil {
-		return err
+		return detached, err
 	}
 	apiToken, err := newAPIToken()
 	if err != nil {
-		return err
+		return detached, err
 	}
 	cfgPath := configPathForID(inst.Id)
 	if err := writeConfig(cfgPath, inst, apiPort, apiToken); err != nil {
-		return err
+		return detached, err
 	}
 	proc := newProcess(cfgPath, fmt.Sprintf("inbound %d", inst.Id))
 	if err := proc.Start(); err != nil {
-		return err
+		return detached, err
 	}
 	m.procs[inst.Id] = &managed{
 		proc:         proc,
@@ -352,41 +400,59 @@ func (m *Manager) ensureLocked(inst Instance) error {
 		last:         map[string]clientCounters{},
 	}
 	logger.Infof("mtproto: started mtg for inbound %d on %s", inst.Id, inst.bindTo())
-	return nil
+	return detached, nil
 }
 
 // Remove stops and forgets the mtg process for an inbound id.
 func (m *Manager) Remove(id int) {
+	lk := m.lockFor(id)
+	lk.Lock()
+	defer lk.Unlock()
+
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	if cur, ok := m.procs[id]; ok {
-		_ = cur.proc.Stop()
+	cur, ok := m.procs[id]
+	if ok {
 		delete(m.procs, id)
-		_ = os.Remove(configPathForID(id))
-		logger.Infof("mtproto: stopped mtg for inbound %d", id)
 	}
+	m.mu.Unlock()
+	if !ok {
+		return
+	}
+	stopDetached(cur)
+	_ = os.Remove(configPathForID(id))
+	logger.Infof("mtproto: stopped mtg for inbound %d", id)
 }
 
 // Reconcile drives the running set toward the desired instances: it stops
 // processes that are no longer wanted and (re)starts the rest. Used at boot
 // and periodically to recover from crashes.
 func (m *Manager) Reconcile(desired []Instance) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.sweepOrphansLocked()
 	want := make(map[int]struct{}, len(desired))
 	for _, inst := range desired {
 		want[inst.Id] = struct{}{}
 	}
+
+	m.mu.Lock()
+	m.sweepOrphansLocked()
+	type stale struct {
+		id int
+		mg *managed
+	}
+	var dropped []stale
 	for id, cur := range m.procs {
 		if _, ok := want[id]; !ok {
-			_ = cur.proc.Stop()
 			delete(m.procs, id)
-			_ = os.Remove(configPathForID(id))
+			dropped = append(dropped, stale{id: id, mg: cur})
 		}
 	}
+	m.mu.Unlock()
+	for _, s := range dropped {
+		stopDetached(s.mg)
+		_ = os.Remove(configPathForID(s.id))
+	}
+
 	for _, inst := range desired {
-		if err := m.ensureLocked(inst); err != nil {
+		if err := m.Ensure(inst); err != nil {
 			logger.Warningf("mtproto: reconcile failed for inbound %d: %v", inst.Id, err)
 		}
 	}
@@ -395,11 +461,12 @@ func (m *Manager) Reconcile(desired []Instance) {
 // StopAll stops every managed mtg process. Called on panel shutdown.
 func (m *Manager) StopAll() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	for id, cur := range m.procs {
-		_ = cur.proc.Stop()
+	running := m.procs
+	m.procs = map[int]*managed{}
+	m.mu.Unlock()
+	for id, cur := range running {
+		stopDetached(cur)
 		_ = os.Remove(configPathForID(id))
-		delete(m.procs, id)
 	}
 }
 
@@ -447,11 +514,13 @@ func (m *Manager) CollectTraffic() ([]Traffic, []string) {
 			}
 			du := up - prev.up
 			dd := down - prev.down
+			// mtg resets its counters on restart. Count the new total instead of
+			// dropping the interval, matching amneziawgkern's reset handling.
 			if du < 0 {
-				du = 0
+				du = up
 			}
 			if dd < 0 {
-				dd = 0
+				dd = down
 			}
 			if du > 0 || dd > 0 {
 				out = append(out, Traffic{Tag: s.tag, Email: email, Up: du, Down: dd})

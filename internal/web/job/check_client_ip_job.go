@@ -39,7 +39,16 @@ type CheckClientIpJob struct {
 	onlineUsers onlineUsersSource
 	allowlist   ipLimitAllowlist
 	lastIpPrune int64
+	// fail2ban-client is a Python script; probing it on every 10s tick costs a
+	// process spawn each time, so the answer is cached per job instance.
+	f2bCheckedAt time.Time
+	f2bInstalled bool
 }
+
+// fail2banProbeTTL bounds how long a probe result is trusted: long enough to
+// skip thousands of spawns, short enough that installing fail2ban is picked up
+// without restarting the panel.
+const fail2banProbeTTL = 5 * time.Minute
 
 const defaultXrayAPIPort = 62789
 
@@ -287,9 +296,9 @@ func (j *CheckClientIpJob) loadClientIpRows(emails []string) map[string]*model.I
 // observations as live connections, which bypass the stale cutoff: a connection
 // that opened hours ago is still live even though its timestamp is old. The
 // online-stats API always reports live connections, so the job passes true.
-// Lookups are batched up front and all inbound_client_ips writes share one
-// transaction, so a scan costs a handful of queries and one fsync instead of
-// several per observed email.
+// Lookups are batched up front and the inbound_client_ips writes commit in
+// bounded batches, so a scan costs a handful of queries per batch instead of
+// several per observed email without holding the write lock for the whole scan.
 func (j *CheckClientIpJob) processObserved(observed map[string]map[string]int64, enforce, observedAreLive bool) bool {
 	shouldCleanLog := false
 	now := time.Now().Unix()
@@ -311,19 +320,32 @@ func (j *CheckClientIpJob) processObserved(observed map[string]map[string]int64,
 	var bans []pendingBan
 
 	db := database.GetDB()
-	tx := db.Begin()
-	if tx.Error != nil {
-		j.checkError(tx.Error)
-		return false
-	}
-	committed := false
+	// One write transaction for the whole scan held SQLite's RESERVED lock for
+	// its full duration, so the traffic writer waited on busy_timeout and lost
+	// its interval. Commit every batch instead; each is self-contained.
+	const ipLimitScanBatchSize = 200
+	var tx *gorm.DB
 	defer func() {
-		if !committed {
+		if tx != nil {
 			tx.Rollback()
 		}
 	}()
 
-	for _, email := range emails {
+	for i, email := range emails {
+		if i%ipLimitScanBatchSize == 0 {
+			if tx != nil {
+				if err := tx.Commit().Error; err != nil {
+					j.checkError(err)
+					return false
+				}
+				tx = nil
+			}
+			tx = db.Begin()
+			if tx.Error != nil {
+				j.checkError(tx.Error)
+				return false
+			}
+		}
 		ipTimestamps := observed[email]
 
 		// The observations can still reference a client that was just renamed
@@ -392,11 +414,13 @@ func (j *CheckClientIpJob) processObserved(observed map[string]map[string]int64,
 		bans = append(bans, pendingBan{inbound: inbound, email: email, candidates: candidates, keptLive: keptLive})
 	}
 
-	if err := tx.Commit().Error; err != nil {
-		j.checkError(err)
-		return false
+	if tx != nil {
+		if err := tx.Commit().Error; err != nil {
+			j.checkError(err)
+			return false
+		}
+		tx = nil
 	}
-	committed = true
 
 	published := j.publishBans(bans)
 
@@ -487,11 +511,16 @@ func (j *CheckClientIpJob) checkFail2BanInstalled() bool {
 	if !isFail2BanEnabled() {
 		return false
 	}
+	if !j.f2bCheckedAt.IsZero() && time.Since(j.f2bCheckedAt) < fail2banProbeTTL {
+		return j.f2bInstalled
+	}
 
 	cmd := "fail2ban-client"
 	args := []string{"-h"}
 	err := exec.CommandContext(context.Background(), cmd, args...).Run()
-	return err == nil
+	j.f2bCheckedAt = time.Now()
+	j.f2bInstalled = err == nil
+	return j.f2bInstalled
 }
 
 func isFail2BanEnabled() bool {
