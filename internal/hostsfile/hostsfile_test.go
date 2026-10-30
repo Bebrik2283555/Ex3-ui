@@ -3,6 +3,7 @@ package hostsfile
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -54,5 +55,37 @@ func TestWriteAtomicReplacesTheWholeFile(t *testing.T) {
 	}
 	if len(entries) != 1 {
 		t.Fatalf("temporary files left behind: %v", entries)
+	}
+}
+
+// Containers keep /etc read-only and bind-mount /etc/hosts as a writable file,
+// so the temp file cannot be created; the write must go through the file.
+func TestWriteAtomicFallsBackToInPlaceOnReadOnlyDir(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("directory permissions do not block file creation on this platform")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "hosts")
+	if err := os.WriteFile(target, []byte("old content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(dir, 0o755)
+
+	content := []byte("127.0.0.1 localhost\n")
+	if err := writeAtomic(target, content, 0o644); err != nil {
+		t.Fatalf("writeAtomic on read-only dir: %v", err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(content) {
+		t.Fatalf("hosts = %q, want %q", got, content)
 	}
 }

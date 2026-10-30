@@ -112,7 +112,9 @@ func writeAtomic(target string, content []byte, perm os.FileMode) error {
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(target), ".xui-hosts-")
 	if err != nil {
-		return err
+		// Containers and immutable-root images keep /etc read-only and mount
+		// /etc/hosts as a writable file, so no temp file can be created there.
+		return writeInPlace(target, content, perm)
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
@@ -132,7 +134,33 @@ func writeAtomic(target string, content []byte, perm os.FileMode) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, target)
+	if err := os.Rename(tmpName, target); err != nil {
+		// A read-only parent directory rejects the rename but not a write
+		// through the mounted file; report the original error if that fails too.
+		if fallbackErr := writeInPlace(target, content, perm); fallbackErr != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeInPlace truncates and rewrites the target. It is the fallback for
+// read-only parent directories: not crash-safe, but the only way to update a
+// bind-mounted file such as /etc/hosts inside a container.
+func writeInPlace(target string, content []byte, perm os.FileMode) error {
+	f, err := os.OpenFile(target, os.O_WRONLY|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(content); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // ApplyEntries writes a hosts file built from a header comment, the given
