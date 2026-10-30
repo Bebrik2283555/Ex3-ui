@@ -1,10 +1,10 @@
 <p align="center">
-  <img alt="EX3-UI" src="https://img.shields.io/badge/EX3--UI%201.2-Black?style=for-the-badge">
+  <img alt="EX3-UI" src="https://img.shields.io/badge/EX3--UI-Black?style=for-the-badge">
 </p>
 
 <p align="center">
   <a href="https://github.com/Bebrik2283555/Ex3-ui/releases"><img src="https://img.shields.io/github/v/release/Bebrik2283555/Ex3-ui?label=Release" alt="Release"></a>
-  <a href="LICENSING.md"><img src="https://img.shields.io/badge/license-GPL--3.0%20%2B%20PolyForm%20NC-blue?style=flat-square&longCache=true" alt="License"></a>
+  <a href="LICENSING.md"><img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square&longCache=true" alt="License"></a>
   <img src="https://img.shields.io/badge/arch-amd64%20%7C%20arm64-blue?style=flat-square" alt="Arch">
 </p>
 
@@ -12,17 +12,24 @@
 
 **EX3-UI** — форк известной панели [3x-ui](https://github.com/MHSanaei/3x-ui), заточенный под обход блокировок в России и оптимизацию под слабые VPS-серверы.
 
-Текущая версия основана на 3x-ui **3.10.2**.
+Текущая версия основана на 3x-ui **3.11.0**.
 
 ## Что внутри
 
 - **Поддержка ядер для обхода блокировок через звонки российских сервисов из белого списка:**
   - [qWDTT](https://github.com/SpaceNeuroX/proxy-turn-vk-android) — форк [WDTT](https://github.com/amurcanov/proxy-turn-vk-android)
-  - [olcRTC](https://github.com/openlibrecommunity/olcrtc)
+  - [olcRTC](https://github.com/openlibrecommunity/olcrtc) — TCP-over-WebRTC (Jitsi, Telemost, WbStream).
+    Проект переведён автором в EoL, но продолжает работать и остаётся в панели.
   - [CSQTT](https://github.com/amurcanov/csqtt)
-- **zapret** — обход DPI-блокировок ([zapret-linux-easy](https://github.com/ImMALWARE/zapret-linux-easy), интегрирован в панель)
+- **zapret** — обход DPI-блокировок ([zapret-linux-easy](https://github.com/ImMALWARE/zapret-linux-easy), интегрирован в панель).
+  При установке дополнительно прописывает GitHub и Discord в `/etc/hosts` отдельным блоком
+  (не пересекается с блоком SmartDNS); при удалении блок убирается.
 - **hosts** — обход гео и DPI-блокировок для серверов в России (можно использовать свой список или [этот](https://info.dns.malw.link/hosts))
-- **SmartDNS** - резолвинг dns серверов для обхода гео блокировок и прописывания их в hosts
+- **SmartDNS** — резолвинг доменов через выбранный DNS-сервер и запись рабочих адресов в hosts:
+  собирает **все** A-записи домена, проверяет каждую реальным TLS-хендшейком с проверкой сертификата
+  и отбрасывает адреса, чей edge-регион сервис блокирует (для ChatGPT/OpenAI/Claude), после чего
+  выбирает самый быстрый. Если проверка не удалась — остаётся предыдущий рабочий IP (статус `STALE`),
+  а не пустая запись. При недоступности основного DNS используются резервные (Cloudflare, Google).
 - **Оптимизация под слабые VPS:**
   - установка системного DNS-сервера
   - включение BBR
@@ -88,18 +95,18 @@ bash <(curl -Ls https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/inst
 | mtg-multi (MTProto) | [mhsanaei/mtg-multi](https://github.com/mhsanaei/mtg-multi) | MIT |
 | qWDTT (fork WDTT) | [SpaceNeuroX/proxy-turn-vk-android](https://github.com/SpaceNeuroX/proxy-turn-vk-android) | GPL-3.0 |
 | WDTT | [amurcanov/proxy-turn-vk-android](https://github.com/amurcanov/proxy-turn-vk-android) | GPL-3.0 |
-| olcRTC | [openlibrecommunity/olcrtc](https://github.com/openlibrecommunity/olcrtc) | WTFPL-2.0 |
+| olcRTC (EoL upstream) | [openlibrecommunity/olcrtc](https://github.com/openlibrecommunity/olcrtc) | WTFPL-2.0 |
 | zapret | [ImMALWARE/zapret-linux-easy](https://github.com/ImMALWARE/zapret-linux-easy) | MIT |
 | CSQTT | [amurcanov/csqtt](https://github.com/amurcanov/csqtt) | PolyForm Noncommercial 1.0.0 |
-| LucX-UI (часть кода sidecar/Cores) | [AlexeyLCP/lucx-ui](https://github.com/AlexeyLCP/lucx-ui) | PolyForm Noncommercial 1.0.0 |
 
-Проект использует смешанную модель: upstream 3x-ui и оригинальный код EX3-UI —
-GPL-3.0; часть кода sidecar/Cores адаптирована из LucX-UI и распространяется по
-PolyForm Noncommercial 1.0.0; CSQTT — отдельный компонент amurcanov под
-PolyForm Noncommercial 1.0.0. Коммерческое использование PolyForm-компонентов
-требует письменного разрешения соответствующих авторов.
+Проект использует смешанную модель: upstream 3x-ui и оригинальный код EX3-UI (включая
+менеджер sidecar и интеграцию ядер) — GPL-3.0; CSQTT — отдельный компонент amurcanov
+под PolyForm Noncommercial 1.0.0, коммерческое использование требует письменного
+разрешения автора. В релизах до 1.5.0 включительно была часть кода из LucX-UI под
+PolyForm Noncommercial 1.0.0; в текущем дереве она заменена независимой реализацией
+и эти условия больше не применяются.
 
-Полные тексты лицензий — в каталоге [`licenses/`](licenses/) (в релизном архиве)
+Полные тексты лицензий — в каталоге [`licenses/`](licenses/)
 и в исходниках соответствующих проектов. Полная матрица — в
 [`LICENSING.md`](LICENSING.md).
 
