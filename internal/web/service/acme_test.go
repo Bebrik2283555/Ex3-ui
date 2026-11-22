@@ -3,10 +3,49 @@ package service
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
+
+// The issuance HTTP request must answer before the panel restart acme.sh
+// triggers, otherwise the browser reports "Failed to fetch" for a good cert.
+func TestCertReloadCommandDefersRestart(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("needs a POSIX shell and nohup")
+	}
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "restarted")
+	fakeSystemctl := "#!/bin/sh\nprintf x > \"" + marker + "\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "systemctl"), []byte(fakeSystemctl), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("sh", "-c", certReloadCommand())
+	cmd.Env = append(os.Environ(), "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	start := time.Now()
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("run reload command: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("reload command blocked the caller for %v, want an immediate return", elapsed)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("restart ran before the response could be written (marker err = %v)", err)
+	}
+
+	deadline := time.Now().Add(6 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(marker); err == nil {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("deferred reload never ran")
+}
 
 func TestAcmeCommandErrorIncludesOutput(t *testing.T) {
 	err := acmeCommandError("acme issue failed", errors.New("exit status 1"), []byte("HTTP-01 challenge failed"))

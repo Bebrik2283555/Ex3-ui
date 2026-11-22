@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
@@ -58,22 +59,15 @@ type NodeTrafficSyncJob struct {
 }
 
 type atomicBool struct {
-	mu sync.Mutex
-	v  bool
+	v atomic.Bool
 }
 
 func (a *atomicBool) set() {
-	a.mu.Lock()
-	a.v = true
-	a.mu.Unlock()
+	a.v.Store(true)
 }
 
 func (a *atomicBool) takeAndReset() bool {
-	a.mu.Lock()
-	v := a.v
-	a.v = false
-	a.mu.Unlock()
-	return v
+	return a.v.Swap(false)
 }
 
 func NewNodeTrafficSyncJob() *NodeTrafficSyncJob {

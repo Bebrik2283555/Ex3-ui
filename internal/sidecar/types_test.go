@@ -1,7 +1,11 @@
 package sidecar
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -194,6 +198,71 @@ func TestCSQTTPerClientPasswords(t *testing.T) {
 	}
 	if got := csqttPasswordForClient(model.Client{Password: "generic"}); got != "" {
 		t.Fatalf("csqttPasswordForClient(legacy) = %q, want empty", got)
+	}
+}
+
+// A 1.4.5+ core persists its diagnostics secret in diag.key: both share
+// payloads must carry the derived token so the client's check works.
+func TestQWDTTDiagKeyInSharePayloads(t *testing.T) {
+	dir := t.TempDir()
+	secret := make([]byte, 32)
+	for i := range secret {
+		secret[i] = byte(i)
+	}
+	if err := os.WriteFile(filepath.Join(dir, qwdttDiagKeyName), []byte(hex.EncodeToString(secret)+"\n"), 0o600); err != nil {
+		t.Fatalf("write diag.key: %v", err)
+	}
+	inst := Instance{
+		Protocol: model.QWDTT,
+		Listen:   "203.0.113.5",
+		Port:     56000,
+		QWDTT:    &QWDTTConfig{ConfigDir: dir, WGPort: 56001, Hashes: "abc"},
+		Clients:  []model.Client{{Email: "a@x", QwdttPassword: "pass-a", Enable: true}},
+	}
+	want := base64.RawURLEncoding.EncodeToString(secret)
+	links := inst.Links(inst.Clients[0])
+	if len(links) != 1 || !strings.Contains(links[0], "dk="+want) {
+		t.Fatalf("link = %v, want dk=%s", links, want)
+	}
+	var sub QwdttSubscription
+	if err := json.Unmarshal([]byte(inst.SubJSON(inst.Clients[0])), &sub); err != nil {
+		t.Fatalf("SubJSON: %v", err)
+	}
+	if len(sub.Profiles) != 1 || sub.Profiles[0].DiagKey != want {
+		t.Fatalf("SubJSON diagKey = %+v, want %s", sub.Profiles, want)
+	}
+}
+
+// A missing or malformed diag.key must leave working links without a token.
+func TestQWDTTDiagKeyAbsent(t *testing.T) {
+	for name, content := range map[string]string{
+		"missing":   "",
+		"malformed": "not-a-key\n",
+	} {
+		dir := t.TempDir()
+		if content != "" {
+			if err := os.WriteFile(filepath.Join(dir, qwdttDiagKeyName), []byte(content), 0o600); err != nil {
+				t.Fatalf("%s: write diag.key: %v", name, err)
+			}
+		}
+		inst := Instance{
+			Protocol: model.QWDTT,
+			Listen:   "203.0.113.5",
+			Port:     56000,
+			QWDTT:    &QWDTTConfig{ConfigDir: dir, WGPort: 56001, Hashes: "abc"},
+			Clients:  []model.Client{{Email: "a@x", QwdttPassword: "pass-a", Enable: true}},
+		}
+		links := inst.Links(inst.Clients[0])
+		if len(links) != 1 || strings.Contains(links[0], "dk=") {
+			t.Fatalf("%s: link = %v, want no dk", name, links)
+		}
+		var sub QwdttSubscription
+		if err := json.Unmarshal([]byte(inst.SubJSON(inst.Clients[0])), &sub); err != nil {
+			t.Fatalf("%s: SubJSON: %v", name, err)
+		}
+		if len(sub.Profiles) != 1 || sub.Profiles[0].DiagKey != "" {
+			t.Fatalf("%s: SubJSON diagKey = %+v, want empty", name, sub.Profiles)
+		}
 	}
 }
 

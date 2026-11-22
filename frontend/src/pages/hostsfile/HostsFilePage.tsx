@@ -106,7 +106,7 @@ function HostsFileTab() {
   }
 
   return (
-    <Spin spinning={isLoading}>
+    <Spin aria-live="off" spinning={isLoading}>
       <Card
         title={t('pages.hostsfile.editorTitle')}
         variant="borderless"
@@ -353,7 +353,7 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
   ];
 
   return (
-    <Spin spinning={isLoading}>
+    <Spin aria-live="off" spinning={isLoading}>
       {/* Status Card */}
       <Card
         title={t('pages.dnsresolver.statusCard')}
@@ -446,19 +446,23 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
                 }
                 rules={[{ required: true }]}
               >
-                <Space.Compact style={{ width: '100%' }}>
-                  <Input
-                    aria-label={t('pages.dnsresolver.dnsServerLabel')}
-                    placeholder="https://dns.comss.one/dns-query"
-                  />
-                  <Button
-                    icon={<ThunderboltOutlined aria-hidden />}
-                    loading={testingDns}
-                    onClick={() => void onTestDns()}
-                  >
-                    {t('pages.dnsresolver.testDnsBtn')}
-                  </Button>
-                </Space.Compact>
+                {/* The Input must be Form.Item's direct child: Space.Compact does not
+                    forward value/onChange, which silently reset the saved server. */}
+                <Input
+                  aria-label={t('pages.dnsresolver.dnsServerLabel')}
+                  placeholder="https://dns.comss.one/dns-query"
+                  addonAfter={
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<ThunderboltOutlined aria-hidden />}
+                      loading={testingDns}
+                      onClick={() => void onTestDns()}
+                    >
+                      {t('pages.dnsresolver.testDnsBtn')}
+                    </Button>
+                  }
+                />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>

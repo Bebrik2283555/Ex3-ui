@@ -19,10 +19,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"golang.org/x/net/dns/dnsmessage"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
+	"github.com/mhsanaei/3x-ui/v3/internal/hostsfile"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 )
 
@@ -159,6 +161,48 @@ func RegisterCronUpdateHook(hook func(intervalHours int, enabled bool)) {
 	onCronUpdate = hook
 }
 
+var dohClient = &http.Client{
+	Transport: &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   2 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   2 * time.Second,
+		ResponseHeaderTimeout: 3 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	},
+	Timeout: 3500 * time.Millisecond,
+}
+
+// validateDomain checks whether d is a syntactically valid domain name.
+// It rejects newlines, spaces, control characters, and malformed labels so invalid
+// domains cannot break DNS queries or corrupt /etc/hosts entries.
+func validateDomain(d string) error {
+	d = strings.TrimSpace(d)
+	if d == "" {
+		return fmt.Errorf("empty domain")
+	}
+	if len(d) > 253 {
+		return fmt.Errorf("domain %q exceeds 253 characters", d)
+	}
+	for _, r := range d {
+		if r > 127 || (!unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.' && r != '-' && r != '_') {
+			return fmt.Errorf("domain %q contains invalid character %q", d, r)
+		}
+	}
+	parts := strings.Split(d, ".")
+	for _, p := range parts {
+		if len(p) == 0 || len(p) > 63 {
+			return fmt.Errorf("domain %q has invalid label length", d)
+		}
+		if strings.HasPrefix(p, "-") || strings.HasSuffix(p, "-") {
+			return fmt.Errorf("domain label %q cannot start or end with hyphen", p)
+		}
+	}
+	return nil
+}
+
 func configPath() string {
 	return filepath.Join(config.GetDBFolderPath(), "dns_resolver.json")
 }
@@ -245,6 +289,15 @@ func GetSettings() Settings {
 
 // SaveSettings updates configuration and updates scheduled cron job.
 func SaveSettings(newSettings Settings) error {
+	for _, d := range newSettings.Domains {
+		d = strings.TrimSpace(d)
+		if d != "" && !strings.HasPrefix(d, "#") {
+			if err := validateDomain(d); err != nil {
+				return err
+			}
+		}
+	}
+
 	mu.Lock()
 	if newSettings.DnsServer == "" {
 		newSettings.DnsServer = defaultDnsServer
@@ -281,14 +334,18 @@ func SaveSettings(newSettings Settings) error {
 
 // SaveDomains updates only the domain list.
 func SaveDomains(domains []string) error {
-	mu.Lock()
 	cleaned := make([]string, 0, len(domains))
 	for _, d := range domains {
 		d = strings.TrimSpace(d)
 		if d != "" && !strings.HasPrefix(d, "#") {
+			if err := validateDomain(d); err != nil {
+				return err
+			}
 			cleaned = append(cleaned, d)
 		}
 	}
+
+	mu.Lock()
 	if len(cleaned) == 0 {
 		cleaned = append([]string{}, defaultDomains...)
 	}
@@ -421,16 +478,16 @@ func Resolve(ctx context.Context) error {
 	var resultStr, errStr string
 	switch {
 	case successCount == len(domainList):
-		resultStr = fmt.Sprintf("Успешно: проверено %d из %d доменов", successCount, len(domainList))
+		resultStr = fmt.Sprintf("Success: verified %d of %d domains", successCount, len(domainList))
 	case successCount > 0:
-		resultStr = fmt.Sprintf("Частично: проверено %d из %d доменов", successCount, len(domainList))
-		errStr = fmt.Sprintf("Не удалось проверить %d доменов", len(domainList)-successCount)
+		resultStr = fmt.Sprintf("Partial: verified %d of %d domains", successCount, len(domainList))
+		errStr = fmt.Sprintf("Failed to verify %d domains", len(domainList)-successCount)
 	default:
-		resultStr = "Ошибка: не удалось проверить домены"
-		errStr = "Ни один домен не ответил корректно через указанный DNS-сервер (таймаут, неверный сертификат или заблокированный регион)"
+		resultStr = "Error: failed to verify domains"
+		errStr = "No domains responded correctly via the specified DNS server (timeout, invalid certificate, or blocked region)"
 	}
 	if staleCount > 0 && errStr == "" {
-		resultStr = fmt.Sprintf("%s (оставлен предыдущий IP для %d)", resultStr, staleCount)
+		resultStr = fmt.Sprintf("%s (retained previous IP for %d)", resultStr, staleCount)
 	}
 
 	mu.Lock()
@@ -518,21 +575,7 @@ func resolveDoH(ctx context.Context, endpoint, domain string) ([]string, error) 
 	httpReq.Header.Set("Content-Type", "application/dns-message")
 	httpReq.Header.Set("Accept", "application/dns-message")
 
-	tr := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   2 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		TLSHandshakeTimeout:   2 * time.Second,
-		ResponseHeaderTimeout: 3 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-	}
-	client := &http.Client{
-		Transport: tr,
-		Timeout:   3500 * time.Millisecond,
-	}
-	resp, err := client.Do(httpReq)
+	resp, err := dohClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("doh request: %w", err)
 	}
@@ -644,13 +687,16 @@ func updateHostsBlock(entries []ResolvedEntry) error {
 		}
 	}
 
-	existing, _ := os.ReadFile(hostsFilePath)
+	existing, err := os.ReadFile(hostsFilePath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	text := string(existing)
 
 	cleaned := stripHostsBlock(text)
 
 	if len(validLines) == 0 {
-		return os.WriteFile(hostsFilePath, []byte(cleaned), 0o644)
+		return hostsfile.WriteSafe(hostsFilePath, []byte(cleaned), 0o644)
 	}
 
 	var sb strings.Builder
@@ -667,7 +713,7 @@ func updateHostsBlock(entries []ResolvedEntry) error {
 	sb.WriteString(blockFooter)
 	sb.WriteString("\n")
 
-	return os.WriteFile(hostsFilePath, []byte(sb.String()), 0o644)
+	return hostsfile.WriteSafe(hostsFilePath, []byte(sb.String()), 0o644)
 }
 
 func removeHostsBlock() error {
@@ -676,10 +722,13 @@ func removeHostsBlock() error {
 	}
 	existing, err := os.ReadFile(hostsFilePath)
 	if err != nil {
-		return nil
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
 	}
 	cleaned := stripHostsBlock(string(existing))
-	return os.WriteFile(hostsFilePath, []byte(cleaned), 0o644)
+	return hostsfile.WriteSafe(hostsFilePath, []byte(cleaned), 0o644)
 }
 
 // stripHostsBlock removes the panel's SmartDNS block. The markers are matched

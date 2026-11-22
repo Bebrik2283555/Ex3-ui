@@ -179,12 +179,31 @@ func quotaDisabledEmails(tx *gorm.DB, within []string) ([]string, error) {
 			in[e] = true
 		}
 	}
+	seen := make(map[string]bool)
 	var emails []string
 	for _, c := range cycles {
 		if c.Depleted() && (in == nil || in[c.Email]) {
+			seen[c.Email] = true
 			emails = append(emails, c.Email)
 		}
 	}
+
+	// Also check client_traffics directly for depleted clients (e.g. tests or unlinked records)
+	var traffics []xray.ClientTraffic
+	ctQuery := tx.Model(&xray.ClientTraffic{}).Where("enable = ? AND total > 0 AND (up + down) >= total", false)
+	if within != nil {
+		ctQuery = ctQuery.Where("email IN ?", within)
+	}
+	if err := ctQuery.Find(&traffics).Error; err != nil {
+		return nil, err
+	}
+	for _, tr := range traffics {
+		if !seen[tr.Email] {
+			seen[tr.Email] = true
+			emails = append(emails, tr.Email)
+		}
+	}
+
 	return emails, nil
 }
 

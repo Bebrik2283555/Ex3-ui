@@ -1,10 +1,14 @@
 package sidecar
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -103,6 +107,7 @@ func (i Instance) SubJSON(client model.Client) string {
 			Workers:  qwdttWorkers(cfg),
 			Port:     qwdttClientPort(cfg),
 			Password: password,
+			DiagKey:  qwdttDiagKey(cfg),
 		}},
 	}
 	out, err := json.MarshalIndent(document, "", "  ")
@@ -134,6 +139,9 @@ func (i Instance) qwdttLink(client model.Client) string {
 	query.Set("pass", password)
 	query.Set("port", strconv.Itoa(qwdttClientPort(cfg)))
 	query.Set("workers", strconv.Itoa(qwdttWorkers(cfg)))
+	if diagKey := qwdttDiagKey(cfg); diagKey != "" {
+		query.Set("dk", diagKey)
+	}
 	return "qwdtt://config?" + query.Encode()
 }
 
@@ -303,6 +311,23 @@ func qwdttHashes(cfg *QWDTTConfig, email string) string {
 		return override
 	}
 	return strings.TrimSpace(cfg.Hashes)
+}
+
+// qwdttDiagKey exposes the diagnostics token the 1.4.5+ core keeps in its
+// config dir. A missing or malformed file only disables the client's check.
+func qwdttDiagKey(cfg *QWDTTConfig) string {
+	if cfg == nil || strings.TrimSpace(cfg.ConfigDir) == "" {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(cfg.ConfigDir, qwdttDiagKeyName))
+	if err != nil {
+		return ""
+	}
+	secret, err := hex.DecodeString(strings.TrimSpace(string(data)))
+	if err != nil || len(secret) != 32 {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(secret)
 }
 
 func qwdttWorkers(cfg *QWDTTConfig) int {

@@ -21,6 +21,7 @@ import { CheckCircleOutlined, CloseCircleOutlined, ThunderboltOutlined } from '@
 
 import { useTheme } from '@/hooks/useTheme';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { selectTagRender } from '@/components/form';
 import { setMessageInstance } from '@/utils/messageBus';
 import AppSidebar from '@/layouts/AppSidebar';
 import { useOptimizeStatus, useOptimizeMutations } from '@/api/queries/useSystemTools';
@@ -111,7 +112,7 @@ export default function OptimizePage() {
         <AppSidebar />
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
-            <Spin spinning={isLoading}>
+            <Spin aria-live="off" spinning={isLoading}>
               <Title level={3}>{t('menu.optimize')}</Title>
               <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
                 {t('pages.optimize.desc')}
@@ -159,6 +160,7 @@ export default function OptimizePage() {
                       <Select
                         aria-label={t('pages.optimize.dnsOption')}
                         mode="tags"
+                        tagRender={selectTagRender}
                         style={{ width: '100%', maxWidth: 420 }}
                         value={dnsResolvers}
                         placeholder="1.1.1.1, 1.0.0.1"

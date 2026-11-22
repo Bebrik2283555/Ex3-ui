@@ -348,17 +348,34 @@ func TestUDPRelayCapsSessionsPerPeer(t *testing.T) {
 	for n := 1; n < maxUDPSessionsPerPeer; n++ {
 		relay.slots.acquire("greedy")
 	}
+	has := func(src string) bool {
+		relay.mu.Lock()
+		defer relay.mu.Unlock()
+		_, ok := relay.sessions[netip.MustParseAddrPort(src)]
+		return ok
+	}
+	waitSession := func(src string) bool {
+		t.Helper()
+		for deadline := time.Now().Add(2 * time.Second); !has(src); time.Sleep(10 * time.Millisecond) {
+			if time.Now().After(deadline) {
+				return false
+			}
+		}
+		return true
+	}
+
+	// Associating runs off the delivery path, so wait for each session it publishes.
 	relay.Handle(netip.MustParseAddrPort("10.8.1.5:1000"), dst, "greedy", []byte("x"))
+	if !waitSession("10.8.1.5:1000") {
+		t.Fatal("greedy's last allowed session was never established")
+	}
 	relay.Handle(netip.MustParseAddrPort("10.8.1.5:1001"), dst, "greedy", []byte("x"))
 	relay.Handle(netip.MustParseAddrPort("10.8.1.6:1000"), dst, "modest", []byte("x"))
-
-	relay.mu.Lock()
-	_, last := relay.sessions[netip.MustParseAddrPort("10.8.1.5:1000")]
-	_, excess := relay.sessions[netip.MustParseAddrPort("10.8.1.5:1001")]
-	_, other := relay.sessions[netip.MustParseAddrPort("10.8.1.6:1000")]
-	relay.mu.Unlock()
-	if !last || excess || !other {
-		t.Fatalf("sessions: greedy's last allowed = %v, greedy's excess = %v, modest's = %v; want true, false, true", last, excess, other)
+	if !waitSession("10.8.1.6:1000") {
+		t.Fatal("modest's session was never established")
+	}
+	if has("10.8.1.5:1001") {
+		t.Fatal("greedy exceeded its per-peer session budget")
 	}
 
 	relay.Close()

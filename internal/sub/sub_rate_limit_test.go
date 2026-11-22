@@ -1,6 +1,43 @@
 package sub
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+	"time"
+)
+
+// Full sweeps of the ceiling-sized map are throttled: a flood must not walk
+// every entry on each request.
+func TestSubRateLimiterSweepsAtMostEveryFiveSeconds(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	l := newSubRateLimiter()
+	l.now = func() time.Time { return now }
+	fillExpired := func() {
+		for i := 0; i < subRateLimitMaxIPs; i++ {
+			l.counts[fmt.Sprintf("10.%d.%d.%d", i>>16&0xff, i>>8&0xff, i&0xff)] = &subRateRecord{windowStart: now.Add(-2 * time.Minute)}
+		}
+	}
+
+	fillExpired()
+	l.allow("192.0.2.1")
+	if !l.lastSweep.Equal(now) {
+		t.Fatalf("first ceiling hit did not sweep: lastSweep=%v, want %v", l.lastSweep, now)
+	}
+
+	now = now.Add(4 * time.Second)
+	fillExpired()
+	l.allow("192.0.2.2")
+	if !l.lastSweep.Equal(time.Unix(1_700_000_000, 0)) {
+		t.Fatalf("swept again after 4s: lastSweep=%v", l.lastSweep)
+	}
+
+	now = now.Add(time.Second)
+	fillExpired()
+	l.allow("192.0.2.3")
+	if !l.lastSweep.Equal(now) {
+		t.Fatalf("no sweep after 5s: lastSweep=%v, want %v", l.lastSweep, now)
+	}
+}
 
 // The limiter must bucket by the socket peer unless that peer is a configured
 // trusted proxy: gin's ClientIP trusts X-Forwarded-For from anyone, so keying

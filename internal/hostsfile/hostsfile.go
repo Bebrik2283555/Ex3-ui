@@ -11,11 +11,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/util"
 )
 
 const path = "/etc/hosts"
+
+var hostsMu sync.Mutex
 
 // ErrUnsupportedPlatform is returned on non-Linux systems.
 var ErrUnsupportedPlatform = errors.New("system hosts editing is only supported on Linux")
@@ -75,7 +78,16 @@ func Set(content string) error {
 	if err := validateHostsContent(content); err != nil {
 		return err
 	}
-	return writeAtomic(path, []byte(content), 0o644)
+	return WriteSafe(path, []byte(content), 0o644)
+}
+
+// WriteSafe writes target safely with atomic replacement via temp file,
+// falling back to in-place truncation for read-only parent directories (containers/bind mounts).
+// All writes to /etc/hosts across packages are synchronized under hostsMu.
+func WriteSafe(target string, content []byte, perm os.FileMode) error {
+	hostsMu.Lock()
+	defer hostsMu.Unlock()
+	return writeAtomic(target, content, perm)
 }
 
 // validateHostsContent rejects text the resolver cannot parse, so a downloaded
@@ -161,20 +173,6 @@ func writeInPlace(target string, content []byte, perm os.FileMode) error {
 		return err
 	}
 	return f.Close()
-}
-
-// ApplyEntries writes a hosts file built from a header comment, the given
-// entries, and any existing lines that are not managed (comments / localhost).
-func ApplyEntries(entries []Entry) error {
-	var b strings.Builder
-	b.WriteString("# Managed by x-ui panel — do not edit manually.\n")
-	for _, e := range entries {
-		if strings.TrimSpace(e.IP) == "" || strings.TrimSpace(e.Domain) == "" {
-			continue
-		}
-		b.WriteString(e.IP + " " + e.Domain + "\n")
-	}
-	return Set(b.String())
 }
 
 // SetFromURL downloads the hosts content from a public link and replaces the

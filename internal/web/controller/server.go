@@ -592,15 +592,34 @@ func (a *ServerController) certPaths(c *gin.Context) {
 	jsonObj(c, a.serverService.CertPaths(), nil)
 }
 
+// acmeWriteTimeout covers the HTTP-01 walk and install; the server-wide 30s
+// WriteTimeout would otherwise cut the response before issuance finishes.
+const acmeWriteTimeout = 12 * time.Minute
+
+// extendACMEWriteDeadline keeps one slow ACME request alive past the global
+// WriteTimeout without relaxing it for every route.
+func extendACMEWriteDeadline(c *gin.Context) {
+	_ = http.NewResponseController(c.Writer).SetWriteDeadline(time.Now().Add(acmeWriteTimeout))
+}
+
 // issueCertificate provisions a TLS certificate for a domain via acme.sh and
 // returns the cert/key paths to embed in an inbound's tlsSettings.
 func (a *ServerController) issueCertificate(c *gin.Context) {
-	res, err := a.serverService.IssueCertificate(strings.TrimSpace(c.PostForm("domain")))
-	if err != nil {
-		jsonMsg(c, err.Error(), err)
-		return
+	issueCertificateHandler(a.serverService.IssueCertificate)(c)
+}
+
+// issueCertificateHandler keeps the ACME call injectable so its long deadline
+// is covered by a test that runs the real handler path.
+func issueCertificateHandler(issue func(string) (map[string]any, error)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		extendACMEWriteDeadline(c)
+		res, err := issue(strings.TrimSpace(c.PostForm("domain")))
+		if err != nil {
+			jsonMsg(c, err.Error(), err)
+			return
+		}
+		jsonObj(c, res, nil)
 	}
-	jsonObj(c, res, nil)
 }
 
 // getNewUUID generates a new UUID.

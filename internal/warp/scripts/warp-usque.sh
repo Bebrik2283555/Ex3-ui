@@ -19,8 +19,8 @@ MAX_LATENCY="${MAX_LATENCY:-5}"
 TG_NETS="91.108.0.0/16 149.154.160.0/20 95.161.64.0/20 185.76.151.0/24 185.64.92.0/22 91.105.192.0/23 194.169.233.0/24 194.102.202.0/24"
 
 apt-get update -y
-DEBIAN_FRONTEND=noninteractive apt-get install -y cron curl unzip iproute2 iptables ca-certificates dnsutils 2>/dev/null || \
-  DEBIAN_FRONTEND=noninteractive apt-get install -y cron curl unzip iproute2 iptables ca-certificates
+DEBIAN_FRONTEND=noninteractive apt-get install -y cron curl unzip iproute2 iptables ca-certificates dnsutils openssl 2>/dev/null || \
+  DEBIAN_FRONTEND=noninteractive apt-get install -y cron curl unzip iproute2 iptables ca-certificates openssl
 systemctl enable --now cron 2>/dev/null || systemctl enable --now crond 2>/dev/null || true
 
 wg-quick down warp 2>/dev/null || true
@@ -295,6 +295,7 @@ setup_routes_and_service() {
 TABLE=10000
 NETS="91.108.0.0/16 149.154.160.0/20 95.161.64.0/20 185.76.151.0/24 185.64.92.0/22 91.105.192.0/23 194.169.233.0/24 194.102.202.0/24"
 BREAKOUT="162.159.198.1 162.159.198.2"
+[ -s /etc/usque/endpoint ] && BREAKOUT="$BREAKOUT $(cat /etc/usque/endpoint)"
 
 # Реальный шлюз, чтобы QUIC до WARP не ушёл в туннель (петля).
 gw=$(ip route show default | awk '/default/{print $3; exit}')
@@ -336,6 +337,7 @@ ip rule del fwmark $TABLE table $TABLE priority 99 2>/dev/null || true
 ip route flush table $TABLE 2>/dev/null || true
 ip route del 162.159.198.1/32 2>/dev/null || true
 ip route del 162.159.198.2/32 2>/dev/null || true
+[ -s /etc/usque/endpoint ] && ip route del "$(cat /etc/usque/endpoint)"/32 2>/dev/null || true
 iptables -t nat -D POSTROUTING -o warp -j MASQUERADE 2>/dev/null || true
 iptables -t mangle -D POSTROUTING -o warp -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
 
@@ -349,6 +351,145 @@ ip link del dev warp 2>/dev/null || true
 EOF
   chmod +x "$USQUE_DIR/down.sh"
 
+  cat > /usr/local/bin/warp-run.sh <<'RUNEOF'
+#!/bin/bash
+# Runs usque with the transport and IP family that last worked. A provider that
+# drops one path (UDP/443, a blocked anycast IP, broken IPv6) must not cost a
+# WARP registration: flip the path first, rotate the account only after that.
+set -u
+STATE=/etc/usque/transport
+FAMILY_FILE=/etc/usque/family
+STAMP=/run/warp-transport.last
+END_FILE=/etc/usque/endpoint
+EP_FAIL=/run/warp-endpoint.fail
+V6_FAIL=/run/warp-v6.last
+LOG=/var/log/warp-watch.log
+IFACE=warp
+SNI=consumer-masque.cloudflareclient.com
+H2_POOL="${WARP_H2_POOL:-162.159.198.3 162.159.198.4 162.159.198.5 162.159.198.6 162.159.198.7 162.159.198.8 162.159.198.9 162.159.198.10}"
+H2_V6="${WARP_H2_V6:-2606:4700:103::2}"
+GRACE="${WARP_TRANSPORT_GRACE:-25}"
+COOLDOWN="${WARP_TRANSPORT_COOLDOWN:-600}"
+EP_COOLDOWN="${WARP_ENDPOINT_COOLDOWN:-120}"
+V6_COOLDOWN="${WARP_V6_COOLDOWN:-600}"
+
+transport=$(tr -d '[:space:]' < "$STATE" 2>/dev/null || true)
+[ "$transport" = quic ] || transport=http2
+
+log() { echo "$(date '+%F %T') [transport] $*" >> "$LOG"; }
+
+cfg_get() { sed -n 's/.*"endpoint_h2_v4"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /etc/usque/config.json 2>/dev/null | head -1; }
+cfg_set() { sed -i -E 's/("endpoint_h2_v4"[[:space:]]*:[[:space:]]*")[^"]*"/\1'"$1"'"/' /etc/usque/config.json 2>/dev/null; }
+cfg_set6() { grep -q '"endpoint_h2_v6"' /etc/usque/config.json 2>/dev/null && \
+  sed -i -E 's/("endpoint_h2_v6"[[:space:]]*:[[:space:]]*")[^"]*"/\1'"$1"'"/' /etc/usque/config.json 2>/dev/null; }
+tls_ok() { timeout 4 openssl s_client -connect "$1:443" -servername "$SNI" -brief </dev/null >/dev/null 2>&1; }
+tls6_ok() { timeout 4 openssl s_client -6 -connect "[$1]:443" -servername "$SNI" -brief </dev/null >/dev/null 2>&1; }
+has_v6() { ip -6 route show default 2>/dev/null | grep -q default; }
+
+# Anycast IPs of one endpoint share the pinned key: probe instead of trusting
+# the default, and skip an IP that recently failed to pass traffic.
+endpoint_usable() {
+  local ip="$1" ts now
+  now=$(date +%s)
+  ts=$(awk -v ip="$ip" '$1==ip{print $2}' "$EP_FAIL" 2>/dev/null | tail -1)
+  case "$ts" in ''|*[!0-9]*) ts=0;; esac
+  [ $((now - ts)) -ge "$EP_COOLDOWN" ] || return 1
+  tls_ok "$ip"
+}
+
+pick_endpoint() {
+  local skip="$1" ip
+  for ip in $H2_POOL; do
+    [ "$ip" = "$skip" ] && continue
+    if endpoint_usable "$ip"; then echo "$ip"; return 0; fi
+  done
+  return 1
+}
+
+family=$(tr -d '[:space:]' < "$FAMILY_FILE" 2>/dev/null || true)
+case "$family" in v4|v6) ;; *) family=auto ;; esac
+if [ "$family" = auto ]; then
+  v6_ts=$(cat "$V6_FAIL" 2>/dev/null || echo 0)
+  case "$v6_ts" in ''|*[!0-9]*) v6_ts=0;; esac
+  family=v4
+  if has_v6 && [ $(($(date +%s) - v6_ts)) -ge "$V6_COOLDOWN" ] && tls6_ok "$H2_V6"; then
+    family=v6
+  fi
+fi
+
+args=(nativetun -c /etc/usque/config.json -n "$IFACE" --always-reconnect
+      --keepalive-period 10s --on-connect /etc/usque/up.sh --on-disconnect /etc/usque/down.sh)
+if [ "$family" = v6 ]; then
+  [ "$transport" = http2 ] && cfg_set6 "$H2_V6"
+  args+=(--ipv6)
+  log "$transport over IPv6 ($H2_V6)"
+else
+  if [ "$transport" = http2 ]; then
+    cur=$(cfg_get)
+    if [ -n "$cur" ] && endpoint_usable "$cur"; then
+      ep="$cur"
+    else
+      ep=$(pick_endpoint "")
+    fi
+    if [ -n "$ep" ]; then
+      cfg_set "$ep"
+      echo "$ep" > "$END_FILE"
+      log "http2 endpoint $ep (TLS ok)"
+    fi
+  fi
+fi
+[ "$transport" = http2 ] && args+=(--http2)
+
+(
+  sleep "$GRACE"
+  curl --interface "$IFACE" -4 -s -o /dev/null --max-time 5 https://1.1.1.1/ 2>/dev/null && exit 0
+  now=$(date +%s)
+  last=$(cat "$STAMP" 2>/dev/null || echo 0)
+  case "$last" in ''|*[!0-9]*) last=0;; esac
+  if [ "$family" = v6 ]; then
+    echo "$now" > "$V6_FAIL"
+    echo "$now" > "$STAMP"
+    log "IPv6 tunnel passes no traffic - switching to IPv4"
+    pkill -x usque 2>/dev/null || true
+    exit 0
+  fi
+  if [ "$transport" = http2 ]; then
+    cur=$(cfg_get)
+    next=$(pick_endpoint "$cur")
+    if [ -n "$next" ]; then
+      if [ $((now - last)) -lt "$EP_COOLDOWN" ]; then
+        log "http2 endpoint $cur passes no traffic; changed recently - waiting"
+        exit 0
+      fi
+      awk -v now="$now" -v ttl="$EP_COOLDOWN" '$2 + 0 >= now - ttl' "$EP_FAIL" 2>/dev/null > "$EP_FAIL.tmp"
+      printf '%s %s\n' "$cur" "$now" >> "$EP_FAIL.tmp"
+      mv "$EP_FAIL.tmp" "$EP_FAIL" 2>/dev/null || true
+      cfg_set "$next"
+      echo "$next" > "$END_FILE"
+      echo "$now" > "$STAMP"
+      log "http2 endpoint $cur passes no traffic - trying $next"
+      pkill -x usque 2>/dev/null || true
+      exit 0
+    fi
+    log "http2 endpoints exhausted - rotating transport"
+  fi
+  if [ $((now - last)) -lt "$COOLDOWN" ]; then
+    log "$transport passes no traffic; changed recently - waiting"
+    exit 0
+  fi
+  if [ "$transport" = http2 ]; then next=quic; else next=http2; fi
+  echo "$next" > "$STATE"
+  echo "$now" > "$STAMP"
+  log "$transport passes no traffic - rotating to $next"
+  pkill -x usque 2>/dev/null || true
+) &
+
+exec /usr/local/bin/usque "${args[@]}"
+RUNEOF
+  chmod +x /usr/local/bin/warp-run.sh
+  [ -f /etc/usque/transport ] || echo http2 > /etc/usque/transport
+  [ -f /etc/usque/family ] || echo auto > /etc/usque/family
+
   cat > /etc/systemd/system/usque.service <<EOF
 [Unit]
 Description=Cloudflare WARP via usque (MASQUE/QUIC)
@@ -358,7 +499,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStartPre=/bin/sh -c 'ip link del dev warp 2>/dev/null || true'
-ExecStart=$USQUE_BIN nativetun -c $USQUE_CONF -n $IFACE --always-reconnect --keepalive-period 10s --on-connect $USQUE_DIR/up.sh --on-disconnect $USQUE_DIR/down.sh
+ExecStart=/usr/local/bin/warp-run.sh
 ExecStopPost=/bin/sh -c 'ip link del dev warp 2>/dev/null || true'
 Restart=always
 RestartSec=3
@@ -420,6 +561,20 @@ good() {
   awk -v t="$2" -v m="$MAX_LATENCY" 'BEGIN{exit !(t <= m)}'
 }
 
+# A dead tunnel is not a dead WARP IP: restarting lets warp-run.sh flip the
+# transport (QUIC -> HTTP/2 over TCP/443) before any registration is spent.
+restore_tunnel() {
+  local i
+  systemctl restart usque 2>/dev/null || true
+  for i in $(seq 1 40); do
+    sleep 1
+    if curl --interface "$IFACE" -4 -s -o /dev/null --max-time 2 https://1.1.1.1/ 2>/dev/null; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 FORCE=0
 [ "${1:-}" = "--force" ] && FORCE=1
 
@@ -428,6 +583,17 @@ if [ "$FORCE" -eq 0 ]; then
   if good "${code:-000}" "${t:-999}"; then
     log "Рабочий IP уже активен (code=$code, ${t}s) — ротация не нужна"
     exit 0
+  fi
+fi
+
+if ! curl --interface "$IFACE" -4 -s -o /dev/null --max-time 2 https://1.1.1.1/ 2>/dev/null; then
+  restore_tunnel || true
+  if [ "$FORCE" -eq 0 ]; then
+    read -r code t < <(probe) || true
+    if good "${code:-000}" "${t:-999}"; then
+      log "туннель восстановлен без регистрации (code=$code, ${t}s)"
+      exit 0
+    fi
   fi
 fi
 
@@ -491,6 +657,7 @@ while [ "$attempt" -lt "$MAX_TRY" ]; do
     reg_fails=$((reg_fails + 1))
     [ -x "$API_HELPER" ] && "$API_HELPER" clear >/dev/null 2>&1 || true
     if [ "$rc" -eq 2 ]; then
+      date +%s > /run/warp-ratelimit 2>/dev/null || true
       fail "Cloudflare временно ограничил регистрацию — повторите смену IP через несколько минут"
     fi
     if [ "$reg_fails" -ge "$MAX_REG_FAILS" ]; then
@@ -500,9 +667,11 @@ while [ "$attempt" -lt "$MAX_TRY" ]; do
     continue
   fi
   reg_fails=0
+  rm -f /run/warp-ratelimit 2>/dev/null || true
   systemctl start usque
 
-  for j in $(seq 1 5); do
+  # Даём warp-run.sh время переключить транспорт, если UDP/443 у провайдера закрыт.
+  for j in $(seq 1 40); do
     if [ -e /sys/class/net/"$IFACE" ] && curl --interface "$IFACE" -4 -s -o /dev/null --max-time 1 https://1.1.1.1/ 2>/dev/null; then
       break
     fi
@@ -570,6 +739,20 @@ probe_target() {
 is_ok() { case "$1" in 2??|3??|401|403) return 0;; *) return 1;; esac; }
 is_fast() { awk -v t="$1" -v m="$MAX_LATENCY" 'BEGIN{exit !(t <= m)}'; }
 
+# Cloudflare rate-limits registrations; rotating inside the window only extends
+# the ban, and warp-run.sh can try the other transport meanwhile.
+rotate_now() {
+  local stamp age
+  stamp=$(cat /run/warp-ratelimit 2>/dev/null || echo 0)
+  case "$stamp" in ''|*[!0-9]*) stamp=0;; esac
+  age=$(( $(date +%s) - stamp ))
+  if [ "$stamp" -gt 0 ] && [ "$age" -lt 1800 ]; then
+    log "смена IP на паузе: Cloudflare ограничил регистрацию ${age}s назад"
+    return 0
+  fi
+  [ -x /usr/local/bin/warp-rotate.sh ] && bash /usr/local/bin/warp-rotate.sh >/dev/null 2>&1
+}
+
 fails_tunnel=0; fails_target=0; fails_slow=0; last_action=0
 [ -f "$STATE" ] && . "$STATE" 2>/dev/null || true
 
@@ -603,7 +786,8 @@ fi
 if [ "$fails_tunnel" -ge 2 ]; then
   log "туннель не отвечает ($fails_tunnel), перезапускаю usque"
   systemctl restart usque
-  sleep 10
+  # warp-run.sh переключает транспорт через 25s, поэтому ждём дольше простого старта.
+  sleep 30
   neutral=$(get_code "$NEUTRAL"); read -r code t < <(probe_target) || true
   if is_ok "$neutral" && is_ok "$code" && is_fast "$t"; then
     log "после рестарта рабочий IP активен (туннель=$neutral цель=$code ${t}s)"
@@ -612,7 +796,7 @@ if [ "$fails_tunnel" -ge 2 ]; then
   fi
   if [ "$AUTO_ROTATE" = "1" ]; then
     log "рестарт не помог, подбираю рабочий IP"
-    [ -x /usr/local/bin/warp-rotate.sh ] && bash /usr/local/bin/warp-rotate.sh >/dev/null 2>&1
+    rotate_now
   else
     log "рестарт не помог, автосмена IP отключена"
   fi
@@ -624,7 +808,7 @@ fi
 if [ "$fails_target" -ge 3 ] || [ "$fails_slow" -ge 3 ]; then
   if [ "$AUTO_ROTATE" = "1" ]; then
     log "нерабочий IP (fails=$fails_target slow_fails=$fails_slow) — подбираю рабочий IP"
-    [ -x /usr/local/bin/warp-rotate.sh ] && bash /usr/local/bin/warp-rotate.sh >/dev/null 2>&1
+    rotate_now
   else
     log "нерабочий IP (fails=$fails_target slow_fails=$fails_slow), автосмена выключена — перезапускаю usque"
     systemctl restart usque

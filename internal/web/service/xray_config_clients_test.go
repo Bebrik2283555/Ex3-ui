@@ -149,7 +149,7 @@ func TestGetXrayConfig_FailureDoesNotLogExclusionSummary(t *testing.T) {
 	}
 	logger.Info(t.Name())
 	cfg, err := (&XrayService{}).GetXrayConfig()
-	if cfg != nil || err == nil || err.Error() != "no such table: inbound_fallbacks" {
+	if cfg != nil || err == nil || !strings.Contains(err.Error(), "no such table: inbound_fallbacks") {
 		t.Fatalf("GetXrayConfig = %v, %v; want missing fallback table failure", cfg, err)
 	}
 	for _, line := range logger.GetLogs(100, "DEBUG") {

@@ -149,6 +149,7 @@ func (a *IndexController) login(c *gin.Context) {
 
 	if err := session.SetLoginUser(c, user); err != nil {
 		logger.Warning("Unable to save session:", err)
+		jsonMsg(c, "", err)
 		return
 	}
 

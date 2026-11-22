@@ -226,7 +226,7 @@ function ZapretTab() {
   );
 
   return (
-    <Spin spinning={isLoading}>
+    <Spin aria-live="off" spinning={isLoading}>
       <Card title={t('pages.zapret.statusCard')} variant="borderless" style={{ marginBottom: 16 }}>
         {isError ? (
           <Result status="error" title={t('pages.zapret.installFailed')} />

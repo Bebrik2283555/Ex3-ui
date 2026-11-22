@@ -767,21 +767,7 @@ export default function InboundFormModal({
   });
 
   const title =
-    mode === 'edit' ? (
-      t('pages.inbounds.modifyInbound')
-    ) : (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span>{t('pages.inbounds.addInbound')}</span>
-        <Button
-          type="primary"
-          size="small"
-          icon={<AppstoreAddOutlined aria-hidden />}
-          onClick={() => setTemplateOpen(true)}
-        >
-          {t('pages.inbounds.form.createFromTemplate')}
-        </Button>
-      </div>
-    );
+    mode === 'edit' ? t('pages.inbounds.modifyInbound') : t('pages.inbounds.addInbound');
 
   const okText = mode === 'edit' ? t('pages.clients.submitEdit') : t('create');
 
@@ -1343,6 +1329,18 @@ export default function InboundFormModal({
         )}
       >
         <FormProvider {...methods}>
+          {mode === 'add' && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <Button
+                type="primary"
+                size="small"
+                icon={<AppstoreAddOutlined aria-hidden />}
+                onClick={() => setTemplateOpen(true)}
+              >
+                {t('pages.inbounds.form.createFromTemplate')}
+              </Button>
+            </div>
+          )}
           <Form
             colon={false}
             labelCol={{ sm: { span: 8 } }}

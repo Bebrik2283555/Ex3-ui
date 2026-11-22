@@ -116,7 +116,7 @@ func (s *ServerService) IssueCertificate(domain string) (map[string]any, error) 
 		"--install-cert", "-d", domain,
 		"--key-file", keyFile,
 		"--fullchain-file", fullchain,
-		"--reloadcmd", "systemctl restart x-ui 2>/dev/null || rc-service x-ui restart 2>/dev/null || true",
+		"--reloadcmd", certReloadCommand(),
 	}
 	installCmd := exec.CommandContext(ctx, acmeBin, installArgs...)
 	installCmd.Env = env
@@ -135,6 +135,12 @@ func (s *ServerService) IssueCertificate(domain string) (map[string]any, error) 
 		"certFile": fullchain,
 		"keyFile":  keyFile,
 	}, nil
+}
+
+// certReloadCommand defers the panel restart so the issuance response can
+// reach the browser; renewals still reload every core a moment later.
+func certReloadCommand() string {
+	return "sh -c 'sleep 2; systemctl restart x-ui 2>/dev/null || rc-service x-ui restart 2>/dev/null || true' >/dev/null 2>&1 &"
 }
 
 // acmeCommandError surfaces acme.sh's own diagnostics instead of only the

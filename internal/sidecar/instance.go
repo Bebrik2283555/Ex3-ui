@@ -109,6 +109,8 @@ type QwdttSubProfile struct {
 	Workers  int    `json:"workers"`
 	Port     int    `json:"port"`
 	Password string `json:"password"`
+	// DiagKey lets a 1.4.5+ client run its connection check against the core.
+	DiagKey string `json:"diagKey,omitempty"`
 }
 
 // QwdttSubscription is the qWDTT subscription document.

@@ -74,3 +74,35 @@ func TestSettingsDefaults(t *testing.T) {
 		t.Error("expected default domain list")
 	}
 }
+
+func TestValidateDomain(t *testing.T) {
+	valid := []string{
+		"chatgpt.com",
+		"sub.domain.example.com",
+		"xn--80akhbyknj4f.com",
+		"domain-with-hyphens.org",
+		"a.b.c",
+	}
+	for _, d := range valid {
+		if err := validateDomain(d); err != nil {
+			t.Errorf("valid domain %q rejected: %v", d, err)
+		}
+	}
+
+	invalid := []string{
+		"",
+		"   ",
+		"evil.com\n127.0.0.1 injected.com",
+		"has space.com",
+		"-hyphenstart.com",
+		"hyphenend-.com",
+		strings.Repeat("a", 64) + ".com",
+		"invalid$char.com",
+		"кириллица-без-punycode.рф",
+	}
+	for _, d := range invalid {
+		if err := validateDomain(d); err == nil {
+			t.Errorf("invalid domain %q was accepted", d)
+		}
+	}
+}

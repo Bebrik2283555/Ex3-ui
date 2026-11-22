@@ -387,14 +387,14 @@ func (a *SUBController) initRouter(g *gin.RouterGroup) {
 		} else if owner := a.configuredSubscriptionPathOwner(subMihomoPath); owner != "" {
 			logger.Warningf("Mihomo subscription alias %q is unavailable because it conflicts with the configured %s path", subMihomoPath, owner)
 		} else {
-			gMihomo := g.Group(subMihomoPath, setNoCacheHeaders)
+			gMihomo := g.Group(subMihomoPath, a.subLimiter.middleware(a.subClientIP), setNoCacheHeaders)
 			gMihomo.GET(":subid", a.subClashs)
 			gMihomo.HEAD(":subid", a.subClashs)
 		}
 		if owner := a.configuredSubscriptionPathOwner(subClashLegacyPath); owner != "" {
 			logger.Warningf("Legacy Clash subscription alias %q is unavailable because it conflicts with the configured %s path", subClashLegacyPath, owner)
 		} else {
-			gLegacy := g.Group(subClashLegacyPath, setNoCacheHeaders)
+			gLegacy := g.Group(subClashLegacyPath, a.subLimiter.middleware(a.subClientIP), setNoCacheHeaders)
 			gLegacy.GET(":subid", a.subClashLegacy)
 			gLegacy.HEAD(":subid", a.subClashLegacy)
 		}
@@ -666,6 +666,17 @@ func compileUserAgentRegex(name, pattern, defaultPattern string) *regexp.Regexp 
 // we inject that here, along with window.X_UI_BASE_PATH so the
 // page's static asset references resolve correctly when the panel runs
 // behind a URL prefix.
+// jsEscape is the defense-in-depth string-escape for the basePath embed.
+var jsEscape = strings.NewReplacer(
+	`\`, `\\`,
+	`"`, `\"`,
+	"\n", `\n`,
+	"\r", `\r`,
+	"<", `\u003c`,
+	">", `\u003e`,
+	"&", `\u0026`,
+)
+
 func (a *SUBController) serveSubPage(c *gin.Context, basePath string, page PageData) {
 	var body []byte
 	if diskBody, diskErr := os.ReadFile("internal/web/dist/subpage.html"); diskErr == nil {
@@ -717,15 +728,6 @@ func (a *SUBController) serveSubPage(c *gin.Context, basePath string, page PageD
 
 	// Defense-in-depth string-escape for the basePath embed — admin-
 	// controlled but cheap to harden.
-	jsEscape := strings.NewReplacer(
-		`\`, `\\`,
-		`"`, `\"`,
-		"\n", `\n`,
-		"\r", `\r`,
-		"<", `<`,
-		">", `>`,
-		"&", `&`,
-	)
 	escapedBase := jsEscape.Replace(basePath)
 
 	inject := []byte(`<script>window.X_UI_BASE_PATH="` + escapedBase + `";` +

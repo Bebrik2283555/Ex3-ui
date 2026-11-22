@@ -911,3 +911,37 @@ func TestSubscriptionRouteGroupsAreNotCacheable(t *testing.T) {
 		})
 	}
 }
+
+// The subscription page embeds the base path in an inline script; HTML
+// metacharacters must be escaped so a crafted path cannot close the tag.
+func TestJSEscapeNeutralisesScriptBreakout(t *testing.T) {
+	got := jsEscape.Replace("</script><b>&")
+	want := `\u003c/script\u003e\u003cb\u003e\u0026`
+	if got != want {
+		t.Fatalf("jsEscape = %q, want %q", got, want)
+	}
+}
+
+// The Mihomo and legacy Clash aliases must share the subscription limiter, so
+// a flood cannot bypass the cap by switching to an alias path.
+func TestClashAliasesAreRateLimited(t *testing.T) {
+	initSubDB(t)
+	router := newSubscriptionTestRouter(subscriptionTestRouterConfig{})
+	hit := func(path string) int {
+		req := httptest.NewRequest(http.MethodGet, "http://sub.example.com"+path, nil)
+		resp := httptest.NewRecorder()
+		router.ServeHTTP(resp, req)
+		return resp.Code
+	}
+	for i := 0; i < subRateLimitPerMinute; i++ {
+		if code := hit("/mihomo/missing"); code == http.StatusTooManyRequests {
+			t.Fatalf("throttled after %d requests, want after %d", i+1, subRateLimitPerMinute)
+		}
+	}
+	if code := hit("/mihomo/missing"); code != http.StatusTooManyRequests {
+		t.Fatalf("mihomo code = %d, want 429", code)
+	}
+	if code := hit("/clash-legacy/missing"); code != http.StatusTooManyRequests {
+		t.Fatalf("legacy alias bypassed the shared bucket: code = %d", code)
+	}
+}

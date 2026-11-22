@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mhsanaei/3x-ui/v3/internal/hostsfile"
 )
 
 //go:embed scripts/warp-usque.sh
@@ -494,6 +496,11 @@ func removeNetworkState() {
 	_ = run("ip", "-6", "route", "flush", "table", "10000")
 	_ = run("ip", "route", "del", "162.159.198.1/32")
 	_ = run("ip", "route", "del", "162.159.198.2/32")
+	if b, err := os.ReadFile("/etc/usque/endpoint"); err == nil {
+		if ip := strings.TrimSpace(string(b)); ip != "" {
+			_ = run("ip", "route", "del", ip+"/32")
+		}
+	}
 	_ = run("iptables", "-t", "nat", "-D", "POSTROUTING", "-o", "warp", "-j", "MASQUERADE")
 	_ = run("iptables", "-t", "mangle", "-D", "POSTROUTING", "-o", "warp", "-p", "tcp",
 		"--tcp-flags", "SYN,RST", "SYN", "-j", "TCPMSS", "--clamp-mss-to-pmtu")
@@ -554,7 +561,13 @@ func Uninstall() error {
 	_ = os.Remove(usqueBin)
 	_ = os.Remove(rotateBin)
 	_ = os.Remove(watchBin)
+	_ = os.Remove("/usr/local/bin/warp-run.sh")
 	_ = os.Remove("/usr/local/bin/warp-api-host.sh")
+	_ = os.Remove("/etc/usque/transport")
+	_ = os.Remove("/run/warp-transport.last")
+	_ = os.Remove("/run/warp-endpoint.fail")
+	_ = os.Remove("/run/warp-v6.last")
+	_ = os.Remove("/run/warp-ratelimit")
 	_ = os.Remove("/run/warp-watch.state")
 	_ = os.Remove("/run/warp-rotate.lock")
 	_ = os.Remove(rotateStamp)
@@ -772,5 +785,5 @@ func cleanHostsFile() {
 		}
 		newLines = append(newLines, line)
 	}
-	_ = os.WriteFile("/etc/hosts", []byte(strings.Join(newLines, "\n")), 0o644)
+	_ = hostsfile.WriteSafe("/etc/hosts", []byte(strings.Join(newLines, "\n")), 0o644)
 }

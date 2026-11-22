@@ -19,9 +19,10 @@ const (
 )
 
 type subRateLimiter struct {
-	mu     sync.Mutex
-	now    func() time.Time
-	counts map[string]*subRateRecord
+	mu        sync.Mutex
+	now       func() time.Time
+	counts    map[string]*subRateRecord
+	lastSweep time.Time
 }
 
 type subRateRecord struct {
@@ -39,9 +40,13 @@ func (l *subRateLimiter) allow(ip string) bool {
 	now := l.now()
 	if _, known := l.counts[ip]; !known && len(l.counts) >= subRateLimitMaxIPs {
 		// At the ceiling, reclaim expired windows before admitting a new IP.
-		for key, rec := range l.counts {
-			if now.Sub(rec.windowStart) >= time.Minute {
-				delete(l.counts, key)
+		// Throttle full sweeps to at most once per 5s to avoid O(N) work on every request under flood.
+		if now.Sub(l.lastSweep) >= 5*time.Second {
+			l.lastSweep = now
+			for key, rec := range l.counts {
+				if now.Sub(rec.windowStart) >= time.Minute {
+					delete(l.counts, key)
+				}
 			}
 		}
 		// Still full: every tracked IP is live, so drop one arbitrary entry to

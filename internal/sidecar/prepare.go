@@ -19,6 +19,7 @@ import (
 const (
 	qwdttStoreName         = "passwords.json"
 	qwdttOwnerPasswordName = "owner-password"
+	qwdttDiagKeyName       = "diag.key"
 	csqttStampFileName     = "ex3ui-store"
 	csqttStoreStamp        = "csqtt-2.5.0-ex3ui-2"
 	csqttLegacyName        = "ex3ui-password"

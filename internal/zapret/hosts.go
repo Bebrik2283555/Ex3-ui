@@ -3,6 +3,8 @@ package zapret
 import (
 	"os"
 	"strings"
+
+	"github.com/mhsanaei/3x-ui/v3/internal/hostsfile"
 )
 
 // hostsFile is the system hosts file zapret pins GitHub and Discord to.
@@ -70,7 +72,10 @@ var bypassHosts = []string{
 // updateHostsBlock writes or replaces the zapret block, leaving every other
 // entry (including the SmartDNS block) untouched.
 func updateHostsBlock(path string) error {
-	existing, _ := os.ReadFile(path)
+	existing, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	cleaned := stripHostsBlock(string(existing))
 
 	var sb strings.Builder
@@ -87,16 +92,19 @@ func updateHostsBlock(path string) error {
 	sb.WriteString(hostsBlockFooter)
 	sb.WriteString("\n")
 
-	return os.WriteFile(path, []byte(sb.String()), 0o644)
+	return hostsfile.WriteSafe(path, []byte(sb.String()), 0o644)
 }
 
 // removeHostsBlock drops the zapret block on uninstall.
 func removeHostsBlock(path string) error {
 	existing, err := os.ReadFile(path)
 	if err != nil {
-		return nil
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
 	}
-	return os.WriteFile(path, []byte(stripHostsBlock(string(existing))), 0o644)
+	return hostsfile.WriteSafe(path, []byte(stripHostsBlock(string(existing))), 0o644)
 }
 
 func stripHostsBlock(content string) string {
