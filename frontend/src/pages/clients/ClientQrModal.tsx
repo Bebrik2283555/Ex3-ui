@@ -165,7 +165,7 @@ function SubscriptionQrPresentation({
             showIcon
             title={t('pages.clients.happLinkDisclosure')}
           />
-          <Spin spinning={happLoading}>
+          <Spin aria-live="off" spinning={happLoading}>
             <div style={{ minHeight: happLoading ? 48 : undefined }}>
               {happLink ? (
                 <>
@@ -586,7 +586,7 @@ function ClientQrModalContent({
       centered
       onCancel={() => onOpenChange(false)}
     >
-      <Spin spinning={loading}>
+      <Spin aria-live="off" spinning={loading}>
         {!directLinksPath && !loading && (
           <div style={{ padding: 24, textAlign: 'center', opacity: 0.6 }}>
             {t('pages.clients.noSubId')}

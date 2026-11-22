@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useId, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { Card, theme } from 'antd';
 
@@ -32,6 +32,7 @@ export default function VitalTile({
   isMobile,
 }: VitalTileProps) {
   const { token } = theme.useToken();
+  const labelId = useId();
   const meanColor = token.colorTextTertiary;
   // Keep warning/critical semantics, but normal usage follows the theme accent.
   const chartColor = percent >= USAGE_WARN_PERCENT ? statusColor : token.colorPrimary;
@@ -42,10 +43,18 @@ export default function VitalTile({
   );
 
   return (
-    <Card hoverable className="ov-tile" styles={{ body: { padding: 0 } }}>
+    <Card
+      hoverable
+      className="ov-tile"
+      styles={{ body: { padding: 0 } }}
+      role="group"
+      aria-labelledby={labelId}
+    >
       <div className="ov-tile-head">
         <span className="ov-tile-icon">{icon}</span>
-        <span className="ov-kicker">{label}</span>
+        <span className="ov-kicker" id={labelId}>
+          {label}
+        </span>
       </div>
 
       <div className="ov-tile-value">

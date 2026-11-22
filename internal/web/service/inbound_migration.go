@@ -203,7 +203,7 @@ func (s *InboundService) MigrationRequirements() (err error) {
 			return
 		}
 	}
-	if err = tx.Save(inbounds).Error; err != nil {
+	if err = saveInChunks(tx, inbounds); err != nil {
 		return
 	}
 

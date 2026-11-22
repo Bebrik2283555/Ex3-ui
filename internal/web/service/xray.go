@@ -205,6 +205,7 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	excludedClients, excludedInbounds := 0, 0
 	for _, inbound := range inbounds {
 		if !inbound.Enable {
 			continue
@@ -217,6 +218,12 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 		}
 		if inbound.Protocol == model.MTProto || inbound.Protocol == model.AmneziaWG || inbound.Protocol == model.TUIC {
 			continue
+		}
+		if err := normalizeVlessFallbacks(inbound); err != nil {
+			return nil, err
+		}
+		if err := validateVlessManagedFallbacks(nil, inbound); err != nil {
+			return nil, err
 		}
 		settings := map[string]any{}
 		_ = json.Unmarshal([]byte(inbound.Settings), &settings)
@@ -246,10 +253,11 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 
 		finalClients := make([]any, 0, len(dbClients))
 		var wgPeers []any
+		excludedBefore := excludedClients
 		for i := range dbClients {
 			c := dbClients[i]
 			if enable, exists := enableMap[c.Email]; exists && !enable {
-				logger.Infof("Remove Inbound User %s due to expiration or traffic limit", c.Email)
+				excludedClients++
 				continue
 			}
 			if !c.Enable {
@@ -318,6 +326,9 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			}
 			finalClients = append(finalClients, entry)
 		}
+		if excludedClients > excludedBefore {
+			excludedInbounds++
+		}
 
 		var mutated bool
 		if inbound.Protocol == model.WireGuard {
@@ -332,6 +343,9 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			mutated = hadClients || len(finalClients) > 0
 			if mutated {
 				settings["clients"] = finalClients
+			}
+			if inbound.Protocol == model.Shadowsocks && xray.LockShadowsocks2022(settings) {
+				mutated = true
 			}
 		}
 
@@ -493,6 +507,9 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 
 	xrayConfig.RouterConfig = dropRefusedScript(xrayConfig.RouterConfig, "routing", routingScriptRefused)
 	xrayConfig.DNSConfig = dropRefusedScript(xrayConfig.DNSConfig, "dns", dnsScriptRefused)
+	if excludedClients > 0 {
+		logger.Infof("Xray config generated: excluded %d disabled client entries across %d inbounds", excludedClients, excludedInbounds)
+	}
 	return xrayConfig, nil
 }
 
@@ -1104,6 +1121,17 @@ func amneziawgV6EgressTag(inboundID int, email string) string {
 	return fmt.Sprintf("amneziawg-v6-%d-%s", inboundID, email)
 }
 
+// amneziawgV6EgressSettings carries the template's private-range egress block:
+// the per-peer rule is matched ahead of the routing-level geoip:private rule.
+func amneziawgV6EgressSettings() map[string]any {
+	return map[string]any{
+		"finalRules": []any{
+			map[string]any{"action": "block", "ip": []any{"geoip:private"}},
+			map[string]any{"action": "allow"},
+		},
+	}
+}
+
 // injectAmneziawgV6Egress gives every enabled, non-node-hosted AmneziaWG
 // peer with an IPv6 AllowedIPs entry its own single-purpose freedom
 // outbound, bound via sendThrough to that exact address, plus a routing
@@ -1203,7 +1231,7 @@ func injectAmneziawgV6Egress(cfg *xray.Config, inbounds []*model.Inbound) {
 				"tag":         tag,
 				"protocol":    "freedom",
 				"sendThrough": v6,
-				"settings":    map[string]any{},
+				"settings":    amneziawgV6EgressSettings(),
 			})
 			newRules = append(newRules, map[string]any{
 				"type":        "field",
@@ -1647,6 +1675,9 @@ func (s *XrayService) RestartXray(isForce bool) error {
 
 	xrayConfig, err := s.GetXrayConfig()
 	if err != nil {
+		if process := currentXrayProcess(); process != nil && process.IsRunning() {
+			xrayState.holdBack(fmt.Sprintf("config refused: %v", err))
+		}
 		return err
 	}
 
@@ -2163,37 +2194,12 @@ func normalizeStreamUDPHop(stream map[string]any) bool {
 	return maskcompat.NormalizeUDPHop(stream["finalmask"])
 }
 
-// forceUserspaceWireGuardTun moves every WireGuard outbound to the gVisor TUN (#6796). Values
-// stay raw so the template's other keys reach the core byte for byte.
+// forceUserspaceWireGuardTun moves every WireGuard outbound to the gVisor TUN (#6796) and
+// warns for each one it moves off a kernel TUN.
 func forceUserspaceWireGuardTun(raw json_util.RawMessage) json_util.RawMessage {
-	var outbounds []map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &outbounds); err != nil {
-		return raw
-	}
-	for _, ob := range outbounds {
-		var protocol, tag string
-		if json.Unmarshal(ob["protocol"], &protocol) != nil || !strings.EqualFold(protocol, "wireguard") {
-			continue
-		}
-		var settings map[string]json.RawMessage
-		if json.Unmarshal(ob["settings"], &settings) != nil || settings == nil {
-			continue
-		}
-		wasUserspace := string(settings["noKernelTun"]) == "true"
-		settings["noKernelTun"] = json.RawMessage("true")
-		rewritten, err := json.Marshal(settings)
-		if err != nil {
-			continue
-		}
-		ob["settings"] = rewritten
-		if !wasUserspace {
-			_ = json.Unmarshal(ob["tag"], &tag)
-			logger.Warningf("Outbound %q: kernel TUN cannot be set up here, running WireGuard on the userspace TUN instead (#6796)", tag)
-		}
-	}
-	rewritten, err := json.Marshal(outbounds)
-	if err != nil {
-		return raw
+	rewritten, moved := xray.ForceUserspaceWireGuardTun(raw)
+	for _, tag := range moved {
+		logger.Warningf("Outbound %q: kernel TUN cannot be set up here, running WireGuard on the userspace TUN instead (#6796)", tag)
 	}
 	return rewritten
 }

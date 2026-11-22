@@ -1,3 +1,4 @@
+import { NativeSelect } from '@/components/form/NativeSelect';
 import { useState, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -16,6 +17,7 @@ import {
 import { CloudDownloadOutlined, SyncOutlined } from '@ant-design/icons';
 import { useFormContext, useWatch } from 'react-hook-form';
 
+import { selectTagRender } from '@/components/form';
 import { FormField } from '@/components/form/rhf';
 import { HttpUtil } from '@/utils';
 
@@ -110,7 +112,7 @@ export default function TuicFields() {
             label={t('pages.xray.tuic.logLevel')}
             tooltip={t('pages.xray.tuic.logLevelHint')}
           >
-            <Select
+            <NativeSelect
               options={[
                 { label: 'Info', value: 'info' },
                 { label: 'Warn', value: 'warn' },
@@ -198,7 +200,7 @@ export default function TuicFields() {
         label={t('pages.xray.tuic.congestionControl')}
         tooltip={t('pages.xray.tuic.congestionControlHint')}
       >
-        <Select
+        <NativeSelect
           options={[
             { label: 'BBR', value: 'bbr' },
             { label: 'CUBIC', value: 'cubic' },
@@ -210,6 +212,7 @@ export default function TuicFields() {
       <FormField name={['settings', 'server', 'alpn']} label={t('pages.xray.tuic.alpn')}>
         <Select
           mode="tags"
+          tagRender={selectTagRender}
           tokenSeparators={[',']}
           options={[
             { label: 'h3', value: 'h3' },
@@ -242,7 +245,7 @@ export default function TuicFields() {
         label={t('pages.xray.tuic.udpRelayMode')}
         tooltip={t('pages.xray.tuic.udpRelayModeHint')}
       >
-        <Select
+        <NativeSelect
           options={[
             { label: 'Native (Recommended)', value: 'native' },
             { label: 'QUIC', value: 'quic' },

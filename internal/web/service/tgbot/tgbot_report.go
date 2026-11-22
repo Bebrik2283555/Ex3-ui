@@ -123,10 +123,10 @@ func (t *Tgbot) SendBackupToAdmins() {
 		if dbData == nil {
 			t.sendNotice(adminId, t.I18nBot("tgbot.messages.backupFailed"))
 		} else {
-			t.sendDocumentWithCaption(adminId, dbData, dbFilename, t.backupSummary())
+			t.sendBackupFile(adminId, dbData, dbFilename, t.backupSummary())
 			time.Sleep(500 * time.Millisecond)
 			if configErr == nil {
-				t.sendDocumentWithCaption(adminId, config, "config.json", "")
+				t.sendBackupFile(adminId, config, "config.json", "")
 			}
 		}
 		// Add delay between sends to avoid Telegram rate limits
@@ -215,7 +215,40 @@ func (t *Tgbot) prepareServerUsageInfo() string {
 	return info
 }
 
-// UserLoginNotify publishes a login event to the event bus.
+const (
+	loginFailAlertWindow = 1 * time.Minute
+	// Distinct source addresses alerted per window; the address is the caller's
+	// to vary, so this ceiling keeps a broad flood below the notifier queue size.
+	loginFailAlertMaxSources = 10
+)
+
+var loginFailAlerts = &loginFailAlertGate{}
+
+// loginFailAlertGate throttles failed-login alerts before they reach the bus: the
+// notifiers exempt login events from their cooldown, so a flood crowds out every other alert.
+type loginFailAlertGate struct {
+	mu          sync.Mutex
+	windowStart time.Time
+	sources     map[string]struct{}
+}
+
+// allow passes the first failure of each source address in a window.
+func (g *loginFailAlertGate) allow(ip string, now time.Time) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if now.Sub(g.windowStart) >= loginFailAlertWindow {
+		g.windowStart = now
+		g.sources = make(map[string]struct{}, loginFailAlertMaxSources)
+	}
+	if _, seen := g.sources[ip]; seen || len(g.sources) >= loginFailAlertMaxSources {
+		return false
+	}
+	g.sources[ip] = struct{}{}
+	return true
+}
+
+// UserLoginNotify publishes a login event to the event bus. Successful logins
+// are always published; failed ones are throttled by loginFailAlerts.
 func (t *Tgbot) UserLoginNotify(attempt LoginAttempt) {
 	if attempt.Username == "" || attempt.IP == "" || attempt.Time == "" {
 		logger.Warning("UserLoginNotify failed, invalid info!")
@@ -229,6 +262,8 @@ func (t *Tgbot) UserLoginNotify(attempt LoginAttempt) {
 	status := "fail"
 	if attempt.Status == LoginSuccess {
 		status = "success"
+	} else if !loginFailAlerts.allow(attempt.IP, time.Now()) {
+		return
 	}
 
 	EventBus.Publish(eventbus.Event{
