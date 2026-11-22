@@ -171,13 +171,13 @@ config_after_update() {
     local panel_needs_restart=0
 
     echo -e "${yellow}x-ui settings:${plain}"
-    ${xui_folder}/x-ui setting -show true
+    ${xui_folder}/x-ui setting -show
     ${xui_folder}/x-ui migrate
 
     # Properly detect empty cert by checking if cert: line exists and has content after it
-    local existing_cert=$(${xui_folder}/x-ui setting -getCert true 2> /dev/null | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+    local existing_cert=$(${xui_folder}/x-ui setting -getCert 2> /dev/null | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
     local settings existing_webBasePath
-    if ! settings=$("${xui_folder}/x-ui" setting -show true) ||
+    if ! settings=$("${xui_folder}/x-ui" setting -show) ||
         ! existing_webBasePath=$(printf '%s\n' "$settings" | awk '
             /^get .* failed, error info:/ { failed = 1 }
             /^hasDefaultCredential: (true|false)$/ { credentials++ }
@@ -237,11 +237,11 @@ config_after_update() {
         access_host=$(basename "$(dirname "$existing_cert")")
     fi
     echo ""
-    echo -e "${green}РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’${plain}"
+    echo -e "${green}═══════════════════════════════════════════${plain}"
     echo -e "${green}     Panel Access Information              ${plain}"
-    echo -e "${green}РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’${plain}"
+    echo -e "${green}═══════════════════════════════════════════${plain}"
     echo -e "${green}Access URL: ${access_scheme}://${access_host}:${existing_port}/${existing_webBasePath}${plain}"
-    echo -e "${green}РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’РІвЂўС’${plain}"
+    echo -e "${green}═══════════════════════════════════════════${plain}"
     if [[ -z "$existing_cert" ]]; then
         echo -e "${yellow}No SSL certificate is configured; the panel is served over HTTP.${plain}"
         echo -e "${yellow}Run 'x-ui' and choose SSL Certificate Management to set one up.${plain}"
@@ -793,24 +793,24 @@ update_x-ui() {
 
     echo -e "${green}x-ui ${tag_version}${plain} updating finished, it is running now..."
     echo -e ""
-    echo -e "РІвЂќРЉРІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќС’
-РІвЂќвЂљ  ${blue}x-ui control menu usages (subcommands):${plain}              РІвЂќвЂљ
-РІвЂќвЂљ                                                       РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui${plain}              - Admin Management Script          РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui start${plain}        - Start                            РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui stop${plain}         - Stop                             РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui restart${plain}      - Restart                          РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui status${plain}       - Current Status                   РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui settings${plain}     - Current Settings                 РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui enable${plain}       - Enable Autostart on OS Startup   РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui disable${plain}      - Disable Autostart on OS Startup  РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui log${plain}          - Check logs                       РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui banlog${plain}       - Check Fail2ban ban logs          РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui update${plain}       - Update                           РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui legacy${plain}       - Legacy version                   РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui install${plain}      - Install                          РІвЂќвЂљ
-РІвЂќвЂљ  ${blue}x-ui uninstall${plain}    - Uninstall                        РІвЂќвЂљ
-РІвЂќвЂќРІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќВ"
+    echo -e "┌───────────────────────────────────────────────────────┐
+│  ${blue}x-ui control menu usages (subcommands):${plain}              │
+│                                                       │
+│  ${blue}x-ui${plain}              - Admin Management Script          │
+│  ${blue}x-ui start${plain}        - Start                            │
+│  ${blue}x-ui stop${plain}         - Stop                             │
+│  ${blue}x-ui restart${plain}      - Restart                          │
+│  ${blue}x-ui status${plain}       - Current Status                   │
+│  ${blue}x-ui settings${plain}     - Current Settings                 │
+│  ${blue}x-ui enable${plain}       - Enable Autostart on OS Startup   │
+│  ${blue}x-ui disable${plain}      - Disable Autostart on OS Startup  │
+│  ${blue}x-ui log${plain}          - Check logs                       │
+│  ${blue}x-ui banlog${plain}       - Check Fail2ban ban logs          │
+│  ${blue}x-ui update${plain}       - Update                           │
+│  ${blue}x-ui legacy${plain}       - Legacy version                   │
+│  ${blue}x-ui install${plain}      - Install                          │
+│  ${blue}x-ui uninstall${plain}    - Uninstall                        │
+└───────────────────────────────────────────────────────┘"
 }
 
 echo -e "${green}Running...${plain}"

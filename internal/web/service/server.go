@@ -900,7 +900,7 @@ func (s *ServerService) AppendCpuSample(t time.Time, v float64) {
 	systemMetrics.append(s.systemMetricKey("cpu"), t, v)
 }
 
-// AppendStatusSample writes one tick of every metric we keep вЂ” CPU, memory
+// AppendStatusSample writes one tick of every metric we keep — CPU, memory
 // percent, network throughput (bytes/s), online client count, and the three
 // load averages. Called by RefreshStatus on the same @2s cadence as
 // AppendCpuSample, so all series stay aligned.
@@ -1794,8 +1794,8 @@ func backupDateSuffix(now time.Time) string {
 // host (port stripped) when available, otherwise the configured Listen Domain
 // (webDomain) and then the resolved public IP (IPv4 before IPv6), reduced to safe
 // filename characters. The public IP is resolved directly rather than read from
-// LastStatus so callers whose ServerService never runs the status ticker вЂ”
-// notably the Telegram bot вЂ” still get a real address instead of the "x-ui"
+// LastStatus so callers whose ServerService never runs the status ticker —
+// notably the Telegram bot — still get a real address instead of the "x-ui"
 // fallback.
 func (s *ServerService) backupHost(requestHost string) string {
 	host := extractHostname(strings.TrimSpace(requestHost))
@@ -1818,7 +1818,7 @@ func (s *ServerService) backupHost(requestHost string) string {
 
 // sanitizeBackupHost reduces a host to characters safe in a download filename
 // (the getDb handler enforces ^[a-zA-Z0-9_\-.]+$). IPv6 brackets are stripped
-// and any other character вЂ” such as the colons in an IPv6 address вЂ” becomes a
+// and any other character — such as the colons in an IPv6 address — becomes a
 // hyphen. Returns "x-ui" when nothing usable remains.
 func sanitizeBackupHost(host string) string {
 	host = strings.Trim(host, "[]")
@@ -2855,7 +2855,7 @@ func (s *ServerService) GetNewmldsa65() (*MLDSA65Response, error) {
 }
 
 // GetCertHash parses a certificate (from a file path or inline PEM/DER content)
-// and returns the hex-encoded SHA-256 over each certificate's raw DER вЂ” the
+// and returns the hex-encoded SHA-256 over each certificate's raw DER — the
 // value xray-core's pinnedPeerCertSha256 (pcs) expects. Lets the panel fill the
 // pinned-cert field from the inbound's own certificate without the user
 // computing the hash by hand.
@@ -2923,7 +2923,7 @@ func (s *ServerService) GetCertHash(certFile string, certContent string) ([]stri
 // resolveKnownCertFile checks the caller-supplied certificate path against the
 // set of certificate files the panel already references (inbound TLS configs
 // plus the panel's own web cert) and, on a match, returns the path taken from
-// that configuration вЂ” not the caller's value. This both confines reads to
+// that configuration — not the caller's value. This both confines reads to
 // known certificates and breaks the user-input-to-filesystem taint flow.
 func (s *ServerService) resolveKnownCertFile(certFile string) (string, bool) {
 	want := filepath.Clean(certFile)
@@ -2994,11 +2994,11 @@ func walkCertFiles(node any, out []string) []string {
 }
 
 // GetRemoteCertHash opens a uTLS (Chrome fingerprint) handshake to a remote
-// endpoint and returns the hex-encoded SHA-256 of its leaf certificate вЂ” the
+// endpoint and returns the hex-encoded SHA-256 of its leaf certificate — the
 // value to put in pinnedPeerCertSha256 (pcs) when pinning a server whose
 // certificate file you don't hold (a CDN front, a REALITY dest, an external
 // proxy). A native handshake replaces the old `xray tls ping` subprocess so the
-// real dial/handshake failure (connection refused, timeout, вЂ¦) surfaces
+// real dial/handshake failure (connection refused, timeout, …) surfaces
 // verbatim. `server` may be host or host:port; the port defaults to 443.
 // allowPrivate lifts the SSRF guard for this one probe (the panel's confirmed opt-in).
 func (s *ServerService) GetRemoteCertHash(server string, allowPrivate bool) ([]string, error) {
@@ -3035,7 +3035,7 @@ func (s *ServerService) GetRemoteCertHash(server string, allowPrivate bool) ([]s
 	if len(certs) == 0 {
 		return nil, common.NewError("no certificate returned by ", host)
 	}
-	// PeerCertificates[0] is always the leaf the connection verifies against вЂ”
+	// PeerCertificates[0] is always the leaf the connection verifies against —
 	// robust for IP-only self-signed certs that carry no DNS SANs.
 	sum := sha256.Sum256(certs[0].Raw)
 	return []string{hex.EncodeToString(sum[:])}, nil

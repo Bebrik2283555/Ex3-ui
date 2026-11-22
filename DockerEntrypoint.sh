@@ -33,7 +33,7 @@ EOF
     # added later without regenerating these files.
     SSH_PORTS=$(grep -oE '^[[:space:]]*Port[[:space:]]+[0-9]+' /etc/ssh/sshd_config 2>/dev/null | grep -oE '[0-9]+' | paste -sd, -)
     [ -z "$SSH_PORTS" ] && SSH_PORTS="22"
-    PANEL_PORT=$(/app/x-ui setting -show true 2>/dev/null | grep -Eo 'port: .+' | awk '{print $2}')
+    PANEL_PORT=$(/app/x-ui setting -show 2>/dev/null | grep -Eo 'port: .+' | awk '{print $2}')
     EXEMPT_PORTS="$SSH_PORTS"
     [ -n "$PANEL_PORT" ] && EXEMPT_PORTS="$EXEMPT_PORTS,$PANEL_PORT"
 
