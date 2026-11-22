@@ -35,7 +35,6 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@fumadocs/api-docs": "0.2.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/mdx": "^2.0.14",
     "@types/node": "^26.6.6",
