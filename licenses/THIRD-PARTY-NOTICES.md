@@ -10,7 +10,7 @@ See [`../LICENSING.md`](../LICENSING.md) for the project-level license split.
 | 3x-ui | GPL-3.0 | `LICENSE-3x-ui-GPL-3.0.txt` |
 | Xray-core | MPL-2.0 | `LICENSE-xray-core-MPL-2.0.txt` |
 | qWDTT | GPL-3.0 | `LICENSE-qwdtt-GPL-3.0.txt` |
-| olcRTC | WTFPL-2.0 | `LICENSE-olcrtc-WTFPL-2.0.txt` |
+| olcRTC | Apache-2.0 | `LICENSE-olcrtc-Apache-2.0.txt`, `LICENSE-olcrtc-WTFPL-2.0.txt` |
 | TUIC | GPL-3.0 | `LICENSE-tuic-GPL-3.0.txt` |
 | mtg | MIT | `LICENSE-mtg-multi-MIT.txt` |
 | zapret | MIT | `LICENSE-zapret-linux-easy-MIT.txt` |
@@ -61,7 +61,7 @@ govern the releases that still contained the adapted code.
 ## qWDTT and olcRTC
 
 - qWDTT: <https://github.com/SpaceNeuroX/proxy-turn-vk-android> (GPL-3.0).
-- olcRTC: <https://github.com/openlibrecommunity/olcrtc> (WTFPL-2.0).
+- olcRTC: <https://github.com/ghostlane-project/olcrtc> (Apache-2.0; Copyright 2026 olcRTC contributors / Roman Podpriatov; fork of <https://github.com/openlibrecommunity/olcrtc>, WTFPL-2.0, Copyright (C) 2026 zarazaex).
 
 These are external processes. Their binaries remain under their own licenses;
 shipping them with EX3-UI does not relicense the panel source.

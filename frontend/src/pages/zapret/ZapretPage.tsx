@@ -68,7 +68,7 @@ function ZapretTab() {
   const { t } = useTranslation();
 
   const { data: status, isLoading, isError, refetch } = useZapretStatus();
-  const { data: hosts, refetch: refetchHosts } = useZapretHosts();
+  const { data: hosts, isLoading: hostsLoading, refetch: refetchHosts } = useZapretHosts();
   const { data: files, refetch: refetchFiles } = useZapretFiles();
   const {
     downloadInstall,
@@ -225,12 +225,24 @@ function ZapretTab() {
     </Tag>
   );
 
+  if (isError && !status) {
+    return <Result status="error" title={t('pages.zapret.installFailed')} />;
+  }
+
+  if (!status || (status.installed && !hosts && hostsLoading)) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+        <Spin aria-live="off" />
+      </div>
+    );
+  }
+
   return (
     <Spin aria-live="off" spinning={isLoading}>
       <Card title={t('pages.zapret.statusCard')} variant="borderless" style={{ marginBottom: 16 }}>
         {isError ? (
           <Result status="error" title={t('pages.zapret.installFailed')} />
-        ) : !status ? null : (
+        ) : (
           <Space wrap size="large">
             {tag(
               status.installed ? t('pages.zapret.installed') : t('pages.zapret.notInstalled'),
@@ -464,7 +476,7 @@ function WarpTab() {
   }>();
 
   // Start with a 5s baseline poll; once we know the state we refetch faster if needed
-  const { data: status, refetch: refetchStatus } = useWarpStatus(5000);
+  const { data: status, isLoading, isError, refetch: refetchStatus } = useWarpStatus(5000);
   const isWorking = status?.installing || (status?.installed && status?.rotating);
   // Derive a fast refetch interval while any long task is running
   useEffect(() => {
@@ -610,6 +622,18 @@ function WarpTab() {
       {label}
     </Tag>
   );
+
+  if (isError && !status) {
+    return <Result status="error" title={t('pages.warp.statusCard')} />;
+  }
+
+  if (isLoading && !status) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+        <Spin aria-live="off" />
+      </div>
+    );
+  }
 
   return (
     <>

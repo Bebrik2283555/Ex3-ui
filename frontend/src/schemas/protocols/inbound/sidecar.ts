@@ -68,7 +68,10 @@ export type QwdttInboundSettings = z.infer<typeof QwdttInboundSettingsSchema>;
 // mean something for the transport that is selected. `dataDir`/`configFile`
 // are backend-managed and never edited.
 export const OlcrtcSettingsSchema = z.object({
-  provider: z.enum(['jitsi', 'telemost', 'wbstream']).default('jitsi'),
+  provider: z
+    .enum(['jitsi', 'telemost', 'wbstream', 'salutejazz', 'vkcalls', 'mtslink', 'max'])
+    .default('jitsi'),
+  authToken: z.string().default(''),
   roomId: z.string().default(''),
   cryptoKey: z.string().default(''),
   transport: z
@@ -85,6 +88,9 @@ export const OlcrtcSettingsSchema = z.object({
   videoFps: z.number().int().min(1).max(120).default(30),
   videoCodec: z.enum(['qrcode', 'tile']).default('qrcode'),
   dns: z.string().default('8.8.8.8:53'),
+  iceLocalIp: z.string().default(''),
+  dtlsProfile: z.enum(['', 'off', 'chrome-linux-138-compat-v1']).default(''),
+  udpEnabled: z.boolean().default(false),
   dataDir: z.string().default(''),
   configFile: z.string().default(''),
   debug: z.boolean().default(false),

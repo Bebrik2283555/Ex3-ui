@@ -1,8 +1,11 @@
 package dnsresolver
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStripHostsBlock(t *testing.T) {
@@ -104,5 +107,68 @@ func TestValidateDomain(t *testing.T) {
 		if err := validateDomain(d); err == nil {
 			t.Errorf("invalid domain %q was accepted", d)
 		}
+	}
+}
+
+func TestUpdateHostsBlockToSkipsUnchangedIPs(t *testing.T) {
+	hostsPath := filepath.Join(t.TempDir(), "hosts")
+	initialContent := "127.0.0.1 localhost\n"
+	if err := os.WriteFile(hostsPath, []byte(initialContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	entries := []ResolvedEntry{
+		{Domain: "chatgpt.com", IP: "179.236.130.11", Status: "OK"},
+		{Domain: "claude.ai", IP: "179.236.130.10", Status: "OK"},
+		{Domain: "cdn.claude.ai", IP: "", Status: "FAILED"},
+	}
+
+	changed, err := updateHostsBlockTo(hostsPath, entries)
+	if err != nil || !changed {
+		t.Fatalf("first write: changed=%v err=%v, want true nil", changed, err)
+	}
+
+	// Simulate an unrelated entry appended later and verify an identical resolve
+	// neither rewrites the file nor disturbs the appended line.
+	afterFirst, err := os.ReadFile(hostsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withTrailing := string(afterFirst) + "172.66.3.170 api.cloudflareclient.com\n"
+	if err := os.WriteFile(hostsPath, []byte(withTrailing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldStamp := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+	if err := os.Chtimes(hostsPath, oldStamp, oldStamp); err != nil {
+		t.Fatal(err)
+	}
+
+	changed, err = updateHostsBlockTo(hostsPath, entries)
+	if err != nil || changed {
+		t.Fatalf("unchanged re-resolve: changed=%v err=%v, want false nil", changed, err)
+	}
+	info, err := os.Stat(hostsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.ModTime().Equal(oldStamp) {
+		t.Fatalf("hosts file mtime changed on unchanged IPs: got %v, want %v", info.ModTime(), oldStamp)
+	}
+
+	// When any resolved IP changes, the file must be updated.
+	updatedEntries := []ResolvedEntry{
+		{Domain: "chatgpt.com", IP: "179.236.130.12", Status: "OK"},
+		{Domain: "claude.ai", IP: "179.236.130.10", Status: "OK"},
+	}
+	changed, err = updateHostsBlockTo(hostsPath, updatedEntries)
+	if err != nil || !changed {
+		t.Fatalf("changed IP resolve: changed=%v err=%v, want true nil", changed, err)
+	}
+	got, err := os.ReadFile(hostsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "179.236.130.12 chatgpt.com") {
+		t.Fatalf("expected updated IP in hosts:\n%s", got)
 	}
 }

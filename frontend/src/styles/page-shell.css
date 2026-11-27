@@ -144,13 +144,13 @@ body:is(.theme-custom, .theme-lane)
     .ant-dropdown-menu-item-danger
   ):hover
   > .anticon {
-  color: var(--ant-color-primary) !important;
+  color: var(--ant-color-primary-text) !important;
 }
 
 .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(
     .ant-dropdown-menu-item-danger
   ):hover {
-  background-color: color-mix(in srgb, var(--ant-color-primary) 14%, transparent) !important;
+  background-color: var(--ant-color-primary-bg) !important;
 }
 
 .ant-dropdown-menu-item-divider {
@@ -320,4 +320,23 @@ body.dark .ant-dropdown-menu-item-divider {
   .hostsfile-page .content-area {
     padding: 8px;
   }
+}
+
+/* Tooltips always render on a dark spotlight surface, so light-theme link tokens
+   (#141414 in lane, #0850c5 in light) become illegible unless inherited. */
+body.light .ant-tooltip a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+body.light .ant-tooltip a:hover {
+  opacity: 0.82;
+}
+
+.ant-segmented.ant-segmented-sm {
+  border-radius: 8px;
+}
+
+.ant-segmented.ant-segmented-sm :is(.ant-segmented-item, .ant-segmented-thumb) {
+  border-radius: 6px;
 }

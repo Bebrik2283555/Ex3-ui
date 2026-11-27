@@ -276,8 +276,8 @@
   font-weight: 500;
   padding: 0 6px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--ant-color-primary) 12%, transparent);
-  color: var(--ant-color-primary);
+  background: var(--ant-color-primary-bg);
+  color: var(--ant-color-primary-text);
   margin-left: auto;
 }
 

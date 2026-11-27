@@ -8,6 +8,8 @@ import { InfinityIcon } from '@/components/ui';
 import { useDatepicker } from '@/hooks/useDatepicker';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 import { coerceInboundJsonField } from '@/models/dbinbound';
+import { formatOlcrtcProvider } from '@/lib/xray/link-label';
+import { Protocols } from '@/schemas/primitives';
 
 import { RowActionsCell } from './RowActions';
 import {
@@ -278,6 +280,24 @@ export function useInboundColumns({
                   Reality
                 </Tag>,
               );
+          } else if (record.protocol === Protocols.CSQTT || record.protocol === Protocols.QWDTT) {
+            tags.push(
+              <Tag key="n" color="green">
+                TURN
+              </Tag>,
+            );
+          } else if (record.protocol === Protocols.OLCRTC) {
+            const sidecar = coerceInboundJsonField(record.settings) as {
+              sidecar?: { provider?: string };
+            };
+            const provider = formatOlcrtcProvider(sidecar.sidecar?.provider);
+            if (provider) {
+              tags.push(
+                <Tag key="n" color={provider.color}>
+                  {provider.label}
+                </Tag>,
+              );
+            }
           }
           return <div className="protocol-tags">{tags}</div>;
         },

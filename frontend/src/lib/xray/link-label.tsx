@@ -8,6 +8,7 @@ import { Base64 } from '@/utils';
 
 export interface LinkParts {
   protocol: string;
+  provider?: string;
   network: string;
   security: string;
   remark: string;
@@ -28,6 +29,9 @@ const PROTOCOL_LABELS: Record<string, string> = {
   tg: 'MTProto',
   vpn: 'AmneziaWG',
   tuic: 'TUIC',
+  csqtt: 'CSQTT',
+  qwdtt: 'qWDTT',
+  olcrtc: 'olcRTC',
 };
 
 const PROTOCOL_COLORS: Record<string, string> = {
@@ -41,6 +45,29 @@ const PROTOCOL_COLORS: Record<string, string> = {
   MTProto: 'blue',
   AmneziaWG: 'yellow',
   TUIC: 'orange',
+  CSQTT: 'lime',
+  qWDTT: 'cyan',
+  olcRTC: 'purple',
+};
+
+const OLCRTC_PROVIDER_LABELS: Record<string, string> = {
+  vkcalls: 'VKCalls',
+  telemost: 'Telemost',
+  salutejazz: 'SaluteJazz',
+  max: 'Max',
+  jitsi: 'Jitsi',
+  mtslink: 'MTSLink',
+  wbstream: 'WBStream',
+};
+
+const OLCRTC_PROVIDER_COLORS: Record<string, string> = {
+  VKCalls: 'blue',
+  Telemost: 'red',
+  SaluteJazz: 'green',
+  Max: 'purple',
+  Jitsi: 'geekblue',
+  MTSLink: 'volcano',
+  WBStream: 'magenta',
 };
 
 const SECURITY_COLORS: Record<string, string> = {
@@ -53,6 +80,32 @@ const SECURITY_COLORS: Record<string, string> = {
 const TRANSPORT_COLOR = 'gold';
 
 const TAG_STYLE = { marginInlineEnd: 0, fontWeight: 600, letterSpacing: '0.3px' };
+
+export function formatOlcrtcProvider(
+  raw: string | undefined,
+): { label: string; color: string } | null {
+  const key = (raw ?? '').trim().toLowerCase();
+  if (!key) return null;
+  const label = OLCRTC_PROVIDER_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
+  return { label, color: OLCRTC_PROVIDER_COLORS[label] ?? 'blue' };
+}
+
+function decodeComponentSafe(value: string): string {
+  if (!value) return '';
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function extractPeerPort(peer: string | null): string {
+  const raw = peer?.trim() ?? '';
+  if (!raw) return '';
+  if (/^\d+$/.test(raw)) return raw;
+  const match = /:(\d+)$/.exec(raw);
+  return match?.[1] ?? '';
+}
 
 // Reverse of inbound-link.ts's own toBase64Url — base64url (RFC 4648 §5, no
 // padding) back to the original unicode text, needed to read the remark/
@@ -80,6 +133,7 @@ export function parseLinkParts(link: string): LinkParts | null {
   const scheme = /^([a-z0-9]+):\/\//i.exec(trimmed)?.[1]?.toLowerCase() ?? '';
   if (!scheme) return null;
   const protocol = PROTOCOL_LABELS[scheme] ?? scheme.charAt(0).toUpperCase() + scheme.slice(1);
+  let provider = '';
   let network = '';
   let security = '';
   let remark = '';
@@ -92,7 +146,7 @@ export function parseLinkParts(link: string): LinkParts | null {
         ps?: string;
         port?: string | number;
       };
-      network = json.net ?? '';
+      network = (json.net ?? '').toUpperCase();
       security = json.tls ?? '';
       remark = typeof json.ps === 'string' ? json.ps : '';
       port = json.port != null ? String(json.port) : '';
@@ -113,33 +167,51 @@ export function parseLinkParts(link: string): LinkParts | null {
     } catch {
       /* unparseable payload, fall back to protocol only */
     }
+  } else if (scheme === 'olcrtc') {
+    // olcrtc://<provider>?<transport>@<room>#<cryptoKey>$<name>
+    const rest = trimmed.slice('olcrtc://'.length);
+    const hashIdx = rest.indexOf('#');
+    const beforeHash = hashIdx >= 0 ? rest.slice(0, hashIdx) : rest;
+    const rawHash = hashIdx >= 0 ? rest.slice(hashIdx + 1) : '';
+    const qIdx = beforeHash.indexOf('?');
+    const rawProvider = (qIdx >= 0 ? beforeHash.slice(0, qIdx) : beforeHash).split('/')[0];
+    provider = formatOlcrtcProvider(rawProvider)?.label ?? '';
+    const dollarIdx = rawHash.indexOf('$');
+    if (dollarIdx >= 0) {
+      remark = decodeComponentSafe(rawHash.slice(dollarIdx + 1));
+    } else if (rawHash && !/^[0-9a-f]{32,}$/i.test(rawHash)) {
+      remark = decodeComponentSafe(rawHash);
+    }
   } else {
     try {
       const url = new URL(trimmed);
-      network = url.searchParams.get('type') ?? '';
-      security = url.searchParams.get('security') ?? '';
-      /* tg://proxy links (mtproto) carry the port in a `port` query param, not
-         the URL authority, so fall back to it when there is no authority port. */
-      port = url.port || (url.searchParams.get('port') ?? '');
-      const hash = url.hash.replace(/^#/, '');
-      try {
-        remark = decodeURIComponent(hash);
-      } catch {
-        remark = hash;
+      if (scheme === 'csqtt' || scheme === 'qwdtt') {
+        network = 'TURN';
+        port = extractPeerPort(url.searchParams.get('peer'));
+        remark =
+          url.searchParams.get('name')?.trim() || decodeComponentSafe(url.hash.replace(/^#/, ''));
+      } else {
+        network = (url.searchParams.get('type') ?? '').toUpperCase();
+        security = url.searchParams.get('security') ?? '';
+        /* tg://proxy links (mtproto) carry the port in a `port` query param, not
+           the URL authority, so fall back to it when there is no authority port. */
+        port = url.port || (url.searchParams.get('port') ?? '');
+        remark = decodeComponentSafe(url.hash.replace(/^#/, ''));
       }
     } catch {
       /* not URL-shaped, fall back to protocol only */
     }
     if (scheme === 'tg') security = 'FakeTLS';
     if (scheme === 'tuic') {
-      network = 'quic';
+      network = 'QUIC';
       security = 'TLS';
     }
   }
   if (security === 'none') security = '';
   return {
     protocol,
-    network: network.toUpperCase(),
+    ...(provider ? { provider } : {}),
+    network,
     security: security.toUpperCase(),
     remark: remark.trim(),
     port,
@@ -158,6 +230,11 @@ export function LinkTags({ parts }: { parts: LinkParts }) {
       <Tag color={PROTOCOL_COLORS[parts.protocol]} style={TAG_STYLE}>
         {parts.protocol}
       </Tag>
+      {parts.provider && (
+        <Tag color={OLCRTC_PROVIDER_COLORS[parts.provider] ?? 'blue'} style={TAG_STYLE}>
+          {parts.provider}
+        </Tag>
+      )}
       {parts.network && (
         <Tag color={TRANSPORT_COLOR} style={TAG_STYLE}>
           {parts.network}

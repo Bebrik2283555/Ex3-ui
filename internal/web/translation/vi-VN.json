@@ -880,7 +880,23 @@
         "debug": "Debug",
         "debugTip": "Verbose olcRTC logs.",
         "legacyLink": "Legacy wdtt:// link",
-        "subJsonLink": "qWDTT JSON subscription"
+        "subJsonLink": "qWDTT JSON subscription",
+        "authToken": "Auth / account token",
+        "authTokenTip": "Required for MAX Calls; enables datachannel on WbStream when the account holds moderator rights.",
+        "requiredAuthToken": "Auth token is required for MAX",
+        "iceLocalIp": "ICE local IP",
+        "iceLocalIpTip": "Optional host IPv4 address for ICE gathering; avoids multiplying TURN allocations on servers with TUN interfaces.",
+        "invalidIceLocalIp": "Enter a valid unicast IPv4 address",
+        "invalidRoomVkcalls": "VK Calls requires a full link like https://vk.ru/call/join/<id>",
+        "invalidRoomSalutejazz": "SaluteJazz requires <code>:<password> (lowercase letters and digits)",
+        "invalidRoomMtslink": "MTS Link requires an event link like https://my.mts-link.ru/j/<owner>/<event>",
+        "invalidRoomJitsi": "Jitsi requires host/room or https://host/room",
+        "dtlsProfile": "DTLS profile",
+        "dtlsProfileTip": "ClientHello fingerprint used during the DTLS handshake.",
+        "dtlsProfileDefault": "Default (stock)",
+        "dtlsProfileOff": "Off",
+        "udpEnabled": "UDP relay (calls/games)",
+        "udpEnabledTip": "Enable lossy SOCKS5 UDP ASSOCIATE forwarding through the tunnel."
       }
     },
     "clients": {

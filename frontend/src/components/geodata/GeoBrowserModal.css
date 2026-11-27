@@ -168,7 +168,7 @@
 }
 
 .geo-browser-modal .geo-kind-regexp {
-  color: var(--ant-color-primary);
+  color: var(--ant-color-primary-text);
 }
 
 .geo-browser-modal .geo-placeholder {

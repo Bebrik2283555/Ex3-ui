@@ -433,6 +433,7 @@ export function createDefaultOlcrtcInboundSettings(): OlcrtcInboundSettings {
     clients: [],
     sidecar: {
       provider: 'jitsi',
+      authToken: '',
       roomId: '',
       cryptoKey: '',
       transport: 'datachannel',
@@ -447,6 +448,9 @@ export function createDefaultOlcrtcInboundSettings(): OlcrtcInboundSettings {
       videoFps: 30,
       videoCodec: 'qrcode',
       dns: '8.8.8.8:53',
+      iceLocalIp: '',
+      dtlsProfile: '',
+      udpEnabled: false,
       dataDir: '',
       configFile: '',
       debug: false,

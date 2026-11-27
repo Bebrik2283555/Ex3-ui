@@ -34,7 +34,7 @@ func (i Instance) Links(client model.Client) []string {
 			return []string{link}
 		}
 	case model.OLCRTC:
-		if link := i.olcrtcLink(); link != "" {
+		if link := i.olcrtcLink(client); link != "" {
 			return []string{link}
 		}
 	case model.CSQTT:
@@ -145,7 +145,7 @@ func (i Instance) qwdttLink(client model.Client) string {
 	return "qwdtt://config?" + query.Encode()
 }
 
-func (i Instance) olcrtcLink() string {
+func (i Instance) olcrtcLink(client model.Client) string {
 	cfg := i.OLCRTC
 	if cfg == nil {
 		return ""
@@ -155,7 +155,26 @@ func (i Instance) olcrtcLink() string {
 	if room == "" || key == "" {
 		return ""
 	}
-	return fmt.Sprintf("olcrtc://%s?%s@%s#%s", cfg.Provider, olcrtcTransport(cfg), cfg.RoomID, cfg.CryptoKey)
+	link := fmt.Sprintf("olcrtc://%s?%s@%s#%s", cfg.Provider, olcrtcTransport(cfg), sanitizeOLCRTCRoom(room), key)
+	if name := encodeOLCRTCName(i.shareName(client)); name != "" {
+		link += "$" + name
+	}
+	return link
+}
+
+func sanitizeOLCRTCRoom(room string) string {
+	cleaned := strings.NewReplacer("\r", "", "\n", "", "#", "%23").Replace(strings.TrimSpace(room))
+	return cleaned
+}
+
+// encodeOLCRTCName encodes the $name fragment suffix matching RFC 3986 / QUrl
+// percent-decoding (%20 for spaces rather than '+').
+func encodeOLCRTCName(name string) string {
+	cleaned := strings.NewReplacer("\r", "", "\n", "").Replace(strings.TrimSpace(name))
+	if cleaned == "" {
+		return ""
+	}
+	return strings.ReplaceAll(url.PathEscape(cleaned), "$", "%24")
 }
 
 func (i Instance) csqttLink(client model.Client) string {

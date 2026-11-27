@@ -1,4 +1,3 @@
-import { NativeSelect } from '@/components/form/NativeSelect';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -155,7 +154,7 @@ function CertRow({
         name={['streamSettings', 'tlsSettings', 'certificates', index, 'usage']}
         label={t('pages.inbounds.form.usageOption')}
       >
-        <NativeSelect
+        <Select
           style={{ width: '50%' }}
           options={Object.values(USAGE_OPTION).map((u) => ({ value: u, label: u }))}
         />
@@ -213,7 +212,7 @@ function EchSockoptSection() {
             name={['streamSettings', 'tlsSettings', 'echSockopt', 'domainStrategy']}
             label={t('pages.xray.wireguard.domainStrategy')}
           >
-            <NativeSelect
+            <Select
               options={Object.values(DOMAIN_STRATEGY_OPTION).map((v) => ({ value: v, label: v }))}
             />
           </FormField>
@@ -355,14 +354,14 @@ export default function TlsForm({
       <Form.Item htmlFor={`${uid}-minVersion`} label={t('pages.inbounds.form.minMaxVersion')}>
         <Space.Compact block>
           <FormField name={['streamSettings', 'tlsSettings', 'minVersion']} noStyle>
-            <NativeSelect
+            <Select
               id={`${uid}-minVersion`}
               style={{ width: '50%' }}
               options={Object.values(TLS_VERSION_OPTION).map((v) => ({ value: v, label: v }))}
             />
           </FormField>
           <FormField name={['streamSettings', 'tlsSettings', 'maxVersion']} noStyle>
-            <NativeSelect
+            <Select
               aria-label={t('pages.inbounds.form.maxVersion')}
               style={{ width: '50%' }}
               options={Object.values(TLS_VERSION_OPTION).map((v) => ({ value: v, label: v }))}
@@ -371,7 +370,7 @@ export default function TlsForm({
         </Space.Compact>
       </Form.Item>
       <FormField name={['streamSettings', 'tlsSettings', 'settings', 'fingerprint']} label="uTLS">
-        <NativeSelect
+        <Select
           options={[
             { value: '', label: 'None' },
             ...Object.values(UTLS_FINGERPRINT).map((fp) => ({ value: fp, label: fp })),

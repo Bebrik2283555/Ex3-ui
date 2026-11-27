@@ -332,6 +332,9 @@ func olcrtcYAML(cfg *OLCRTCConfig) string {
 	line("mode: srv")
 	line("auth:")
 	line("  provider: %s", yamlQuoted(cfg.Provider))
+	if token := strings.TrimSpace(cfg.AuthToken); token != "" {
+		line("  token: %s", yamlQuoted(token))
+	}
 	line("room:")
 	line("  id: %s", yamlQuoted(cfg.RoomID))
 	if cfg.CryptoKey != "" {
@@ -342,6 +345,17 @@ func olcrtcYAML(cfg *OLCRTCConfig) string {
 	line("  transport: %s", yamlQuoted(cfg.Transport))
 	if cfg.DNS != "" {
 		line("  dns: %s", yamlQuoted(cfg.DNS))
+	}
+	if iceIP := strings.TrimSpace(cfg.ICELocalIP); iceIP != "" {
+		line("  ice_local_ip: %s", yamlQuoted(iceIP))
+	}
+	if profile := strings.TrimSpace(cfg.DTLSProfile); profile != "" {
+		line("dtls:")
+		line("  profile: %s", yamlQuoted(profile))
+	}
+	if cfg.UDPEnabled {
+		line("udp:")
+		line("  enabled: true")
 	}
 	switch cfg.Transport {
 	case "vp8channel":

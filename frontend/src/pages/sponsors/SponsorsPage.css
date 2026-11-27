@@ -49,7 +49,7 @@
   height: 56px;
   border-radius: 8px;
   font-size: 22px;
-  color: var(--ant-color-primary);
+  color: var(--ant-color-primary-text);
   background: var(--ant-color-primary-bg);
 }
 

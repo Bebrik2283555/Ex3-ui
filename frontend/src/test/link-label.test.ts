@@ -96,4 +96,53 @@ describe('link-label parseLinkParts', () => {
     expect(parts?.port).toBe('8443');
     expect(parts?.remark).toBe('tuic-remark');
   });
+
+  it('labels csqtt links with 2 tags (CSQTT + TURN), peer port, and name', () => {
+    const link =
+      'csqtt://connect?v=2&host=1.2.3.4&peer=46000&password=pw&hashes=abc&name=%F0%9F%87%B7%F0%9F%87%BA%D0%9E%D0%91%D0%A5%D0%9E%D0%94';
+    const parts = parseLinkParts(link);
+    expect(parts?.protocol).toBe('CSQTT');
+    expect(parts?.network).toBe('TURN');
+    expect(parts?.security).toBe('');
+    expect(parts?.port).toBe('46000');
+    expect(parts?.remark).toBe('🇷🇺ОБХОД');
+    expect(parts && linkMetaText(parts)).toBe('🇷🇺ОБХОД:46000');
+  });
+
+  it('labels qwdtt links with 2 tags (qWDTT + TURN) and peer port instead of local client port', () => {
+    const link =
+      'qwdtt://config?name=%F0%9F%87%B7%F0%9F%87%BA%D0%9E%D0%91%D0%A5%D0%9E%D0%942&peer=1.2.3.4%3A56000&hashes=h1&pass=secret&port=9000&workers=4';
+    const parts = parseLinkParts(link);
+    expect(parts?.protocol).toBe('qWDTT');
+    expect(parts?.network).toBe('TURN');
+    expect(parts?.security).toBe('');
+    expect(parts?.port).toBe('56000');
+    expect(parts?.remark).toBe('🇷🇺ОБХОД2');
+    expect(parts && linkMetaText(parts)).toBe('🇷🇺ОБХОД2:56000');
+  });
+
+  it('strips the crypto key prefix from olcrtc links and shows only protocol + provider tags', () => {
+    const link =
+      'olcrtc://vkcalls?vp8channel<vp8-fps=120&vp8-batch=64>@https://vk.ru/call/join/room123#8532f4a19058b60e49a132d49c8609e41f5d6e661eea773c1836157c21735654$%F0%9F%87%B7%F0%9F%87%BAOLCRTCvk';
+    const parts = parseLinkParts(link);
+    expect(parts?.protocol).toBe('olcRTC');
+    expect(parts?.provider).toBe('VKCalls');
+    expect(parts?.network).toBe('');
+    expect(parts?.security).toBe('');
+    expect(parts?.port).toBe('');
+    expect(parts?.remark).toBe('🇷🇺OLCRTCvk');
+    expect(parts && linkMetaText(parts)).toBe('🇷🇺OLCRTCvk');
+  });
+
+  it('preserves escaped dollar signs inside olcrtc display names and hides bare keys', () => {
+    const withDollar =
+      'olcrtc://telemost?videochannel<video-w=1080&video-h=1080>@https://telemost.yandex.ru/j/99#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef$a%24b';
+    expect(parseLinkParts(withDollar)?.provider).toBe('Telemost');
+    expect(parseLinkParts(withDollar)?.network).toBe('');
+    expect(parseLinkParts(withDollar)?.remark).toBe('a$b');
+
+    const bareKey =
+      'olcrtc://vkcalls?vp8channel@room#8532f4a19058b60e49a132d49c8609e41f5d6e661eea773c1836157c21735654';
+    expect(parseLinkParts(bareKey)?.remark).toBe('');
+  });
 });

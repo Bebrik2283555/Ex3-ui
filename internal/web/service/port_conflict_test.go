@@ -15,6 +15,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/database/dbtest"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	xuilogger "github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/sidecar"
 )
 
 // the panel logger is a process-wide singleton. init it once per test
@@ -1013,5 +1014,51 @@ func TestCheckPortConflict_V6OnlyWildcardLeavesIPv4AddressFree(t *testing.T) {
 				t.Fatalf("conflict = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestAddMultipleOLCRTCInbounds_NoPortConflictAndDistinctBridgePorts(t *testing.T) {
+	setupConflictDB(t)
+	svc := &InboundService{}
+	key := strings.Repeat("aa", 32)
+	settings := `{"sidecar":{"provider":"vkcalls","roomId":"https://vk.ru/call/join/room1","cryptoKey":"` + key + `","transport":"vp8channel","routeThroughXray":true}}`
+
+	ib1 := &model.Inbound{Remark: "olc-1", Protocol: model.OLCRTC, Enable: true, Port: 0, Settings: settings}
+	if _, _, err := svc.AddInbound(ib1); err != nil {
+		t.Fatalf("AddInbound #1: %v", err)
+	}
+	ib2 := &model.Inbound{Remark: "olc-2", Protocol: model.OLCRTC, Enable: true, Port: 0, Settings: settings}
+	if _, _, err := svc.AddInbound(ib2); err != nil {
+		t.Fatalf("AddInbound #2: %v", err)
+	}
+	if ib1.Tag == ib2.Tag {
+		t.Fatalf("expected distinct tags, both got %q", ib1.Tag)
+	}
+	inst1, err := sidecar.InstanceFromInbound(ib1)
+	if err != nil {
+		t.Fatalf("InstanceFromInbound #1: %v", err)
+	}
+	inst2, err := sidecar.InstanceFromInbound(ib2)
+	if err != nil {
+		t.Fatalf("InstanceFromInbound #2: %v", err)
+	}
+	if inst1.RouteXrayPort <= 0 || inst2.RouteXrayPort <= 0 || inst1.RouteXrayPort == inst2.RouteXrayPort {
+		t.Fatalf("expected distinct allocated routeXrayPorts, got %d and %d", inst1.RouteXrayPort, inst2.RouteXrayPort)
+	}
+
+	// Explicit reuse of an existing routeXrayPort must still be rejected.
+	dup := &model.Inbound{
+		Tag:      "olc-dup",
+		Listen:   "0.0.0.0",
+		Port:     0,
+		Protocol: model.OLCRTC,
+		Settings: `{"sidecar":{"provider":"vkcalls","roomId":"https://vk.ru/call/join/room2","cryptoKey":"` + key + `","transport":"vp8channel","routeThroughXray":true,"routeXrayPort":` + strconv.Itoa(inst1.RouteXrayPort) + `}}`,
+	}
+	got, err := svc.checkPortConflict(dup, 0)
+	if err != nil {
+		t.Fatalf("checkPortConflict(dup): %v", err)
+	}
+	if got == nil || got.CandidateRole != "routeXrayPort" {
+		t.Fatalf("expected routeXrayPort conflict, got %+v", got)
 	}
 }

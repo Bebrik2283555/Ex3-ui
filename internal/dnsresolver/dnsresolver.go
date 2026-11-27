@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -498,12 +499,17 @@ func Resolve(ctx context.Context) error {
 	saveState()
 	mu.Unlock()
 
-	// Write to /etc/hosts
-	if err := updateHostsBlock(entries); err != nil {
+	// Write to /etc/hosts only when resolved IP mappings changed.
+	changed, err := updateHostsBlock(entries)
+	if err != nil {
 		logger.Warningf("SmartDNS: failed to update /etc/hosts: %v", err)
 		return err
 	}
-	logger.Infof("SmartDNS: updated /etc/hosts with %d domains", successCount)
+	if changed {
+		logger.Infof("SmartDNS: updated /etc/hosts with %d domains", successCount)
+	} else {
+		logger.Infof("SmartDNS: /etc/hosts unchanged (%d domains)", successCount)
+	}
 	return nil
 }
 
@@ -675,11 +681,16 @@ func extractIPs(data []byte) ([]string, error) {
 }
 
 // updateHostsBlock writes or updates the 3-line comment separated block in /etc/hosts.
-func updateHostsBlock(entries []ResolvedEntry) error {
+// It returns changed=false without modifying the file when the existing SmartDNS block
+// already holds the exact same IP-domain mappings.
+func updateHostsBlock(entries []ResolvedEntry) (bool, error) {
 	if runtime.GOOS != "linux" {
-		return nil
+		return false, nil
 	}
+	return updateHostsBlockTo(hostsFilePath, entries)
+}
 
+func updateHostsBlockTo(targetPath string, entries []ResolvedEntry) (bool, error) {
 	var validLines []string
 	for _, e := range entries {
 		if e.IP != "" && e.Domain != "" {
@@ -687,17 +698,26 @@ func updateHostsBlock(entries []ResolvedEntry) error {
 		}
 	}
 
-	existing, err := os.ReadFile(hostsFilePath)
+	existing, err := os.ReadFile(targetPath)
 	if err != nil && !os.IsNotExist(err) {
-		return err
+		return false, err
 	}
 	text := string(existing)
 
-	cleaned := stripHostsBlock(text)
-
+	existingLines, hasBlock := hostsBlockLines(text)
 	if len(validLines) == 0 {
-		return hostsfile.WriteSafe(hostsFilePath, []byte(cleaned), 0o644)
+		if !hasBlock {
+			return false, nil
+		}
+		cleaned := stripHostsBlock(text)
+		return true, hostsfile.WriteSafe(targetPath, []byte(cleaned), 0o644)
 	}
+
+	if hasBlock && slices.Equal(existingLines, validLines) {
+		return false, nil
+	}
+
+	cleaned := stripHostsBlock(text)
 
 	var sb strings.Builder
 	sb.WriteString(strings.TrimRight(cleaned, "\n"))
@@ -713,7 +733,10 @@ func updateHostsBlock(entries []ResolvedEntry) error {
 	sb.WriteString(blockFooter)
 	sb.WriteString("\n")
 
-	return hostsfile.WriteSafe(hostsFilePath, []byte(sb.String()), 0o644)
+	if err := hostsfile.WriteSafe(targetPath, []byte(sb.String()), 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func removeHostsBlock() error {
@@ -727,8 +750,28 @@ func removeHostsBlock() error {
 		}
 		return err
 	}
-	cleaned := stripHostsBlock(string(existing))
+	text := string(existing)
+	if _, hasBlock := hostsBlockLines(text); !hasBlock {
+		return nil
+	}
+	cleaned := stripHostsBlock(text)
 	return hostsfile.WriteSafe(hostsFilePath, []byte(cleaned), 0o644)
+}
+
+func hostsBlockLines(content string) ([]string, bool) {
+	lines := strings.SplitAfter(content, "\n")
+	start, end := hostsBlockRange(lines)
+	if start < 0 || end-start < 4 {
+		return nil, false
+	}
+	out := make([]string, 0, end-start-4)
+	for _, line := range lines[start+3 : end-1] {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out, true
 }
 
 // stripHostsBlock removes the panel's SmartDNS block. The markers are matched

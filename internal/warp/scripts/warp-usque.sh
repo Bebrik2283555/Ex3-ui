@@ -30,8 +30,6 @@ ip link set dev warp down 2>/dev/null || true
 ip link del dev warp 2>/dev/null || true
 ip rule del to 91.108.0.0/16 table $TABLE priority 100 2>/dev/null || true
 ip rule del fwmark $TABLE table $TABLE priority 99 2>/dev/null || true
-ip -6 rule del fwmark $TABLE table $TABLE priority 99 2>/dev/null || true
-ip6tables -D OUTPUT -m mark --mark $TABLE ! -o warp -j REJECT 2>/dev/null || true
 
 if [ ! -x "$USQUE_BIN" ]; then
   TMP_DIR=$(mktemp -d)
@@ -71,16 +69,16 @@ get_country() {
   local iface="${1:-}"
   local c=""
   if [ -n "$iface" ]; then
-    c="$(curl --interface "$iface" -s --max-time 5 https://1.1.1.1/cdn-cgi/trace 2>/dev/null | awk -F= '/loc=/{print $2}' || true)"
+    c="$(curl -4 --interface "$iface" -s --max-time 5 https://1.1.1.1/cdn-cgi/trace 2>/dev/null | awk -F= '/loc=/{print $2}' || true)"
   else
-    c="$(curl -s --max-time 5 https://1.1.1.1/cdn-cgi/trace 2>/dev/null | awk -F= '/loc=/{print $2}' || true)"
+    c="$(curl -4 -s --max-time 5 https://1.1.1.1/cdn-cgi/trace 2>/dev/null | awk -F= '/loc=/{print $2}' || true)"
   fi
   c="$(echo "$c" | tr -d '\r\n ')"
   if ! [[ "$c" =~ ^[A-Za-z]{2}$ ]]; then
     if [ -n "$iface" ]; then
-      c="$(curl --interface "$iface" -s --max-time 5 https://ipinfo.io/country 2>/dev/null || true)"
+      c="$(curl -4 --interface "$iface" -s --max-time 5 https://ipinfo.io/country 2>/dev/null || true)"
     else
-      c="$(curl -s --max-time 5 https://ipinfo.io/country 2>/dev/null || true)"
+      c="$(curl -4 -s --max-time 5 https://ipinfo.io/country 2>/dev/null || true)"
     fi
     c="$(echo "$c" | tr -d '\r\n ')"
   fi
@@ -98,14 +96,14 @@ get_ip() {
     ip="$(curl --interface "$iface" -4 -s --max-time 5 https://api.ipify.org 2>/dev/null || true)"
     ip="$(echo "$ip" | tr -d '\r\n ')"
     if ! [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-      ip="$(curl --interface "$iface" -s --max-time 5 https://1.1.1.1/cdn-cgi/trace 2>/dev/null | awk -F= '/ip=/{print $2}' || true)"
+      ip="$(curl -4 --interface "$iface" -s --max-time 5 https://1.1.1.1/cdn-cgi/trace 2>/dev/null | awk -F= '/ip=/{print $2}' || true)"
       ip="$(echo "$ip" | tr -d '\r\n ')"
     fi
   else
     ip="$(curl -4 -s --max-time 5 https://api.ipify.org 2>/dev/null || true)"
     ip="$(echo "$ip" | tr -d '\r\n ')"
     if ! [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-      ip="$(curl -s --max-time 5 https://1.1.1.1/cdn-cgi/trace 2>/dev/null | awk -F= '/ip=/{print $2}' || true)"
+      ip="$(curl -4 -s --max-time 5 https://1.1.1.1/cdn-cgi/trace 2>/dev/null | awk -F= '/ip=/{print $2}' || true)"
       ip="$(echo "$ip" | tr -d '\r\n ')"
     fi
   fi
@@ -161,7 +159,7 @@ pin_hosts() {
 probe_ip() {
   local ip="$1" code
   [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 4 --resolve "$NAME:443:$ip" \
+  code=$(curl -4 -s -o /dev/null -w '%{http_code}' --max-time 4 --resolve "$NAME:443:$ip" \
     "https://$NAME/v0a4471/reg" 2>/dev/null || true)
   code=$(printf '%s' "$code" | tr -dc '0-9' | tail -c 3)
   case "$code" in 2??|3??|4??) return 0 ;; esac
@@ -251,9 +249,9 @@ register_usque_config() {
     fi
 
     if [ "$run_user" = "root" ]; then
-      out=$($USQUE_BIN register -a -c "$target_conf" 2>&1 || true)
+      out=$(GODEBUG="tlsmlkem=0,tlskyber=0" $USQUE_BIN register -a -c "$target_conf" 2>&1 || true)
     else
-      out=$(su -s /bin/bash "$run_user" -c "$USQUE_BIN register -a -c $target_conf" 2>&1 || true)
+      out=$(su -s /bin/bash "$run_user" -c "GODEBUG=tlsmlkem=0,tlskyber=0 $USQUE_BIN register -a -c $target_conf" 2>&1 || true)
     fi
 
     if [ -s "$target_conf" ]; then
@@ -294,14 +292,23 @@ setup_routes_and_service() {
 #!/bin/bash
 TABLE=10000
 NETS="91.108.0.0/16 149.154.160.0/20 95.161.64.0/20 185.76.151.0/24 185.64.92.0/22 91.105.192.0/23 194.169.233.0/24 194.102.202.0/24"
-BREAKOUT="162.159.198.1 162.159.198.2"
-[ -s /etc/usque/endpoint ] && BREAKOUT="$BREAKOUT $(cat /etc/usque/endpoint)"
-
-# Реальный шлюз, чтобы QUIC до WARP не ушёл в туннель (петля).
-gw=$(ip route show default | awk '/default/{print $3; exit}')
-[ -n "$gw" ] && for ip in $BREAKOUT; do
-  ip route replace "$ip"/32 via "$gw" 2>/dev/null || true
+BREAKOUT="162.159.198.1"
+[ -s /etc/usque/endpoint ] && BREAKOUT="$BREAKOUT $(tr '\n' ' ' < /etc/usque/endpoint)"
+for k in endpoint_v4 endpoint_h2_v4; do
+  ip=$(sed -n 's/.*"'"$k"'"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' /etc/usque/config.json 2>/dev/null | head -1)
+  [ -n "$ip" ] && BREAKOUT="$BREAKOUT $ip"
 done
+BREAKOUT=$(printf '%s\n' $BREAKOUT | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | awk '!seen[$0]++')
+
+# Реальный IPv4-шлюз, чтобы трафик до WARP не ушёл в туннель (петля).
+gw=$(ip -4 route show default | awk '/default/{print $3; exit}')
+if [ -n "$gw" ]; then
+  : > /run/warp-breakout-ips
+  for ip in $BREAKOUT; do
+    ip route replace "$ip"/32 via "$gw" 2>/dev/null || true
+    echo "$ip" >> /run/warp-breakout-ips
+  done
+fi
 
 ip route replace default dev warp table $TABLE
 for n in $NETS; do
@@ -314,17 +321,6 @@ iptables -t nat -C POSTROUTING -o warp -j MASQUERADE 2>/dev/null || \
   iptables -t nat -A POSTROUTING -o warp -j MASQUERADE
 iptables -t mangle -C POSTROUTING -o warp -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || \
   iptables -t mangle -A POSTROUTING -o warp -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
-
-# Маршрутизация IPv6 через warp
-ip -6 route replace default dev warp table $TABLE 2>/dev/null || true
-ip -6 rule del fwmark $TABLE table $TABLE priority 99 2>/dev/null || true
-ip -6 rule add fwmark $TABLE table $TABLE priority 99 2>/dev/null || true
-ip6tables -t nat -C POSTROUTING -o warp -j MASQUERADE 2>/dev/null || \
-  ip6tables -t nat -A POSTROUTING -o warp -j MASQUERADE 2>/dev/null || true
-
-# Блокировка утечки IPv6: пакеты с меткой туннеля не должны уходить через интерфейсы сервера
-ip6tables -C OUTPUT -m mark --mark $TABLE ! -o warp -j REJECT 2>/dev/null || \
-  ip6tables -A OUTPUT -m mark --mark $TABLE ! -o warp -j REJECT 2>/dev/null || true
 EOF
   chmod +x "$USQUE_DIR/up.sh"
 
@@ -335,16 +331,12 @@ NETS="91.108.0.0/16 149.154.160.0/20 95.161.64.0/20 185.76.151.0/24 185.64.92.0/
 for n in $NETS; do ip rule del to $n table $TABLE priority 100 2>/dev/null || true; done
 ip rule del fwmark $TABLE table $TABLE priority 99 2>/dev/null || true
 ip route flush table $TABLE 2>/dev/null || true
-ip route del 162.159.198.1/32 2>/dev/null || true
-ip route del 162.159.198.2/32 2>/dev/null || true
-[ -s /etc/usque/endpoint ] && ip route del "$(cat /etc/usque/endpoint)"/32 2>/dev/null || true
+for ip in 162.159.198.1 162.159.198.2 $(cat /etc/usque/endpoint /run/warp-breakout-ips 2>/dev/null); do
+  [ -n "$ip" ] && ip route del "$ip"/32 2>/dev/null || true
+done
+rm -f /run/warp-breakout-ips
 iptables -t nat -D POSTROUTING -o warp -j MASQUERADE 2>/dev/null || true
 iptables -t mangle -D POSTROUTING -o warp -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
-
-ip -6 rule del fwmark $TABLE table $TABLE priority 99 2>/dev/null || true
-ip -6 route flush table $TABLE 2>/dev/null || true
-ip6tables -t nat -D POSTROUTING -o warp -j MASQUERADE 2>/dev/null || true
-ip6tables -D OUTPUT -m mark --mark $TABLE ! -o warp -j REJECT 2>/dev/null || true
 
 ip link set dev warp down 2>/dev/null || true
 ip link del dev warp 2>/dev/null || true
@@ -353,41 +345,45 @@ EOF
 
   cat > /usr/local/bin/warp-run.sh <<'RUNEOF'
 #!/bin/bash
-# Runs usque with the transport and IP family that last worked. A provider that
-# drops one path (UDP/443, a blocked anycast IP, broken IPv6) must not cost a
-# WARP registration: flip the path first, rotate the account only after that.
+# IPv4-only usque runner: exits on EOF/TUN drops so systemd restarts cleanly
+# instead of hanging in reconnect loops.
 set -u
 STATE=/etc/usque/transport
-FAMILY_FILE=/etc/usque/family
 STAMP=/run/warp-transport.last
 END_FILE=/etc/usque/endpoint
 EP_FAIL=/run/warp-endpoint.fail
-V6_FAIL=/run/warp-v6.last
+FAIL_COUNT_FILE=/run/warp-fail-count
+EGRESS_TRIES_FILE=/run/warp-egress-tries
 LOG=/var/log/warp-watch.log
 IFACE=warp
 SNI=consumer-masque.cloudflareclient.com
-H2_POOL="${WARP_H2_POOL:-162.159.198.3 162.159.198.4 162.159.198.5 162.159.198.6 162.159.198.7 162.159.198.8 162.159.198.9 162.159.198.10}"
-H2_V6="${WARP_H2_V6:-2606:4700:103::2}"
+H2_SNI="${WARP_SNI:-vk.com}"
+EP_POOL="${WARP_EP_POOL:-${WARP_H2_POOL:-162.159.198.23 162.159.198.42 162.159.198.49 162.159.198.31 162.159.198.13 162.159.198.22 162.159.198.9 162.159.198.3 162.159.198.6 162.159.198.7 162.159.198.11 162.159.198.10}}"
 GRACE="${WARP_TRANSPORT_GRACE:-25}"
-COOLDOWN="${WARP_TRANSPORT_COOLDOWN:-600}"
-EP_COOLDOWN="${WARP_ENDPOINT_COOLDOWN:-120}"
-V6_COOLDOWN="${WARP_V6_COOLDOWN:-600}"
+COOLDOWN="${WARP_TRANSPORT_COOLDOWN:-300}"
+EP_COOLDOWN="${WARP_ENDPOINT_COOLDOWN:-600}"
+TRANSPORT_FAILS_FILE=/run/warp-transport-fails
+MAX_EP_TRIES="${WARP_MAX_EP_TRIES:-3}"
+MAX_EGRESS_TRIES="${WARP_MAX_EGRESS_TRIES:-10}"
 
 transport=$(tr -d '[:space:]' < "$STATE" 2>/dev/null || true)
 [ "$transport" = quic ] || transport=http2
 
 log() { echo "$(date '+%F %T') [transport] $*" >> "$LOG"; }
 
-cfg_get() { sed -n 's/.*"endpoint_h2_v4"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /etc/usque/config.json 2>/dev/null | head -1; }
-cfg_set() { sed -i -E 's/("endpoint_h2_v4"[[:space:]]*:[[:space:]]*")[^"]*"/\1'"$1"'"/' /etc/usque/config.json 2>/dev/null; }
-cfg_set6() { grep -q '"endpoint_h2_v6"' /etc/usque/config.json 2>/dev/null && \
-  sed -i -E 's/("endpoint_h2_v6"[[:space:]]*:[[:space:]]*")[^"]*"/\1'"$1"'"/' /etc/usque/config.json 2>/dev/null; }
-tls_ok() { timeout 4 openssl s_client -connect "$1:443" -servername "$SNI" -brief </dev/null >/dev/null 2>&1; }
-tls6_ok() { timeout 4 openssl s_client -6 -connect "[$1]:443" -servername "$SNI" -brief </dev/null >/dev/null 2>&1; }
-has_v6() { ip -6 route show default 2>/dev/null | grep -q default; }
+cfg_get() { sed -n 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /etc/usque/config.json 2>/dev/null | head -1; }
+cfg_set() {
+  if grep -q "\"$1\"" /etc/usque/config.json 2>/dev/null; then
+    sed -i -E 's/("'"$1"'"[[:space:]]*:[[:space:]]*")[^"]*"/\1'"$2"'"/' /etc/usque/config.json 2>/dev/null || true
+  fi
+}
+tls_ok() {
+  local probe_sni="$SNI"
+  [ "$transport" = http2 ] && probe_sni="$H2_SNI"
+  timeout 3 openssl s_client -connect "$1:443" -servername "$probe_sni" </dev/null 2>/dev/null \
+    | openssl x509 -noout -subject 2>/dev/null | grep -q 'masque\.cloudflareclient\.com'
+}
 
-# Anycast IPs of one endpoint share the pinned key: probe instead of trusting
-# the default, and skip an IP that recently failed to pass traffic.
 endpoint_usable() {
   local ip="$1" ts now
   now=$(date +%s)
@@ -399,110 +395,225 @@ endpoint_usable() {
 
 pick_endpoint() {
   local skip="$1" ip
-  for ip in $H2_POOL; do
+  for ip in $EP_POOL; do
     [ "$ip" = "$skip" ] && continue
     if endpoint_usable "$ip"; then echo "$ip"; return 0; fi
   done
   return 1
 }
 
-family=$(tr -d '[:space:]' < "$FAMILY_FILE" 2>/dev/null || true)
-case "$family" in v4|v6) ;; *) family=auto ;; esac
-if [ "$family" = auto ]; then
-  v6_ts=$(cat "$V6_FAIL" 2>/dev/null || echo 0)
-  case "$v6_ts" in ''|*[!0-9]*) v6_ts=0;; esac
-  family=v4
-  if has_v6 && [ $(($(date +%s) - v6_ts)) -ge "$V6_COOLDOWN" ] && tls6_ok "$H2_V6"; then
-    family=v6
-  fi
-fi
-
-args=(nativetun -c /etc/usque/config.json -n "$IFACE" --always-reconnect
-      --keepalive-period 10s --on-connect /etc/usque/up.sh --on-disconnect /etc/usque/down.sh)
-if [ "$family" = v6 ]; then
-  [ "$transport" = http2 ] && cfg_set6 "$H2_V6"
-  args+=(--ipv6)
-  log "$transport over IPv6 ($H2_V6)"
-else
-  if [ "$transport" = http2 ]; then
-    cur=$(cfg_get)
-    if [ -n "$cur" ] && endpoint_usable "$cur"; then
-      ep="$cur"
-    else
-      ep=$(pick_endpoint "")
+# Round-robin to the next MASQUE IP without poisoning EP_FAIL on a Russian
+# Anycast ECMP roll (e.g. DME vs ARN), because the same IP hashes differently
+# on the next ephemeral source port.
+pick_next_endpoint() {
+  local cur="$1" seen=0 ip first=""
+  for ip in $EP_POOL; do
+    [ -z "$first" ] && first="$ip"
+    if [ "$seen" -eq 1 ] && [ "$ip" != "$cur" ] && endpoint_usable "$ip"; then
+      echo "$ip"; return 0
     fi
-    if [ -n "$ep" ]; then
-      cfg_set "$ep"
-      echo "$ep" > "$END_FILE"
-      log "http2 endpoint $ep (TLS ok)"
-    fi
-  fi
-fi
-[ "$transport" = http2 ] && args+=(--http2)
+    [ "$ip" = "$cur" ] && seen=1
+  done
+  pick_endpoint "$cur" || echo "${cur:-$first}"
+}
 
-(
-  sleep "$GRACE"
-  curl --interface "$IFACE" -4 -s -o /dev/null --max-time 5 https://1.1.1.1/ 2>/dev/null && exit 0
+mark_ep_fail() {
+  local bad="$1" now="$2"
+  [ -n "$bad" ] || return 0
+  awk -v now="$now" -v ttl="$EP_COOLDOWN" '$2 + 0 >= now - ttl' "$EP_FAIL" 2>/dev/null > "$EP_FAIL.tmp" || true
+  printf '%s %s\n' "$bad" "$now" >> "$EP_FAIL.tmp"
+  mv -f "$EP_FAIL.tmp" "$EP_FAIL" 2>/dev/null || true
+}
+
+rotate_on_failure() {
+  local cur_ep="$1" now last next t_fails
+  touch /run/warp-rotated
   now=$(date +%s)
   last=$(cat "$STAMP" 2>/dev/null || echo 0)
   case "$last" in ''|*[!0-9]*) last=0;; esac
-  if [ "$family" = v6 ]; then
-    echo "$now" > "$V6_FAIL"
-    echo "$now" > "$STAMP"
-    log "IPv6 tunnel passes no traffic - switching to IPv4"
-    pkill -x usque 2>/dev/null || true
-    exit 0
-  fi
-  if [ "$transport" = http2 ]; then
-    cur=$(cfg_get)
-    next=$(pick_endpoint "$cur")
-    if [ -n "$next" ]; then
-      if [ $((now - last)) -lt "$EP_COOLDOWN" ]; then
-        log "http2 endpoint $cur passes no traffic; changed recently - waiting"
-        exit 0
-      fi
-      awk -v now="$now" -v ttl="$EP_COOLDOWN" '$2 + 0 >= now - ttl' "$EP_FAIL" 2>/dev/null > "$EP_FAIL.tmp"
-      printf '%s %s\n' "$cur" "$now" >> "$EP_FAIL.tmp"
-      mv "$EP_FAIL.tmp" "$EP_FAIL" 2>/dev/null || true
-      cfg_set "$next"
-      echo "$next" > "$END_FILE"
-      echo "$now" > "$STAMP"
-      log "http2 endpoint $cur passes no traffic - trying $next"
-      pkill -x usque 2>/dev/null || true
-      exit 0
-    fi
-    log "http2 endpoints exhausted - rotating transport"
+  t_fails=$(cat "$TRANSPORT_FAILS_FILE" 2>/dev/null || echo 0)
+  case "$t_fails" in ''|*[!0-9]*) t_fails=0;; esac
+  t_fails=$((t_fails + 1))
+  echo "$t_fails" > "$TRANSPORT_FAILS_FILE"
+
+  mark_ep_fail "$cur_ep" "$now"
+  next=$(pick_endpoint "$cur_ep" || true)
+  if [ -n "$next" ] && [ "$t_fails" -lt "$MAX_EP_TRIES" ]; then
+    cfg_set endpoint_h2_v4 "$next"
+    cfg_set endpoint_v4 "$next"
+    echo "$next" > "$END_FILE"
+    log "$transport endpoint $cur_ep failed ($t_fails/$MAX_EP_TRIES) - switching to $next"
+    return 0
   fi
   if [ $((now - last)) -lt "$COOLDOWN" ]; then
-    log "$transport passes no traffic; changed recently - waiting"
-    exit 0
+    if [ -n "$next" ]; then
+      cfg_set endpoint_h2_v4 "$next"
+      cfg_set endpoint_v4 "$next"
+      echo "$next" > "$END_FILE"
+      log "$transport endpoint $cur_ep failed; cooldown active - trying $next"
+      return 0
+    fi
+    log "$transport passes no traffic; cooldown active - waiting"
+    return 0
   fi
+  rm -f "$EP_FAIL"
+  echo 0 > "$TRANSPORT_FAILS_FILE"
   if [ "$transport" = http2 ]; then next=quic; else next=http2; fi
   echo "$next" > "$STATE"
   echo "$now" > "$STAMP"
   log "$transport passes no traffic - rotating to $next"
-  pkill -x usque 2>/dev/null || true
-) &
+}
 
-exec /usr/local/bin/usque "${args[@]}"
+if [ "$transport" = http2 ]; then cfg_key=endpoint_h2_v4; else cfg_key=endpoint_v4; fi
+cur=$(cfg_get "$cfg_key")
+if [ -n "$cur" ] && case " $EP_POOL " in *" $cur "*) true;; *) false;; esac && endpoint_usable "$cur"; then
+  ep="$cur"
+else
+  ep=$(pick_endpoint "" || true)
+fi
+if [ -n "$ep" ]; then
+  cfg_set endpoint_h2_v4 "$ep"
+  cfg_set endpoint_v4 "$ep"
+  echo "$ep" > "$END_FILE"
+  log "$transport endpoint $ep (IPv4 TLS ok)"
+fi
+
+args=(nativetun -c /etc/usque/config.json -n "$IFACE"
+      --always-reconnect --no-tunnel-ipv6
+      --keepalive-period 10s --on-connect /etc/usque/up.sh)
+[ "$transport" = http2 ] && args+=(--http2 -s "$H2_SNI")
+
+usque_pid=""
+monitor_pid=""
+log_pid=""
+log_fifo=/run/warp-usque.fifo
+cleanup_child() {
+  [ -n "$monitor_pid" ] && kill "$monitor_pid" 2>/dev/null || true
+  if [ -n "$usque_pid" ]; then
+    kill "$usque_pid" 2>/dev/null || true
+    wait "$usque_pid" 2>/dev/null || true
+  fi
+  [ -n "$log_pid" ] && wait "$log_pid" 2>/dev/null || true
+  rm -f "$log_fifo" /run/warp-usque.pid
+}
+trap 'cleanup_child; exit 0' TERM INT
+
+is_http_ok() { case "$1" in 2??|3??|401|403) return 0;; *) return 1;; esac; }
+probe_code() { curl --interface "$IFACE" -4 -s -o /dev/null -w '%{http_code}' --max-time "$2" "$1" 2>/dev/null || true; }
+
+rm -f /run/warp-healthy /run/warp-rotated /run/warp-usque.pid "$log_fifo"
+mkfifo "$log_fifo"
+# Disable Go PQ X25519MLKEM768 so ClientHello stays single-packet (<400B) and
+# does not trigger DPI/TSPU TCP-443 blackholing after ~3 KB.
+GODEBUG="tlsmlkem=0,tlskyber=0" /usr/local/bin/usque "${args[@]}" >"$log_fifo" 2>&1 &
+usque_pid=$!
+echo "$usque_pid" > /run/warp-usque.pid
+
+(
+  while IFS= read -r line; do
+    printf '%s\n' "$line" >&2
+    case "$line" in
+      *"not pollable"*)
+        pid=$(cat /run/warp-usque.pid 2>/dev/null || true)
+        [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+        ;;
+    esac
+  done < "$log_fifo"
+) &
+log_pid=$!
+
+(
+  i=0
+  while [ "$i" -lt "$GRACE" ]; do
+    kill -0 "$usque_pid" 2>/dev/null || exit 0
+    if [ -e "/sys/class/net/$IFACE" ] && curl --interface "$IFACE" -4 -s -o /dev/null --max-time 3 https://1.1.1.1/ 2>/dev/null; then
+      tme_code=$(probe_code "https://t.me/" 2)
+      if is_http_ok "$tme_code"; then
+        yt_code=$(probe_code "https://www.youtube.com/generate_204" 2)
+      else
+        yt_code="skip"
+      fi
+      if is_http_ok "$tme_code" && is_http_ok "$yt_code"; then
+        echo 0 > "$FAIL_COUNT_FILE"
+        echo 0 > "$TRANSPORT_FAILS_FILE"
+        echo 0 > "$EGRESS_TRIES_FILE"
+        touch /run/warp-healthy
+        exit 0
+      fi
+      etries=$(cat "$EGRESS_TRIES_FILE" 2>/dev/null || echo 0)
+      case "$etries" in ''|*[!0-9]*) etries=0;; esac
+      if [ "$etries" -lt "$MAX_EGRESS_TRIES" ]; then
+        etries=$((etries + 1))
+        echo "$etries" > "$EGRESS_TRIES_FILE"
+        echo 0 > "$FAIL_COUNT_FILE"
+        echo 0 > "$TRANSPORT_FAILS_FILE"
+        next=$(pick_next_endpoint "$ep")
+        cfg_set endpoint_h2_v4 "$next"
+        cfg_set endpoint_v4 "$next"
+        echo "$next" > "$END_FILE"
+        touch /run/warp-rotated
+        log "$transport endpoint $ep has filtered egress (t.me=${tme_code:-000} yt=${yt_code:-000}) - rerolling ($etries/$MAX_EGRESS_TRIES) -> $next"
+        kill "$usque_pid" 2>/dev/null || true
+        exit 0
+      fi
+      log "egress still filtered after $MAX_EGRESS_TRIES tries; keeping working $transport tunnel on $ep"
+      echo 0 > "$FAIL_COUNT_FILE"
+      echo 0 > "$TRANSPORT_FAILS_FILE"
+      echo 0 > "$EGRESS_TRIES_FILE"
+      touch /run/warp-healthy
+      exit 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  kill -0 "$usque_pid" 2>/dev/null || exit 0
+  echo 0 > "$FAIL_COUNT_FILE"
+  echo 0 > "$EGRESS_TRIES_FILE"
+  rotate_on_failure "$ep"
+  kill "$usque_pid" 2>/dev/null || true
+) &
+monitor_pid=$!
+
+set +e
+wait "$usque_pid"
+rc=$?
+set -e
+kill "$monitor_pid" 2>/dev/null || true
+wait "$monitor_pid" 2>/dev/null || true
+wait "$log_pid" 2>/dev/null || true
+rm -f "$log_fifo" /run/warp-usque.pid
+
+if [ ! -f /run/warp-healthy ] && [ ! -f /run/warp-rotated ]; then
+  echo 0 > "$EGRESS_TRIES_FILE"
+  fails=$(cat "$FAIL_COUNT_FILE" 2>/dev/null || echo 0)
+  case "$fails" in ''|*[!0-9]*) fails=0;; esac
+  fails=$((fails + 1))
+  echo "$fails" > "$FAIL_COUNT_FILE"
+  if [ "$fails" -ge 2 ]; then
+    rotate_on_failure "$ep"
+    echo 0 > "$FAIL_COUNT_FILE"
+  fi
+fi
+rm -f /run/warp-healthy /run/warp-rotated
+exit "$rc"
 RUNEOF
   chmod +x /usr/local/bin/warp-run.sh
   [ -f /etc/usque/transport ] || echo http2 > /etc/usque/transport
-  [ -f /etc/usque/family ] || echo auto > /etc/usque/family
 
   cat > /etc/systemd/system/usque.service <<EOF
 [Unit]
-Description=Cloudflare WARP via usque (MASQUE/QUIC)
+Description=Cloudflare WARP via usque (IPv4 MASQUE)
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStartPre=/bin/sh -c 'ip link del dev warp 2>/dev/null || true'
+ExecStartPre=/bin/sh -c '/etc/usque/down.sh 2>/dev/null || ip link del dev warp 2>/dev/null || true'
 ExecStart=/usr/local/bin/warp-run.sh
-ExecStopPost=/bin/sh -c 'ip link del dev warp 2>/dev/null || true'
+ExecStopPost=/bin/sh -c '/etc/usque/down.sh 2>/dev/null || ip link del dev warp 2>/dev/null || true'
 Restart=always
-RestartSec=3
+RestartSec=1
 TimeoutStopSec=5
 LimitNOFILE=65535
 
@@ -551,9 +662,10 @@ probe() {
     echo "000 999"
     return
   fi
-  curl --interface "$IFACE" -4 -sS -o /dev/null \
-    -w '%{http_code} %{time_total}\n' --max-time "$MAX_LATENCY" "$CHECK_TARGET" 2>/dev/null \
-    || echo "000 999"
+  local res
+  res=$(curl --interface "$IFACE" -4 -sS -o /dev/null \
+    -w '%{http_code} %{time_total}' --max-time "$MAX_LATENCY" "$CHECK_TARGET" 2>/dev/null) || res="000 999"
+  printf '%s\n' "${res:-000 999}"
 }
 
 good() {
@@ -616,7 +728,7 @@ try_register() {
       [ -x "$API_HELPER" ] && "$API_HELPER" clear >/dev/null 2>&1 || true
     fi
     rm -f "$USQUE_DIR/config.json.tmp" 2>/dev/null || true
-    out=$($USQUE_BIN register -a -c "$USQUE_DIR/config.json.tmp" 2>&1 || true)
+    out=$(GODEBUG="tlsmlkem=0,tlskyber=0" $USQUE_BIN register -a -c "$USQUE_DIR/config.json.tmp" 2>&1 || true)
     if [ -s "$USQUE_DIR/config.json.tmp" ]; then
       mv -f "$USQUE_DIR/config.json.tmp" "$USQUE_CONF"
       if [ -n "$try_ip" ]; then
@@ -730,14 +842,40 @@ fi
 
 log() { echo "$(date '+%F %T') $*" >> "$LOG"; }
 get_code() {
-  curl --interface "$IFACE" -4 -sS -o /dev/null -w '%{http_code}' --max-time 10 "$1" 2>/dev/null || true
+  curl --interface "$IFACE" -4 -sS -o /dev/null -w '%{http_code}' --max-time "${2:-10}" "$1" 2>/dev/null || true
 }
 probe_target() {
-  curl --interface "$IFACE" -4 -sS -o /dev/null -w '%{http_code} %{time_total}\n' \
-    --max-time "$((MAX_LATENCY + 2))" "$CHECK_TARGET" 2>/dev/null || echo "000 999"
+  local res
+  res=$(curl --interface "$IFACE" -4 -sS -o /dev/null -w '%{http_code} %{time_total}' \
+    --max-time "$((MAX_LATENCY + 2))" "$CHECK_TARGET" 2>/dev/null) || res="000 999"
+  printf '%s\n' "${res:-000 999}"
 }
 is_ok() { case "$1" in 2??|3??|401|403) return 0;; *) return 1;; esac; }
 is_fast() { awk -v t="$1" -v m="$MAX_LATENCY" 'BEGIN{exit !(t <= m)}'; }
+egress_ok() {
+  egress_detail="ok"
+  case "$CHECK_TARGET" in
+    https://api.telegram.org*|https://t.me*) ;;
+    *) return 0 ;;
+  esac
+  local tme_c="$code" yt_c
+  case "$CHECK_TARGET" in
+    https://api.telegram.org*)
+      tme_c=$(get_code "https://t.me/" 3)
+      if ! is_ok "$tme_c"; then
+        egress_detail="t.me=${tme_c:-000}"
+        return 1
+      fi
+      ;;
+  esac
+  yt_c=$(get_code "https://www.youtube.com/generate_204" 3)
+  if ! is_ok "$yt_c"; then
+    egress_detail="t.me=${tme_c:-000},yt=${yt_c:-000}"
+    return 1
+  fi
+  egress_detail="t.me=${tme_c},yt=${yt_c}"
+  return 0
+}
 
 # Cloudflare rate-limits registrations; rotating inside the window only extends
 # the ban, and warp-run.sh can try the other transport meanwhile.
@@ -757,11 +895,16 @@ fails_tunnel=0; fails_target=0; fails_slow=0; last_action=0
 [ -f "$STATE" ] && . "$STATE" 2>/dev/null || true
 
 now=$(date +%s)
-neutral=$(get_code "$NEUTRAL")
+neutral=$(get_code "$NEUTRAL" 4)
 read -r code t < <(probe_target) || true
-
+egress_detail="ok"
+egress_passed=1
 if is_ok "$neutral" && is_ok "$code" && is_fast "$t"; then
-  log "проверка OK: туннель=$neutral цель=$code (${t}s, лимит ${MAX_LATENCY}s)"
+  egress_ok || egress_passed=0
+fi
+
+if is_ok "$neutral" && is_ok "$code" && is_fast "$t" && [ "$egress_passed" -eq 1 ]; then
+  log "проверка OK: туннель=$neutral цель=$code (${t}s, выход $egress_detail, лимит ${MAX_LATENCY}s)"
   echo "fails_tunnel=0 fails_target=0 fails_slow=0 last_action=$last_action" > "$STATE"
   exit 0
 fi
@@ -772,6 +915,9 @@ if ! is_ok "$neutral"; then
 elif ! is_ok "$code"; then
   fails_target=$((fails_target + 1)); fails_slow=0
   log "туннель OK (${neutral}), цель недоступна (code=${code:-000}) попытка=$fails_target"
+elif [ "$egress_passed" -eq 0 ]; then
+  fails_target=$((fails_target + 1)); fails_slow=0
+  log "туннель OK (${neutral}), фильтрация выхода ($egress_detail) попытка=$fails_target"
 else
   fails_slow=$((fails_slow + 1)); fails_target=0; fails_tunnel=0
   log "цель отвечает медленно (${t}s >= ${MAX_LATENCY}s) попытка=$fails_slow"
@@ -786,11 +932,11 @@ fi
 if [ "$fails_tunnel" -ge 2 ]; then
   log "туннель не отвечает ($fails_tunnel), перезапускаю usque"
   systemctl restart usque
-  # warp-run.sh переключает транспорт через 25s, поэтому ждём дольше простого старта.
-  sleep 30
-  neutral=$(get_code "$NEUTRAL"); read -r code t < <(probe_target) || true
-  if is_ok "$neutral" && is_ok "$code" && is_fast "$t"; then
-    log "после рестарта рабочий IP активен (туннель=$neutral цель=$code ${t}s)"
+  # warp-run.sh перебирает ECMP-выход или транспорт за ~25-35s.
+  sleep 25
+  neutral=$(get_code "$NEUTRAL" 4); read -r code t < <(probe_target) || true
+  if is_ok "$neutral" && is_ok "$code" && is_fast "$t" && egress_ok; then
+    log "после рестарта рабочий IP активен (туннель=$neutral цель=$code ${t}s $egress_detail)"
     echo "fails_tunnel=0 fails_target=0 fails_slow=0 last_action=$now" > "$STATE"
     exit 0
   fi
@@ -804,14 +950,20 @@ if [ "$fails_tunnel" -ge 2 ]; then
   exit 0
 fi
 
-# Недоступен (3 нет) или стабильно медленный (3 медленно): подбираем рабочий IP.
-if [ "$fails_target" -ge 3 ] || [ "$fails_slow" -ge 3 ]; then
+# Цель или выход недоступны (2 раза подряд) либо стабильно медленно (3): сначала рестарт для смены ECMP-узла.
+if [ "$fails_target" -ge 2 ] || [ "$fails_slow" -ge 3 ]; then
+  log "проблема выхода/задержки (fails=$fails_target slow=$fails_slow) — перезапускаю usque"
+  systemctl restart usque
+  sleep 25
+  neutral=$(get_code "$NEUTRAL" 4); read -r code t < <(probe_target) || true
+  if is_ok "$neutral" && is_ok "$code" && is_fast "$t" && egress_ok; then
+    log "после рестарта маршрут восстановлен (туннель=$neutral цель=$code ${t}s $egress_detail)"
+    echo "fails_tunnel=0 fails_target=0 fails_slow=0 last_action=$now" > "$STATE"
+    exit 0
+  fi
   if [ "$AUTO_ROTATE" = "1" ]; then
-    log "нерабочий IP (fails=$fails_target slow_fails=$fails_slow) — подбираю рабочий IP"
+    log "рестарт не помог (fails=$fails_target slow_fails=$fails_slow) — подбираю рабочий IP"
     rotate_now
-  else
-    log "нерабочий IP (fails=$fails_target slow_fails=$fails_slow), автосмена выключена — перезапускаю usque"
-    systemctl restart usque
   fi
   echo "fails_tunnel=0 fails_target=0 fails_slow=0 last_action=$now" > "$STATE"
   exit 0
@@ -861,7 +1013,10 @@ install_rotate_script
 install_watch_cron
 
 systemctl enable --now usque 2>/dev/null || true
-sleep 3
+for _ in $(seq 1 35); do
+  [ -f /run/warp-healthy ] && break
+  sleep 1
+done
 
 echo "--- Подбор рабочего WARP IP ---"
 ROTATE_LOG_TO_WATCH=0 MAX_LATENCY="${MAX_LATENCY:-5}" bash /usr/local/bin/warp-rotate.sh || true
@@ -871,7 +1026,8 @@ WARP_COUNTRY="$(get_country "$IFACE")"
 echo "  WARP IP: $WARP_IP${WARP_COUNTRY:+ (страна: $WARP_COUNTRY)}"
 
 CHECK_TARGET="${CHECK_URL:-https://api.telegram.org/}"
-read -r CODE t < <(curl --interface "$IFACE" -4 -sS -o /dev/null -w '%{http_code} %{time_total}\n' --max-time 6 "$CHECK_TARGET" 2>/dev/null || echo "000 999") || true
+RES=$(curl --interface "$IFACE" -4 -sS -o /dev/null -w '%{http_code} %{time_total}' --max-time 6 "$CHECK_TARGET" 2>/dev/null) || RES="000 999"
+read -r CODE t <<< "${RES:-000 999}"
 echo "  $CHECK_TARGET → HTTP ${CODE:-000} (${t:-0}s, лимит ${MAX_LATENCY:-5}s)"
 
 CHECK_INTERVAL="${CHECK_INTERVAL:-5}"

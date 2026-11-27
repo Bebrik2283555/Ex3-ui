@@ -70,6 +70,34 @@ describe('buildClonePayload', () => {
     const settings = JSON.parse(payload.settings);
     expect(settings.clients ?? []).toEqual([]);
   });
+
+  it('zeros port and routeXrayPort when cloning olcRTC so a second inbound gets a free bridge port', () => {
+    const olcrtc = new DBInbound({
+      id: 6,
+      port: 0,
+      listen: '0.0.0.0',
+      protocol: 'olcrtc',
+      remark: 'vk-1',
+      enable: true,
+      settings: JSON.stringify({
+        clients: [{ email: 'Me', password: 'pw', enable: true }],
+        sidecar: {
+          provider: 'vkcalls',
+          roomId: 'https://vk.ru/call/join/room1',
+          cryptoKey: 'a'.repeat(64),
+          transport: 'vp8channel',
+          routeThroughXray: true,
+          routeXrayPort: 45145,
+        },
+      }),
+    });
+    const payload = buildClonePayload(olcrtc, 23456, null);
+    expect(payload.port).toBe(0);
+    const settings = JSON.parse(payload.settings);
+    expect(settings.clients).toEqual([]);
+    expect(settings.sidecar.routeXrayPort).toBe(0);
+    expect(settings.sidecar.roomId).toBe('https://vk.ru/call/join/room1');
+  });
 });
 
 describe('pickClonePort', () => {

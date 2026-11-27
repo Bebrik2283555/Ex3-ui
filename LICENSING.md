@@ -30,7 +30,7 @@ authors.
 | 3x-ui | GPL-3.0 | `licenses/LICENSE-3x-ui-GPL-3.0.txt` |
 | Xray-core | MPL-2.0 | `licenses/LICENSE-xray-core-MPL-2.0.txt` |
 | qWDTT (`bin/extra-qwdtt`) | GPL-3.0 | `licenses/LICENSE-qwdtt-GPL-3.0.txt` |
-| olcRTC (`bin/extra-olcrtc`) | WTFPL-2.0 | `licenses/LICENSE-olcrtc-WTFPL-2.0.txt` |
+| olcRTC (`bin/extra-olcrtc`) | Apache-2.0 (fork of WTFPL-2.0 upstream) | `licenses/LICENSE-olcrtc-Apache-2.0.txt` |
 | TUIC (`bin/tuic-server*`) | GPL-3.0 | `licenses/LICENSE-tuic-GPL-3.0.txt` |
 | mtg (`bin/mtg-linux-*`) | MIT | `licenses/LICENSE-mtg-multi-MIT.txt` |
 | zapret | MIT | `licenses/LICENSE-zapret-linux-easy-MIT.txt` |

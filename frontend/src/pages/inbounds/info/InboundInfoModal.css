@@ -187,15 +187,16 @@
   padding: 6px 8px;
   background: var(--ant-color-fill-tertiary);
   border-radius: 4px;
-  color: var(--ant-color-primary);
+  color: var(--ant-color-primary-text);
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--ant-color-primary) 40%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--ant-color-primary-text) 40%, transparent);
   transition:
     background 120ms ease,
     text-decoration-color 120ms ease;
 }
 
 .link-panel-anchor:hover {
-  background: color-mix(in srgb, var(--ant-color-primary) 12%, transparent);
-  text-decoration-color: var(--ant-color-primary);
+  background: var(--ant-color-primary-bg);
+  color: var(--ant-color-primary-text);
+  text-decoration-color: var(--ant-color-primary-text);
 }

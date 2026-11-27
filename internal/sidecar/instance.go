@@ -54,26 +54,30 @@ type QWDTTConfig struct {
 
 // OLCRTCConfig is the olcRTC block of an inbound's settings JSON.
 type OLCRTCConfig struct {
-	Provider   string `json:"provider,omitempty"`
-	RoomID     string `json:"roomId,omitempty"`
-	CryptoKey  string `json:"cryptoKey,omitempty"`
-	Transport  string `json:"transport,omitempty"`
-	VP8Fps     int    `json:"vp8Fps,omitempty"`
-	VP8Batch   int    `json:"vp8Batch,omitempty"`
-	SeiFps     int    `json:"seiFps,omitempty"`
-	SeiBatch   int    `json:"seiBatch,omitempty"`
-	SeiFrag    int    `json:"seiFrag,omitempty"`
-	SeiAck     int    `json:"seiAck,omitempty"`
-	VideoW     int    `json:"videoW,omitempty"`
-	VideoH     int    `json:"videoH,omitempty"`
-	VideoFps   int    `json:"videoFps,omitempty"`
-	VideoCodec string `json:"videoCodec,omitempty"`
-	DNS        string `json:"dns,omitempty"`
-	DataDir    string `json:"dataDir,omitempty"`
-	ConfigFile string `json:"configFile,omitempty"`
-	PublicHost string `json:"publicHost,omitempty"`
-	SubHost    string `json:"subHost,omitempty"`
-	Debug      bool   `json:"debug,omitempty"`
+	Provider    string `json:"provider,omitempty"`
+	AuthToken   string `json:"authToken,omitempty"`
+	RoomID      string `json:"roomId,omitempty"`
+	CryptoKey   string `json:"cryptoKey,omitempty"`
+	Transport   string `json:"transport,omitempty"`
+	VP8Fps      int    `json:"vp8Fps,omitempty"`
+	VP8Batch    int    `json:"vp8Batch,omitempty"`
+	SeiFps      int    `json:"seiFps,omitempty"`
+	SeiBatch    int    `json:"seiBatch,omitempty"`
+	SeiFrag     int    `json:"seiFrag,omitempty"`
+	SeiAck      int    `json:"seiAck,omitempty"`
+	VideoW      int    `json:"videoW,omitempty"`
+	VideoH      int    `json:"videoH,omitempty"`
+	VideoFps    int    `json:"videoFps,omitempty"`
+	VideoCodec  string `json:"videoCodec,omitempty"`
+	DNS         string `json:"dns,omitempty"`
+	ICELocalIP  string `json:"iceLocalIp,omitempty"`
+	DTLSProfile string `json:"dtlsProfile,omitempty"`
+	UDPEnabled  bool   `json:"udpEnabled,omitempty"`
+	DataDir     string `json:"dataDir,omitempty"`
+	ConfigFile  string `json:"configFile,omitempty"`
+	PublicHost  string `json:"publicHost,omitempty"`
+	SubHost     string `json:"subHost,omitempty"`
+	Debug       bool   `json:"debug,omitempty"`
 
 	RouteThroughXray bool   `json:"routeThroughXray,omitempty"`
 	OutboundTag      string `json:"outboundTag,omitempty"`
@@ -474,6 +478,15 @@ func resolveQWDTT(inst *Instance, dataDir string) error {
 func resolveOLCRTC(inst *Instance, dataDir string) error {
 	cfg := inst.OLCRTC
 	name := DisplayName(inst.Protocol)
+	cfg.Provider = strings.TrimSpace(cfg.Provider)
+	cfg.AuthToken = strings.TrimSpace(cfg.AuthToken)
+	cfg.RoomID = strings.TrimSpace(cfg.RoomID)
+	cfg.CryptoKey = strings.TrimSpace(cfg.CryptoKey)
+	cfg.Transport = strings.TrimSpace(cfg.Transport)
+	cfg.VideoCodec = strings.TrimSpace(cfg.VideoCodec)
+	cfg.DNS = strings.TrimSpace(cfg.DNS)
+	cfg.ICELocalIP = strings.TrimSpace(cfg.ICELocalIP)
+	cfg.DTLSProfile = strings.TrimSpace(cfg.DTLSProfile)
 	if cfg.ConfigFile == "" {
 		cfg.ConfigFile = filepath.Join(dataDir, "server.yaml")
 	}

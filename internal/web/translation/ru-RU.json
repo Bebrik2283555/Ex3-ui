@@ -880,7 +880,23 @@
         "debug": "Отладка",
         "debugTip": "Подробные логи olcRTC.",
         "legacyLink": "Старая ссылка wdtt://",
-        "subJsonLink": "JSON-подписка qWDTT"
+        "subJsonLink": "JSON-подписка qWDTT",
+        "authToken": "Токен аккаунта / модератора",
+        "authTokenTip": "Обязателен для MAX Calls; открывает datachannel для WbStream при правах модератора.",
+        "requiredAuthToken": "Для MAX требуется токен",
+        "iceLocalIp": "Локальный IP для ICE",
+        "iceLocalIpTip": "Необязательный IPv4-адрес интерфейса для ICE; снижает число TURN-аллокаций на серверах с TUN.",
+        "invalidIceLocalIp": "Укажите корректный unicast IPv4-адрес",
+        "invalidRoomVkcalls": "Для VK Calls нужна ссылка вида https://vk.ru/call/join/<id>",
+        "invalidRoomSalutejazz": "Для SaluteJazz нужен формат <code>:<password> (строчные латинские буквы и цифры)",
+        "invalidRoomMtslink": "Для MTS Link нужна ссылка на встречу вида https://my.mts-link.ru/j/<owner>/<event>",
+        "invalidRoomJitsi": "Для Jitsi нужен формат host/room или https://host/room",
+        "dtlsProfile": "Профиль DTLS",
+        "dtlsProfileTip": "Отпечаток ClientHello для DTLS-рукопожатия.",
+        "dtlsProfileDefault": "По умолчанию (стандартный)",
+        "dtlsProfileOff": "Отключён",
+        "udpEnabled": "UDP-релей (звонки/игры)",
+        "udpEnabledTip": "Включить передачу UDP ASSOCIATE (SOCKS5) через туннель."
       }
     },
     "clients": {

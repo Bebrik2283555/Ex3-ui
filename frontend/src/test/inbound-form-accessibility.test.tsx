@@ -35,22 +35,46 @@ function renderInbound(mode: 'add' | 'edit' = 'add') {
   return userEvent.setup();
 }
 
+function selectText(combobox: HTMLElement): string {
+  return (combobox.closest('.ant-select')?.textContent ?? '').trim();
+}
+
+async function selectAntdOption(
+  user: ReturnType<typeof userEvent.setup>,
+  dialog: HTMLElement,
+  combobox: HTMLElement,
+  optionName: string,
+) {
+  await user.click(combobox);
+  const dropdown = Array.from(
+    dialog.querySelectorAll<HTMLElement>('.ant-select-dropdown:not(.ant-select-dropdown-hidden)'),
+  ).at(-1);
+  if (!dropdown) throw new Error(`Open select dropdown not found for '${combobox.id}'`);
+  const option = Array.from(dropdown.querySelectorAll<HTMLElement>('.ant-select-item-option')).find(
+    (el) => (el.getAttribute('title') ?? el.textContent ?? '').trim() === optionName,
+  );
+  if (!option) throw new Error(`Option '${optionName}' not found`);
+  await user.click(option);
+}
+
 describe('Inbound screen-reader interaction', () => {
   it('exposes the selected protocol as the closed control value', () => {
     renderInbound();
-    expect(screen.getByRole('combobox', { name: 'Protocol' })).toHaveDisplayValue('vless');
+    const protocol = screen.getByRole('combobox', { name: 'Protocol' });
+    expect(selectText(protocol)).toBe('vless');
   });
+
   it('exposes all visible protocol options as selectable items within its dialog', async () => {
     const user = renderInbound();
-    const dialog = screen.getByRole('dialog', { name: 'Add Inbound' });
+    const dialog = screen.getByRole('dialog', { name: /^Add Inbound/ });
     const protocol = within(dialog).getByRole('combobox', { name: 'Protocol' });
-    const shadowsocks = within(protocol).getByRole('option', { name: 'shadowsocks' });
-    expect(within(protocol).getByRole('option', { name: 'tuic' })).toBeInTheDocument();
+    await user.click(protocol);
+    expect(within(dialog).getByRole('option', { name: 'tuic' })).toBeInTheDocument();
     expect(
-      within(protocol).getByRole('option', { name: 'vless', selected: true }),
+      within(dialog).getByRole('option', { name: 'vless', selected: true }),
     ).toBeInTheDocument();
-    await user.selectOptions(protocol, shadowsocks);
-    expect(protocol).toHaveDisplayValue('shadowsocks');
+    await user.click(within(dialog).getByRole('option', { name: 'shadowsocks' }));
+    expect(selectText(protocol)).toBe('shadowsocks');
     await user.click(screen.getByRole('tab', { name: 'Protocol' }));
     expect(screen.getByRole('combobox', { name: 'Encryption method' })).toBeVisible();
   });
@@ -58,12 +82,10 @@ describe('Inbound screen-reader interaction', () => {
   it('selects transport by its option role and submits the actual create payload', async () => {
     const post = vi.mocked(HttpUtil.post).mockClear();
     const user = renderInbound();
+    const dialog = screen.getByRole('dialog', { name: /^Add Inbound/ });
     await user.click(screen.getByRole('tab', { name: 'Stream' }));
     const transport = screen.getByRole('combobox', { name: 'Transmission' });
-    await user.selectOptions(
-      transport,
-      within(transport).getByRole('option', { name: 'WebSocket' }),
-    );
+    await selectAntdOption(user, dialog, transport, 'WebSocket');
     const path = screen.getByRole('textbox', { name: 'Path' });
     await user.clear(path);
     await user.type(path, '/accessible');
@@ -96,9 +118,10 @@ describe('Inbound screen-reader interaction', () => {
   it('preserves edit serialization after a keyboard-accessible transport change', async () => {
     const post = vi.mocked(HttpUtil.post).mockClear();
     const user = renderInbound('edit');
+    const dialog = screen.getByRole('dialog', { name: 'Modify Inbound' });
     await user.click(screen.getByRole('tab', { name: 'Stream' }));
     const transport = screen.getByRole('combobox', { name: 'Transmission' });
-    await user.selectOptions(transport, within(transport).getByRole('option', { name: 'gRPC' }));
+    await selectAntdOption(user, dialog, transport, 'gRPC');
     await user.click(screen.getByRole('button', { name: 'Save Changes' }));
     await waitFor(() =>
       expect(post).toHaveBeenCalledWith('/panel/api/inbounds/update/41', expect.anything()),
@@ -118,8 +141,9 @@ describe('Inbound screen-reader interaction', () => {
   it('reveals and describes a validation error on a hidden tab without submitting', async () => {
     const post = vi.mocked(HttpUtil.post).mockClear();
     const user = renderInbound();
+    const dialog = screen.getByRole('dialog', { name: /^Add Inbound/ });
     const strategy = screen.getByRole('combobox', { name: 'Share address strategy' });
-    await user.selectOptions(strategy, within(strategy).getByRole('option', { name: 'Custom' }));
+    await selectAntdOption(user, dialog, strategy, 'Custom');
     const address = screen.getByRole('textbox', { name: 'Custom share address' });
     await user.type(address, 'https://example.test/path');
     await user.click(screen.getByRole('tab', { name: 'Stream' }));

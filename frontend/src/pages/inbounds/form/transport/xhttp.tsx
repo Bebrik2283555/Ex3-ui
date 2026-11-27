@@ -1,6 +1,5 @@
-import { NativeSelect } from '@/components/form/NativeSelect';
 import { useTranslation } from 'react-i18next';
-import { AutoComplete, Input, InputNumber, Switch } from 'antd';
+import { AutoComplete, Input, InputNumber, Select, Switch } from 'antd';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import { HeaderMapEditor } from '@/components/form';
@@ -82,7 +81,7 @@ export default function XhttpForm() {
         name={['streamSettings', 'xhttpSettings', 'mode']}
         label={t('pages.inbounds.info.mode')}
       >
-        <NativeSelect
+        <Select
           style={{ width: '50%' }}
           options={(['auto', 'packet-up', 'stream-up', 'stream-one'] as const).map((m) => ({
             value: m,
@@ -150,7 +149,7 @@ export default function XhttpForm() {
         name={['streamSettings', 'xhttpSettings', 'uplinkHTTPMethod']}
         label={t('pages.inbounds.form.uplinkHttpMethod')}
       >
-        <NativeSelect
+        <Select
           options={[
             { value: '', label: 'Default (POST)' },
             { value: 'POST', label: 'POST' },
@@ -188,7 +187,7 @@ export default function XhttpForm() {
             name={['streamSettings', 'xhttpSettings', 'xPaddingPlacement']}
             label={t('pages.inbounds.form.paddingPlacement')}
           >
-            <NativeSelect
+            <Select
               options={[
                 { value: '', label: 'Default (queryInHeader)' },
                 { value: 'queryInHeader', label: 'queryInHeader' },
@@ -202,7 +201,7 @@ export default function XhttpForm() {
             name={['streamSettings', 'xhttpSettings', 'xPaddingMethod']}
             label={t('pages.inbounds.form.paddingMethod')}
           >
-            <NativeSelect
+            <Select
               options={[
                 { value: '', label: 'Default (repeat-x)' },
                 { value: 'repeat-x', label: 'repeat-x' },
@@ -216,7 +215,7 @@ export default function XhttpForm() {
         name={['streamSettings', 'xhttpSettings', 'sessionIDPlacement']}
         label={t('pages.inbounds.form.sessionPlacement')}
       >
-        <NativeSelect
+        <Select
           options={[
             { value: '', label: 'Default (path)' },
             { value: 'path', label: 'path' },
@@ -260,7 +259,7 @@ export default function XhttpForm() {
         name={['streamSettings', 'xhttpSettings', 'seqPlacement']}
         label={t('pages.inbounds.form.sequencePlacement')}
       >
-        <NativeSelect
+        <Select
           options={[
             { value: '', label: 'Default (path)' },
             { value: 'path', label: 'path' },
@@ -284,7 +283,7 @@ export default function XhttpForm() {
             name={['streamSettings', 'xhttpSettings', 'uplinkDataPlacement']}
             label={t('pages.inbounds.form.uplinkDataPlacement')}
           >
-            <NativeSelect
+            <Select
               options={[
                 { value: '', label: 'Default (auto)' },
                 { value: 'auto', label: 'auto' },

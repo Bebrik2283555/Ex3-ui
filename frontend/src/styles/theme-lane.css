@@ -70,3 +70,25 @@ html[data-theme='lane'] .command-palette-modal.light .command-palette-action-btn
   background: rgba(20, 20, 20, 0.08);
   color: #141414;
 }
+
+/* Concentric inner radius inside 20px popups (20px outer - 4px paddingXXS)
+   so selected/hovered options follow the rounded popup corners cleanly. */
+html[data-theme='lane']
+  :is(
+    .ant-select-dropdown .ant-select-item,
+    .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item,
+    .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-submenu-title,
+    .ant-cascader-dropdown .ant-cascader-menu-item
+  ) {
+  border-radius: 16px;
+}
+
+html[data-theme='lane'] .ant-segmented.ant-segmented-sm {
+  border-radius: 12px;
+}
+
+html[data-theme='lane']
+  .ant-segmented.ant-segmented-sm
+  :is(.ant-segmented-item, .ant-segmented-thumb) {
+  border-radius: 10px;
+}

@@ -112,104 +112,120 @@ export default function OptimizePage() {
         <AppSidebar />
         <Layout className="content-shell">
           <Layout.Content id="content-layout" className="content-area">
-            <Spin aria-live="off" spinning={isLoading}>
+            <Spin aria-live="off" spinning={isLoading && !!status}>
               <Title level={3}>{t('menu.optimize')}</Title>
               <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
                 {t('pages.optimize.desc')}
               </Text>
 
-              <Card
-                title={t('pages.optimize.currentState')}
-                variant="borderless"
-                style={{ marginBottom: 16 }}
-              >
-                {isError ? (
-                  <Result status="error" title={t('pages.optimize.loadFailed')} />
-                ) : (
-                  renderStatus()
-                )}
-              </Card>
+              {isError && !status ? (
+                <Result status="error" title={t('pages.optimize.loadFailed')} />
+              ) : !status ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+                  <Spin aria-live="off" />
+                </div>
+              ) : (
+                <>
+                  <Card
+                    title={t('pages.optimize.currentState')}
+                    variant="borderless"
+                    style={{ marginBottom: 16 }}
+                  >
+                    {renderStatus()}
+                  </Card>
 
-              <Card
-                title={
-                  <>
-                    <ThunderboltOutlined aria-hidden />{' '}
-                    {allApplied ? t('pages.optimize.allApplied') : t('pages.optimize.applyTitle')}
-                  </>
-                }
-                variant="borderless"
-                style={{ marginBottom: 16 }}
-              >
-                {allApplied ? (
-                  <Result
-                    status="success"
-                    title={t('pages.optimize.allApplied')}
-                    subTitle={t('pages.optimize.allAppliedDesc')}
-                    extra={
-                      <Button danger loading={busy === 'revert'} onClick={() => void runRevert()}>
-                        {t('pages.optimize.revert')}
-                      </Button>
+                  <Card
+                    title={
+                      <>
+                        <ThunderboltOutlined aria-hidden />{' '}
+                        {allApplied
+                          ? t('pages.optimize.allApplied')
+                          : t('pages.optimize.applyTitle')}
+                      </>
                     }
-                  />
-                ) : (
-                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                    <Checkbox checked={dns} onChange={(e) => setDns(e.target.checked)}>
-                      {t('pages.optimize.dnsOption')}
-                    </Checkbox>
-                    {dns && (
-                      <Select
-                        aria-label={t('pages.optimize.dnsOption')}
-                        mode="tags"
-                        tagRender={selectTagRender}
-                        style={{ width: '100%', maxWidth: 420 }}
-                        value={dnsResolvers}
-                        placeholder="1.1.1.1, 1.0.0.1"
-                        onChange={(values: string[]) => setDnsResolvers(values.slice(0, 3))}
-                        options={[
-                          { value: '1.1.1.1', label: '1.1.1.1' },
-                          { value: '1.0.0.1', label: '1.0.0.1' },
-                          { value: '8.8.8.8', label: '8.8.8.8' },
-                          { value: '8.8.4.4', label: '8.8.4.4' },
-                        ]}
+                    variant="borderless"
+                    style={{ marginBottom: 16 }}
+                  >
+                    {allApplied ? (
+                      <Result
+                        status="success"
+                        title={t('pages.optimize.allApplied')}
+                        subTitle={t('pages.optimize.allAppliedDesc')}
+                        extra={
+                          <Button
+                            danger
+                            loading={busy === 'revert'}
+                            onClick={() => void runRevert()}
+                          >
+                            {t('pages.optimize.revert')}
+                          </Button>
+                        }
                       />
+                    ) : (
+                      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                        <Checkbox checked={dns} onChange={(e) => setDns(e.target.checked)}>
+                          {t('pages.optimize.dnsOption')}
+                        </Checkbox>
+                        {dns && (
+                          <Select
+                            aria-label={t('pages.optimize.dnsOption')}
+                            mode="tags"
+                            tagRender={selectTagRender}
+                            style={{ width: '100%', maxWidth: 420 }}
+                            value={dnsResolvers}
+                            placeholder="1.1.1.1, 1.0.0.1"
+                            onChange={(values: string[]) => setDnsResolvers(values.slice(0, 3))}
+                            options={[
+                              { value: '1.1.1.1', label: '1.1.1.1' },
+                              { value: '1.0.0.1', label: '1.0.0.1' },
+                              { value: '8.8.8.8', label: '8.8.8.8' },
+                              { value: '8.8.4.4', label: '8.8.4.4' },
+                            ]}
+                          />
+                        )}
+                        <Checkbox checked={bbr} onChange={(e) => setBbr(e.target.checked)}>
+                          {t('pages.optimize.bbrOption')}
+                        </Checkbox>
+                        <Checkbox checked={tcp} onChange={(e) => setTcp(e.target.checked)}>
+                          {t('pages.optimize.tcpOption')}
+                        </Checkbox>
+                        <Space>
+                          <Checkbox checked={swap} onChange={(e) => setSwap(e.target.checked)}>
+                            {t('pages.optimize.swapOption')}
+                          </Checkbox>
+                          {swap && (
+                            <InputNumber
+                              aria-label={t('pages.optimize.swapOption')}
+                              min={64}
+                              step={128}
+                              value={swapSize}
+                              onChange={(v) => setSwapSize(Number(v) || 0)}
+                              addonAfter="MiB"
+                            />
+                          )}
+                        </Space>
+                        <Divider style={{ margin: '8px 0' }} />
+                        <Space>
+                          <Button
+                            type="primary"
+                            loading={busy === 'apply'}
+                            onClick={() => void runApply()}
+                          >
+                            {t('pages.optimize.apply')}
+                          </Button>
+                          <Button
+                            danger
+                            loading={busy === 'revert'}
+                            onClick={() => void runRevert()}
+                          >
+                            {t('pages.optimize.revert')}
+                          </Button>
+                        </Space>
+                      </Space>
                     )}
-                    <Checkbox checked={bbr} onChange={(e) => setBbr(e.target.checked)}>
-                      {t('pages.optimize.bbrOption')}
-                    </Checkbox>
-                    <Checkbox checked={tcp} onChange={(e) => setTcp(e.target.checked)}>
-                      {t('pages.optimize.tcpOption')}
-                    </Checkbox>
-                    <Space>
-                      <Checkbox checked={swap} onChange={(e) => setSwap(e.target.checked)}>
-                        {t('pages.optimize.swapOption')}
-                      </Checkbox>
-                      {swap && (
-                        <InputNumber
-                          aria-label={t('pages.optimize.swapOption')}
-                          min={64}
-                          step={128}
-                          value={swapSize}
-                          onChange={(v) => setSwapSize(Number(v) || 0)}
-                          addonAfter="MiB"
-                        />
-                      )}
-                    </Space>
-                    <Divider style={{ margin: '8px 0' }} />
-                    <Space>
-                      <Button
-                        type="primary"
-                        loading={busy === 'apply'}
-                        onClick={() => void runApply()}
-                      >
-                        {t('pages.optimize.apply')}
-                      </Button>
-                      <Button danger loading={busy === 'revert'} onClick={() => void runRevert()}>
-                        {t('pages.optimize.revert')}
-                      </Button>
-                    </Space>
-                  </Space>
-                )}
-              </Card>
+                  </Card>
+                </>
+              )}
             </Spin>
           </Layout.Content>
         </Layout>

@@ -15,6 +15,9 @@ export function buildClonePayload(dbInbound: DBInbound, port: number, nodeId: nu
   try {
     const raw = { ...coerceInboundJsonField(dbInbound.settings) };
     raw.clients = [];
+    if (raw.sidecar && typeof raw.sidecar === 'object' && !Array.isArray(raw.sidecar)) {
+      raw.sidecar = { ...(raw.sidecar as Record<string, unknown>), routeXrayPort: 0 };
+    }
     clonedSettings = JSON.stringify(raw);
   } catch {
     const fallback = createDefaultInboundSettings(dbInbound.protocol);
@@ -36,7 +39,7 @@ export function buildClonePayload(dbInbound: DBInbound, port: number, nodeId: nu
     enable: false,
     expiryTime: 0,
     listen: '',
-    port,
+    port: dbInbound.protocol === 'olcrtc' ? 0 : port,
     protocol: dbInbound.protocol,
     settings: clonedSettings,
     streamSettings: streamSettingsString,

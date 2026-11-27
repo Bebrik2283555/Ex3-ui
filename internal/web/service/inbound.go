@@ -1321,6 +1321,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	if err := normalizeTuicSettings(inbound); err != nil {
 		return inbound, false, err
 	}
+	explicitRoutePort := inbound.Protocol == model.OLCRTC && sidecar.HasRouteXrayPort(inbound.Settings)
 	if err := normalizeSidecarSettings(inbound); err != nil {
 		return inbound, false, err
 	}
@@ -1527,7 +1528,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	needRestart := false
 	var postCommitApply func()
 	err = runSerializedTx(func(tx *gorm.DB) error {
-		conflict, cErr := checkPortConflictTx(tx, inbound, 0)
+		conflict, cErr := resolveSidecarPortConflictTx(tx, inbound, 0, !explicitRoutePort)
 		if cErr != nil {
 			return cErr
 		}
@@ -2121,6 +2122,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	if err := normalizeTuicSettings(inbound); err != nil {
 		return inbound, false, err
 	}
+	explicitRoutePort := inbound.Protocol == model.OLCRTC && sidecar.HasRouteXrayPort(inbound.Settings)
 	if err := normalizeSidecarSettings(inbound); err != nil {
 		return inbound, false, err
 	}
@@ -2201,7 +2203,7 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		if err := validateVlessManagedFallbacks(tx, inbound); err != nil {
 			return err
 		}
-		conflict, cErr := checkPortConflictTx(tx, inbound, inbound.Id)
+		conflict, cErr := resolveSidecarPortConflictTx(tx, inbound, inbound.Id, !explicitRoutePort)
 		if cErr != nil {
 			return cErr
 		}
@@ -2514,6 +2516,28 @@ func normalizeSidecarSettings(inbound *model.Inbound) error {
 		return common.NewError(err.Error())
 	}
 	return nil
+}
+
+// resolveSidecarPortConflictTx retries an auto-allocated olcRTC bridge port
+// when the OS hands back a port reserved by a stopped/disabled DB inbound.
+func resolveSidecarPortConflictTx(tx *gorm.DB, inbound *model.Inbound, ignoreID int, allowAutoRouteRealloc bool) (*portConflictDetail, error) {
+	conflict, err := checkPortConflictTx(tx, inbound, ignoreID)
+	if err != nil || conflict == nil {
+		return conflict, err
+	}
+	if !allowAutoRouteRealloc || inbound.Protocol != model.OLCRTC || conflict.CandidateRole != "routeXrayPort" {
+		return conflict, nil
+	}
+	for range 16 {
+		if err := sidecar.ReallocateRouteXrayPort(inbound); err != nil {
+			return conflict, nil
+		}
+		conflict, err = checkPortConflictTx(tx, inbound, ignoreID)
+		if err != nil || conflict == nil || conflict.CandidateRole != "routeXrayPort" {
+			return conflict, err
+		}
+	}
+	return conflict, nil
 }
 
 // applyInboundUserOps reports whether per-user core ops moved running to next, so

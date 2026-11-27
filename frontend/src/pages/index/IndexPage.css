@@ -99,7 +99,7 @@
 .ov-state-version:focus-visible,
 .ov-panel-version:hover,
 .ov-panel-version:focus-visible {
-  color: var(--ant-color-primary);
+  color: var(--ant-color-primary-text);
 }
 
 .ov-panel-version {

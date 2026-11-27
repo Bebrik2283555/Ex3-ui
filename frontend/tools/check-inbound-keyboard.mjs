@@ -54,11 +54,55 @@ try {
       );
     }
 
-    async function selectByKey(locator, key, label) {
+    async function selectText(locator) {
+      return locator.evaluate((element) => {
+        const root = element.closest('.ant-select');
+        const item = root?.querySelector('.ant-select-selection-item');
+        return (item?.textContent ?? root?.textContent ?? '').trim();
+      });
+    }
+
+    async function activeOptionText(locator) {
+      return locator.evaluate((element) => {
+        const id = element.getAttribute('aria-activedescendant');
+        return id ? (document.getElementById(id)?.textContent ?? '').trim() : '';
+      });
+    }
+
+    async function waitExpanded(handle, expanded) {
+      await page.waitForFunction(
+        ([el, state]) => el?.getAttribute('aria-expanded') === state,
+        [handle, expanded],
+      );
+    }
+
+    async function selectOptionByKeyboard(locator, label) {
       await tabTo(locator);
-      if (key.length === 1) await page.keyboard.press(key);
-      else await page.keyboard.type(key);
-      assert.equal(await locator.evaluate((element) => element.selectedOptions[0].text), label);
+      await page.keyboard.press('ArrowDown');
+      const combobox = await locator.elementHandle();
+      if ((await locator.getAttribute('aria-expanded')) !== 'true') {
+        await page.keyboard.press('Space');
+      }
+      await waitExpanded(combobox, 'true');
+      const listId = await locator.getAttribute('aria-controls');
+      const optionCount = await page.evaluate(
+        (id) =>
+          id ? (document.getElementById(id)?.querySelectorAll('[role="option"]').length ?? 0) : 0,
+        listId,
+      );
+      assert.ok(optionCount > 0, `Dropdown options did not render for '${label}'`);
+
+      let found = (await activeOptionText(locator)) === label;
+      for (const arrow of ['ArrowDown', 'ArrowUp']) {
+        for (let i = 0; !found && i < optionCount; i++) {
+          await page.keyboard.press(arrow);
+          found = (await activeOptionText(locator)) === label;
+        }
+      }
+      assert.ok(found, `Option '${label}' was not reachable via keyboard`);
+      await page.keyboard.press('Enter');
+      await waitExpanded(combobox, 'false');
+      assert.equal(await selectText(locator), label);
       assert.ok(
         await locator.evaluate((element) => element === document.activeElement),
         'Selection lost focus',
@@ -101,30 +145,40 @@ try {
         await activateTab(dialog, 'Basics');
         if (!mobile) {
           await tabTo(protocol);
-          await page.keyboard.press('Alt+ArrowDown');
+          const protocolHandle = await protocol.elementHandle();
+          await page.keyboard.press('ArrowDown');
+          await waitExpanded(protocolHandle, 'true');
           await page.keyboard.press('Escape');
-          assert.ok(await dialog.isVisible(), 'Canceling a native picker closed the dialog');
+          await waitExpanded(protocolHandle, 'false');
+          assert.ok(await dialog.isVisible(), 'Canceling the Select picker closed the dialog');
         }
-        await selectByKey(protocol, 's', 'shadowsocks');
+        await selectOptionByKeyboard(protocol, 'shadowsocks');
         await activateTab(dialog, 'Protocol');
-        await selectByKey(
+        await selectOptionByKeyboard(
           dialog.getByRole('combobox', { name: 'Encryption method' }),
-          'chacha20-ietf-poly1305',
           'chacha20-ietf-poly1305',
         );
       }
       await activateTab(dialog, 'Stream');
-      await selectByKey(
+      const expectedTransport = edit ? 'gRPC' : 'WebSocket';
+      await selectOptionByKeyboard(
         dialog.getByRole('combobox', { name: 'Transmission' }),
-        edit ? 'g' : 'w',
-        edit ? 'gRPC' : 'WebSocket',
+        expectedTransport,
       );
       const cdp = await context.newCDPSession(page);
       const ax = await cdp.send('Accessibility.getFullAXTree');
       const transport = ax.nodes.find(
         (node) => node.role?.value === 'combobox' && node.name?.value.trim() === 'Transmission',
       );
-      assert.equal(transport?.value?.value, edit ? 'gRPC' : 'WebSocket');
+      const transportContainer = ax.nodes.find((node) =>
+        node.childIds?.includes(transport?.nodeId),
+      );
+      const transportValue =
+        transport?.value?.value ??
+        transportContainer?.childIds
+          ?.map((id) => ax.nodes.find((node) => node.nodeId === id))
+          .find((node) => node?.role?.value === 'StaticText')?.name?.value;
+      assert.equal(transportValue, expectedTransport);
       const submit = dialog.getByRole('button', {
         name: edit ? 'Save Changes' : 'Create',
         exact: true,

@@ -491,22 +491,21 @@ func removeNetworkState() {
 		_ = run("ip", "rule", "del", "to", n, "table", "10000", "priority", "100")
 	}
 	_ = run("ip", "rule", "del", "fwmark", "10000", "table", "10000", "priority", "99")
-	_ = run("ip", "-6", "rule", "del", "fwmark", "10000", "table", "10000", "priority", "99")
 	_ = run("ip", "route", "flush", "table", "10000")
-	_ = run("ip", "-6", "route", "flush", "table", "10000")
 	_ = run("ip", "route", "del", "162.159.198.1/32")
 	_ = run("ip", "route", "del", "162.159.198.2/32")
-	if b, err := os.ReadFile("/etc/usque/endpoint"); err == nil {
-		if ip := strings.TrimSpace(string(b)); ip != "" {
-			_ = run("ip", "route", "del", ip+"/32")
+	for _, f := range []string{"/etc/usque/endpoint", "/run/warp-breakout-ips"} {
+		if b, err := os.ReadFile(f); err == nil {
+			for _, ip := range strings.Fields(string(b)) {
+				_ = run("ip", "route", "del", ip+"/32")
+			}
 		}
 	}
 	_ = run("iptables", "-t", "nat", "-D", "POSTROUTING", "-o", "warp", "-j", "MASQUERADE")
 	_ = run("iptables", "-t", "mangle", "-D", "POSTROUTING", "-o", "warp", "-p", "tcp",
 		"--tcp-flags", "SYN,RST", "SYN", "-j", "TCPMSS", "--clamp-mss-to-pmtu")
-	_ = run("ip6tables", "-t", "nat", "-D", "POSTROUTING", "-o", "warp", "-j", "MASQUERADE")
-	_ = run("ip6tables", "-D", "OUTPUT", "-m", "mark", "--mark", "10000", "!", "-o", "warp", "-j", "REJECT")
 	_ = run("ip", "link", "del", "warp")
+	_ = os.Remove("/run/warp-breakout-ips")
 }
 
 // removeDirContents empties dir and then tries to remove it. The panel runs
@@ -566,7 +565,14 @@ func Uninstall() error {
 	_ = os.Remove("/etc/usque/transport")
 	_ = os.Remove("/run/warp-transport.last")
 	_ = os.Remove("/run/warp-endpoint.fail")
-	_ = os.Remove("/run/warp-v6.last")
+	_ = os.Remove("/run/warp-fail-count")
+	_ = os.Remove("/run/warp-transport-fails")
+	_ = os.Remove("/run/warp-healthy")
+	_ = os.Remove("/run/warp-rotated")
+	_ = os.Remove("/run/warp-egress-tries")
+	_ = os.Remove("/run/warp-usque.fifo")
+	_ = os.Remove("/run/warp-usque.pid")
+	_ = os.Remove("/run/warp-breakout-ips")
 	_ = os.Remove("/run/warp-ratelimit")
 	_ = os.Remove("/run/warp-watch.state")
 	_ = os.Remove("/run/warp-rotate.lock")

@@ -19,13 +19,114 @@ import { RandomUtil } from '@/utils';
 const TRANSPORTS_BY_PROVIDER: Record<string, readonly string[]> = {
   telemost: ['vp8channel', 'videochannel'],
   wbstream: ['vp8channel', 'seichannel', 'videochannel'],
+  salutejazz: ['datachannel'],
+  vkcalls: ['vp8channel'],
+  mtslink: ['vp8channel'],
+  max: ['datachannel'],
 };
 const DEFAULT_TRANSPORTS = ['datachannel', 'vp8channel', 'seichannel', 'videochannel'] as const;
 const DEFAULT_PROVIDER = 'jitsi';
 const DEFAULT_TRANSPORT = 'datachannel';
 
-function transportsFor(provider: string): readonly string[] {
+const ROOM_PLACEHOLDER_BY_PROVIDER: Record<string, string> = {
+  jitsi: 'https://meet.jit.si/...',
+  telemost: 'https://telemost.yandex.ru/j/...',
+  salutejazz: 'code:password',
+  vkcalls: 'https://vk.ru/call/join/...',
+  mtslink: 'https://my.mts-link.ru/j/...',
+  max: 'https://max.ru/joincall/...',
+  wbstream: 'room id',
+};
+
+function invalidOlcrtcRoomKey(provider: string, raw: unknown): string | null {
+  if (typeof raw !== 'string') return 'pages.inbounds.sidecar.requiredRoom';
+  const room = raw.trim();
+  if (room === '') return 'pages.inbounds.sidecar.requiredRoom';
+  if (/[\r\n]/.test(room)) return 'pages.inbounds.sidecar.requiredRoom';
+  switch (provider) {
+    case 'vkcalls': {
+      try {
+        const u = new URL(room);
+        const parts = u.pathname.replace(/^\/+|\/+$/g, '').split('/');
+        if (
+          u.protocol !== 'https:' ||
+          (u.host !== 'vk.ru' && u.host !== 'vk.com') ||
+          u.username !== '' ||
+          u.password !== '' ||
+          u.port !== '' ||
+          u.search !== '' ||
+          u.hash !== '' ||
+          parts.length !== 3 ||
+          parts[0] !== 'call' ||
+          parts[1] !== 'join' ||
+          parts[2] === ''
+        ) {
+          return 'pages.inbounds.sidecar.invalidRoomVkcalls';
+        }
+      } catch {
+        return 'pages.inbounds.sidecar.invalidRoomVkcalls';
+      }
+      return null;
+    }
+    case 'salutejazz':
+      return /^[a-z0-9]{4,16}:[a-z0-9]{4,16}$/.test(room)
+        ? null
+        : 'pages.inbounds.sidecar.invalidRoomSalutejazz';
+    case 'mtslink': {
+      try {
+        const u = new URL(room);
+        const parts = u.pathname.replace(/^\/+|\/+$/g, '').split('/');
+        const jIdx = parts.indexOf('j');
+        if (
+          (u.protocol !== 'https:' && u.protocol !== 'http:') ||
+          u.host === '' ||
+          jIdx < 0 ||
+          parts.length < jIdx + 3 ||
+          !parts[jIdx + 1] ||
+          !parts[jIdx + 2]
+        ) {
+          return 'pages.inbounds.sidecar.invalidRoomMtslink';
+        }
+      } catch {
+        return 'pages.inbounds.sidecar.invalidRoomMtslink';
+      }
+      return null;
+    }
+    case 'jitsi': {
+      const noScheme = room.replace(/^https?:\/\//i, '');
+      const slash = noScheme.indexOf('/');
+      if (slash <= 0 || noScheme.slice(slash + 1).replace(/^\/+|\/+$/g, '') === '') {
+        return 'pages.inbounds.sidecar.invalidRoomJitsi';
+      }
+      return null;
+    }
+    default:
+      return null;
+  }
+}
+
+function transportsFor(provider: string, authToken?: string): readonly string[] {
+  if (provider === 'wbstream' && typeof authToken === 'string' && authToken.trim() !== '') {
+    return ['vp8channel', 'seichannel', 'videochannel', 'datachannel'];
+  }
   return TRANSPORTS_BY_PROVIDER[provider] ?? DEFAULT_TRANSPORTS;
+}
+
+function isValidICELocalIPv4(raw: unknown): boolean {
+  if (isBlank(raw)) return true;
+  if (typeof raw !== 'string') return false;
+  const trimmed = raw.trim().replace(/^::ffff:/i, '');
+  const parts = trimmed.split('.');
+  if (parts.length !== 4) return false;
+  const octets = parts.map((p) => (/^\d{1,3}$/.test(p) ? Number(p) : -1));
+  if (octets.some((n) => n < 0 || n > 255)) return false;
+  const [a, b, c, d] = octets;
+  if (a === 0 && b === 0 && c === 0 && d === 0) return false;
+  if (a === 127) return false;
+  if (a === 169 && b === 254) return false;
+  if (a >= 224 && a <= 239) return false;
+  if (a === 255 && b === 255 && c === 255 && d === 255) return false;
+  return true;
 }
 
 function isBlank(value: unknown): boolean {
@@ -59,6 +160,7 @@ export default function SidecarFields() {
   const dns = useWatch({ control, name: 'settings.sidecar.dns' });
   const provider = (useWatch({ control, name: 'settings.sidecar.provider' }) ??
     DEFAULT_PROVIDER) as string;
+  const authToken = (useWatch({ control, name: 'settings.sidecar.authToken' }) ?? '') as string;
   const transport = (useWatch({ control, name: 'settings.sidecar.transport' }) ??
     DEFAULT_TRANSPORT) as string;
   // Legacy keys: the pre-`subHost` deployments stored the dial host under a
@@ -106,14 +208,14 @@ export default function SidecarFields() {
     setValue('settings.sidecar.dns', first, { shouldDirty: false });
   }, [isQwdtt, dns, setValue]);
 
-  // A provider change drops transports it cannot carry; the operator's edit is
-  // what caused it, so this one marks the form dirty.
+  // A provider or token change drops transports it cannot carry; the operator's edit
+  // caused it, so this one marks the form dirty.
   useEffect(() => {
     if (!isOlcrtc) return;
-    const allowed = transportsFor(provider);
+    const allowed = transportsFor(provider, authToken);
     if (allowed.includes(transport)) return;
     setValue('settings.sidecar.transport', allowed[0], { shouldDirty: true });
-  }, [isOlcrtc, provider, transport, setValue]);
+  }, [isOlcrtc, provider, authToken, transport, setValue]);
 
   const noticeKey = isQwdtt
     ? 'pages.inbounds.sidecar.qwdttNotice'
@@ -289,8 +391,12 @@ function OlcrtcSettingsFields() {
   const { control, setValue } = useFormContext();
   const provider = (useWatch({ control, name: 'settings.sidecar.provider' }) ??
     DEFAULT_PROVIDER) as string;
+  const authToken = (useWatch({ control, name: 'settings.sidecar.authToken' }) ?? '') as string;
   const transport = (useWatch({ control, name: 'settings.sidecar.transport' }) ??
     DEFAULT_TRANSPORT) as string;
+  const showAuthToken = provider === 'max' || provider === 'wbstream' || !isBlank(authToken);
+  const roomPlaceholder =
+    ROOM_PLACEHOLDER_BY_PROVIDER[provider] ?? 'https://meet.jit.si/room or room id';
 
   return (
     <>
@@ -306,18 +412,41 @@ function OlcrtcSettingsFields() {
             { value: 'jitsi', label: 'Jitsi Meet' },
             { value: 'telemost', label: 'Yandex Telemost' },
             { value: 'wbstream', label: 'WbStream' },
+            { value: 'salutejazz', label: 'SaluteJazz' },
+            { value: 'vkcalls', label: 'VK Calls' },
+            { value: 'mtslink', label: 'MTS Link' },
+            { value: 'max', label: 'MAX Calls' },
           ]}
         />
       </FormField>
+
+      {showAuthToken && (
+        <FormField
+          name={['settings', 'sidecar', 'authToken']}
+          label={t('pages.inbounds.sidecar.authToken')}
+          tooltip={t('pages.inbounds.sidecar.authTokenTip')}
+          rules={{
+            validate: (value) =>
+              provider !== 'max' ||
+              !isBlank(value) ||
+              t('pages.inbounds.sidecar.requiredAuthToken'),
+          }}
+        >
+          <Input.Password />
+        </FormField>
+      )}
 
       <FormField
         name={['settings', 'sidecar', 'roomId']}
         label={t('pages.inbounds.sidecar.roomId')}
         rules={{
-          validate: (value) => !isBlank(value) || t('pages.inbounds.sidecar.requiredRoom'),
+          validate: (value) => {
+            const issueKey = invalidOlcrtcRoomKey(provider, value);
+            return issueKey === null || t(issueKey);
+          },
         }}
       >
-        <Input placeholder="https://meet.jit.si/room or room id" />
+        <Input placeholder={roomPlaceholder} />
       </FormField>
 
       <Form.Item
@@ -343,7 +472,9 @@ function OlcrtcSettingsFields() {
         name={['settings', 'sidecar', 'transport']}
         label={t('pages.inbounds.sidecar.transport')}
       >
-        <Select options={transportsFor(provider).map((value) => ({ value, label: value }))} />
+        <Select
+          options={transportsFor(provider, authToken).map((value) => ({ value, label: value }))}
+        />
       </FormField>
 
       {transport === 'vp8channel' && (
@@ -432,6 +563,41 @@ function OlcrtcSettingsFields() {
         tooltip={t('pages.inbounds.sidecar.dnsResolverTip')}
       >
         <Input placeholder="8.8.8.8:53" />
+      </FormField>
+
+      <FormField
+        name={['settings', 'sidecar', 'iceLocalIp']}
+        label={t('pages.inbounds.sidecar.iceLocalIp')}
+        tooltip={t('pages.inbounds.sidecar.iceLocalIpTip')}
+        rules={{
+          validate: (value) =>
+            isValidICELocalIPv4(value) || t('pages.inbounds.sidecar.invalidIceLocalIp'),
+        }}
+      >
+        <Input placeholder="203.0.113.10" />
+      </FormField>
+
+      <FormField
+        name={['settings', 'sidecar', 'dtlsProfile']}
+        label={t('pages.inbounds.sidecar.dtlsProfile')}
+        tooltip={t('pages.inbounds.sidecar.dtlsProfileTip')}
+      >
+        <Select
+          options={[
+            { value: '', label: t('pages.inbounds.sidecar.dtlsProfileDefault') },
+            { value: 'off', label: t('pages.inbounds.sidecar.dtlsProfileOff') },
+            { value: 'chrome-linux-138-compat-v1', label: 'chrome-linux-138-compat-v1' },
+          ]}
+        />
+      </FormField>
+
+      <FormField
+        name={['settings', 'sidecar', 'udpEnabled']}
+        label={t('pages.inbounds.sidecar.udpEnabled')}
+        tooltip={t('pages.inbounds.sidecar.udpEnabledTip')}
+        valueProp="checked"
+      >
+        <Switch />
       </FormField>
 
       <FormField

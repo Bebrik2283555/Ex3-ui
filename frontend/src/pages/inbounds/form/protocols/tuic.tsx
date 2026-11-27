@@ -1,4 +1,3 @@
-import { NativeSelect } from '@/components/form/NativeSelect';
 import { useState, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -112,7 +111,7 @@ export default function TuicFields() {
             label={t('pages.xray.tuic.logLevel')}
             tooltip={t('pages.xray.tuic.logLevelHint')}
           >
-            <NativeSelect
+            <Select
               options={[
                 { label: 'Info', value: 'info' },
                 { label: 'Warn', value: 'warn' },
@@ -200,7 +199,7 @@ export default function TuicFields() {
         label={t('pages.xray.tuic.congestionControl')}
         tooltip={t('pages.xray.tuic.congestionControlHint')}
       >
-        <NativeSelect
+        <Select
           options={[
             { label: 'BBR', value: 'bbr' },
             { label: 'CUBIC', value: 'cubic' },
@@ -245,7 +244,7 @@ export default function TuicFields() {
         label={t('pages.xray.tuic.udpRelayMode')}
         tooltip={t('pages.xray.tuic.udpRelayModeHint')}
       >
-        <NativeSelect
+        <Select
           options={[
             { label: 'Native (Recommended)', value: 'native' },
             { label: 'QUIC', value: 'quic' },

@@ -83,12 +83,43 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * linearize(red) + 0.7152 * linearize(green) + 0.0722 * linearize(blue);
 }
 
+function contrastRatio(foreground: string, background: string): number {
+  const lighter = Math.max(relativeLuminance(foreground), relativeLuminance(background));
+  const darker = Math.min(relativeLuminance(foreground), relativeLuminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 export function isLightColor(hex: string): boolean {
   return relativeLuminance(hex) > 0.45;
 }
 
 function contrastText(hex: string): string {
-  return isLightColor(hex) ? '#141414' : '#ffffff';
+  // Cut at white contrast < 4.0 so rich brand blues keep white ink while
+  // bright accents (sky, emerald, yellow, white) flip to dark ink >= 4.5:1.
+  return contrastRatio('#ffffff', hex) < 4.0 ? '#141414' : '#ffffff';
+}
+
+function ensureContrastAgainstSurfaces(
+  color: string,
+  surfaces: readonly string[],
+  blendToward: string,
+  minRatio = 4.6,
+): string {
+  if (surfaces.every((surface) => contrastRatio(color, surface) >= minRatio)) {
+    return color;
+  }
+  let low = 0;
+  let high = 1;
+  for (let i = 0; i < 18; i += 1) {
+    const mid = (low + high) / 2;
+    const candidate = mixColors(color, blendToward, mid);
+    if (surfaces.every((surface) => contrastRatio(candidate, surface) >= minRatio)) {
+      high = mid;
+    } else {
+      low = mid;
+    }
+  }
+  return mixColors(color, blendToward, high);
 }
 
 export function isDarkTheme(name: ThemeName, customBg: string = DEFAULT_CUSTOM_BG): boolean {
@@ -134,12 +165,28 @@ const DARK_TOKENS = {
   colorBgLayout: '#1a1b1f',
   colorBgContainer: '#23252b',
   colorBgElevated: '#2d2f37',
+  colorPrimaryHover: '#2468e5',
+  colorPrimaryText: '#73b7ff',
+  colorPrimaryTextHover: '#99ceff',
+  colorLink: '#73b7ff',
+  colorLinkHover: '#99ceff',
+  colorLinkActive: '#3c89e8',
+  colorInfoText: '#73b7ff',
+  colorErrorText: '#ff7875',
 };
 const ULTRA_DARK_TOKENS = {
   colorBgBase: '#000',
   colorBgLayout: '#000',
   colorBgContainer: '#101013',
   colorBgElevated: '#1a1a1e',
+  colorPrimaryHover: '#2468e5',
+  colorPrimaryText: '#73b7ff',
+  colorPrimaryTextHover: '#99ceff',
+  colorLink: '#73b7ff',
+  colorLinkHover: '#99ceff',
+  colorLinkActive: '#3c89e8',
+  colorInfoText: '#73b7ff',
+  colorErrorText: '#ff7875',
 };
 const DARK_LAYOUT_TOKENS = {
   bodyBg: '#1a1b1f',
@@ -180,11 +227,30 @@ const ULTRA_DARK_CARD_TOKENS = {
 // studio site sklane.com — lots of air, soft cards and no glass effects.
 const LANE_TOKENS = {
   colorPrimary: '#141414',
+  colorPrimaryText: '#141414',
+  colorPrimaryTextHover: '#000000',
+  colorPrimaryBg: '#e7e2d7',
+  colorPrimaryBgHover: '#dcd5c7',
+  colorPrimaryBorder: 'rgba(20, 20, 20, 0.24)',
+  colorPrimaryBorderHover: 'rgba(20, 20, 20, 0.42)',
   colorInfo: '#141414',
+  colorInfoBg: '#e7e2d7',
+  colorInfoBorder: 'rgba(20, 20, 20, 0.24)',
+  colorInfoText: '#141414',
   colorLink: '#141414',
+  colorLinkHover: '#383838',
+  colorLinkActive: '#000000',
   colorText: '#141414',
   colorTextSecondary: 'rgba(20, 20, 20, 0.68)',
-  colorTextTertiary: 'rgba(20, 20, 20, 0.52)',
+  colorTextTertiary: 'rgba(20, 20, 20, 0.58)',
+  colorTextLightSolid: '#fbf8f1',
+  colorError: '#cf1322',
+  colorErrorText: '#cf1322',
+  colorSuccessText: '#237804',
+  colorWarningText: '#ad6800',
+  controlItemBgActive: '#e7e2d7',
+  controlItemBgActiveHover: '#dcd5c7',
+  controlOutline: 'rgba(20, 20, 20, 0.14)',
   colorBgBase: '#f3efe6',
   colorBgLayout: '#f3efe6',
   colorBgContainer: '#fbf8f1',
@@ -222,18 +288,45 @@ const STATISTIC_TOKENS = {
   titleFontSize: 11,
 };
 const LIGHT_CONTRAST_TOKENS = {
+  colorPrimaryText: '#0850c5',
+  colorPrimaryTextHover: '#003eb3',
+  colorLink: '#0850c5',
+  colorLinkHover: '#003eb3',
+  colorLinkActive: '#002c8c',
+  colorInfoText: '#0850c5',
   colorTextDescription: 'rgba(0, 0, 0, 0.58)',
   colorTextTertiary: 'rgba(0, 0, 0, 0.58)',
   colorTextPlaceholder: '#767676',
   colorError: '#cf1322',
   colorErrorText: '#cf1322',
   colorSuccessText: '#237804',
+  colorWarningText: '#ad6800',
 };
 const LIGHT_BUTTON_TOKENS = {
   colorPrimary: '#0958d9',
   colorPrimaryHover: '#2468e5',
   colorPrimaryActive: '#073ea8',
 };
+const BUTTON_FLAT_SHADOW = {
+  primaryShadow: 'none',
+  dangerShadow: 'none',
+  defaultShadow: 'none',
+};
+
+function accentNavigationTokens(itemColor: string, itemHoverColor: string) {
+  return {
+    Tabs: {
+      itemSelectedColor: itemColor,
+      itemHoverColor,
+      itemActiveColor: itemHoverColor,
+      inkBarColor: itemColor,
+    },
+    Pagination: {
+      itemActiveColor: itemColor,
+      itemActiveColorHover: itemHoverColor,
+    },
+  };
+}
 
 // The custom theme derives every surface from one background colour, then uses
 // the second colour only for interactive accents. Text automatically flips to
@@ -243,8 +336,8 @@ function buildCustomPalette(background: string, accent: string) {
   const light = baseLuminance > 0.45;
   const text = contrastText(background);
   const textSecondary = light ? 'rgba(20, 20, 20, 0.68)' : 'rgba(255, 255, 255, 0.68)';
-  const textTertiary = light ? 'rgba(20, 20, 20, 0.52)' : 'rgba(255, 255, 255, 0.52)';
-  const textPlaceholder = light ? 'rgba(20, 20, 20, 0.42)' : 'rgba(255, 255, 255, 0.42)';
+  const textTertiary = light ? 'rgba(20, 20, 20, 0.58)' : 'rgba(255, 255, 255, 0.58)';
+  const textPlaceholder = light ? '#767676' : 'rgba(255, 255, 255, 0.50)';
   const border = light ? 'rgba(20, 20, 20, 0.16)' : 'rgba(255, 255, 255, 0.14)';
   const borderSecondary = light ? 'rgba(20, 20, 20, 0.09)' : 'rgba(255, 255, 255, 0.06)';
   const layout = light ? darken(background, 0.025) : background;
@@ -262,16 +355,83 @@ function buildCustomPalette(background: string, accent: string) {
   const triggerBg = light ? darken(background, 0.75) : lighten(background, 0.12);
   const triggerColor = light ? container : text;
 
+  const solidText = contrastText(accent);
+  const tintSurface = light ? elevated : container;
+  const tintInk =
+    contrastRatio(accent, container) >= 1.8 && contrastRatio(accent, elevated) >= 1.8
+      ? accent
+      : text;
+  const rawPrimaryBg = mixColors(tintSurface, tintInk, light ? 0.1 : 0.16);
+  const rawPrimaryBgHover = mixColors(tintSurface, tintInk, light ? 0.16 : 0.24);
+  const oppositeInk = light ? '#ffffff' : '#000000';
+  const fallbackBg = mixColors(tintSurface, text, 0.1);
+  const fallbackBgHover = mixColors(tintSurface, text, 0.16);
+  const primaryBg =
+    contrastRatio(text, rawPrimaryBg) >= 4.5 && contrastRatio(tintSurface, rawPrimaryBg) >= 1.12
+      ? rawPrimaryBg
+      : contrastRatio(text, fallbackBg) >= 4.5
+        ? fallbackBg
+        : mixColors(tintSurface, oppositeInk, 0.12);
+  const primaryBgHover =
+    contrastRatio(text, rawPrimaryBgHover) >= 4.5 &&
+    contrastRatio(tintSurface, rawPrimaryBgHover) >= 1.15
+      ? rawPrimaryBgHover
+      : contrastRatio(text, fallbackBgHover) >= 4.5
+        ? fallbackBgHover
+        : mixColors(tintSurface, oppositeInk, 0.18);
+
+  const inkTarget = light ? '#000000' : '#ffffff';
+  const textSurfaces = [container, elevated, sider, primaryBg, primaryBgHover];
+  const primaryText = ensureContrastAgainstSurfaces(accent, textSurfaces, inkTarget, 4.6);
+  const primaryTextHover = ensureContrastAgainstSurfaces(
+    mixColors(primaryText, inkTarget, 0.22),
+    textSurfaces,
+    inkTarget,
+    5.2,
+  );
+  const primaryHover = ensureContrastAgainstSurfaces(
+    lighten(accent, 0.08),
+    [solidText],
+    solidText === '#ffffff' ? '#000000' : '#ffffff',
+    contrastRatio(solidText, accent) >= 4.5 ? 4.5 : 4.0,
+  );
+  const statusContrastTokens = light
+    ? {
+        colorError: '#cf1322',
+        colorErrorText: '#cf1322',
+        colorSuccessText: '#237804',
+        colorWarningText: '#ad6800',
+      }
+    : {
+        colorErrorText: '#ff7875',
+      };
+
   return {
     light,
+    primaryText,
+    primaryTextHover,
     tokens: {
       colorPrimary: accent,
+      colorPrimaryHover: primaryHover,
+      colorPrimaryText: primaryText,
+      colorPrimaryTextHover: primaryTextHover,
+      colorPrimaryBg: primaryBg,
+      colorPrimaryBgHover: primaryBgHover,
+      controlItemBgActive: primaryBg,
+      controlItemBgActiveHover: primaryBgHover,
+      controlOutline: light ? 'rgba(20, 20, 20, 0.14)' : 'rgba(255, 255, 255, 0.18)',
       colorInfo: accent,
-      colorLink: accent,
+      colorInfoBg: primaryBg,
+      colorInfoText: primaryText,
+      colorLink: primaryText,
+      colorLinkHover: primaryTextHover,
+      colorLinkActive: primaryTextHover,
       colorText: text,
       colorTextSecondary: textSecondary,
       colorTextTertiary: textTertiary,
       colorTextPlaceholder: textPlaceholder,
+      colorTextLightSolid: solidText,
+      ...statusContrastTokens,
       colorBgBase: background,
       colorBgLayout: layout,
       colorBgContainer: container,
@@ -293,7 +453,7 @@ function buildCustomPalette(background: string, accent: string) {
           itemBg: 'transparent',
           itemColor: textSecondary,
           itemSelectedBg: accent,
-          itemSelectedColor: contrastText(accent),
+          itemSelectedColor: solidText,
           itemHoverBg: 'rgba(20, 20, 20, 0.06)',
           subMenuItemBg: 'transparent',
         }
@@ -305,7 +465,7 @@ function buildCustomPalette(background: string, accent: string) {
           darkItemHoverColor: text,
           darkItemHoverBg: 'rgba(255, 255, 255, 0.08)',
           darkItemSelectedBg: accent,
-          darkItemSelectedColor: contrastText(accent),
+          darkItemSelectedColor: solidText,
         },
     card: { colorBorderSecondary: borderSecondary },
   };
@@ -339,7 +499,9 @@ export function buildAntdThemeConfig(
         Layout: LANE_LAYOUT_TOKENS,
         Menu: LANE_MENU_TOKENS,
         Card: LANE_CARD_TOKENS,
+        Button: BUTTON_FLAT_SHADOW,
         Statistic: STATISTIC_TOKENS,
+        ...accentNavigationTokens('#141414', '#000000'),
       },
     };
   }
@@ -350,7 +512,8 @@ export function buildAntdThemeConfig(
       token: LIGHT_CONTRAST_TOKENS,
       components: {
         Statistic: STATISTIC_TOKENS,
-        Button: LIGHT_BUTTON_TOKENS,
+        Button: { ...BUTTON_FLAT_SHADOW, ...LIGHT_BUTTON_TOKENS },
+        ...accentNavigationTokens('#0850c5', '#003eb3'),
       },
     };
   }
@@ -364,7 +527,9 @@ export function buildAntdThemeConfig(
         Layout: palette.layout,
         Menu: palette.menu,
         Card: palette.card,
+        Button: BUTTON_FLAT_SHADOW,
         Statistic: STATISTIC_TOKENS,
+        ...accentNavigationTokens(palette.primaryText, palette.primaryTextHover),
       },
     };
   }
@@ -377,7 +542,9 @@ export function buildAntdThemeConfig(
       Layout: isUltra ? ULTRA_DARK_LAYOUT_TOKENS : DARK_LAYOUT_TOKENS,
       Menu: isUltra ? ULTRA_DARK_MENU_TOKENS : DARK_MENU_TOKENS,
       Card: isUltra ? ULTRA_DARK_CARD_TOKENS : DARK_CARD_TOKENS,
+      Button: BUTTON_FLAT_SHADOW,
       Statistic: STATISTIC_TOKENS,
+      ...accentNavigationTokens('#73b7ff', '#99ceff'),
     },
   };
 }

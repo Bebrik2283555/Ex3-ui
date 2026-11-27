@@ -201,7 +201,10 @@ func normalizeCSQTT(ib *model.Inbound, sidecar map[string]json.RawMessage) error
 
 func normalizeOLCRTC(sidecar map[string]json.RawMessage, name string) error {
 	setDefault(sidecar, "provider", "jitsi")
-	setDefault(sidecar, "transport", "datachannel")
+	provider, _ := rawString(sidecar, "provider")
+	provider = strings.TrimSpace(provider)
+	sidecar["provider"] = mustRaw(provider)
+	setDefault(sidecar, "transport", olcrtcDefaultTransport(provider))
 	setDefault(sidecar, "vp8Fps", 60)
 	setDefault(sidecar, "vp8Batch", 64)
 	setDefault(sidecar, "seiFps", 30)
@@ -215,12 +218,20 @@ func normalizeOLCRTC(sidecar map[string]json.RawMessage, name string) error {
 	setDefault(sidecar, "dns", "8.8.8.8:53")
 	setDefault(sidecar, "routeThroughXray", true)
 
+	for _, field := range []string{"roomId", "authToken", "iceLocalIp", "dtlsProfile", "dns", "transport", "videoCodec"} {
+		if val, ok := rawString(sidecar, field); ok {
+			sidecar[field] = mustRaw(strings.TrimSpace(val))
+		}
+	}
+
 	if key, ok := rawString(sidecar, "cryptoKey"); !ok || strings.TrimSpace(key) == "" {
 		generated, err := randomHex(32)
 		if err != nil {
 			return fmt.Errorf("%s: generate crypto key: %w", name, err)
 		}
 		sidecar["cryptoKey"] = mustRaw(generated)
+	} else {
+		sidecar["cryptoKey"] = mustRaw(strings.TrimSpace(key))
 	}
 
 	if enabled, _ := rawBool(sidecar, "routeThroughXray"); enabled {
@@ -231,6 +242,69 @@ func normalizeOLCRTC(sidecar map[string]json.RawMessage, name string) error {
 		}
 	}
 	return nil
+}
+
+// HasRouteXrayPort reports whether settings already specifies a positive sidecar routeXrayPort.
+func HasRouteXrayPort(settings string) bool {
+	root, err := normalizeRoot(settings)
+	if err != nil {
+		return false
+	}
+	sidecar, err := normalizeSidecarMap(root["sidecar"], "")
+	if err != nil {
+		return false
+	}
+	port, ok := rawInt(sidecar, "routeXrayPort")
+	return ok && port > 0
+}
+
+// ReallocateRouteXrayPort assigns a fresh loopback bridge port when an
+// auto-picked port collides with a DB-reserved port (e.g. a disabled inbound).
+func ReallocateRouteXrayPort(ib *model.Inbound) error {
+	if ib == nil || !Supported(ib.Protocol) {
+		return errNotSidecarInbound
+	}
+	name := DisplayName(ib.Protocol)
+	root, err := normalizeRoot(ib.Settings)
+	if err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	}
+	sidecar, err := normalizeSidecarMap(root["sidecar"], name)
+	if err != nil {
+		return err
+	}
+	current, _ := rawInt(sidecar, "routeXrayPort")
+	for range 8 {
+		allocated, allocErr := freeLoopbackPort()
+		if allocErr != nil {
+			return fmt.Errorf("%s: allocate bridge port: %w", name, allocErr)
+		}
+		if allocated == current {
+			continue
+		}
+		sidecar["routeXrayPort"] = mustRaw(allocated)
+		raw, err := json.Marshal(sidecar)
+		if err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		root["sidecar"] = raw
+		out, err := json.MarshalIndent(root, "", "  ")
+		if err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		ib.Settings = string(out)
+		return nil
+	}
+	return fmt.Errorf("%s: could not allocate an unused bridge port", name)
+}
+
+func olcrtcDefaultTransport(provider string) string {
+	switch provider {
+	case "telemost", "wbstream", "vkcalls", "mtslink":
+		return "vp8channel"
+	default:
+		return "datachannel"
+	}
 }
 
 // canonicalListenAddr validates listenAddr and writes the effective endpoint

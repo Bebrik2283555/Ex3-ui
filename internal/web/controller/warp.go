@@ -49,7 +49,7 @@ func (a *WarpController) initRouter(g *gin.RouterGroup) {
 
 func (a *WarpController) getStatus(c *gin.Context) {
 	st := warp.GetStatus()
-	if st.Installed {
+	if st.Installed && !st.Installing {
 		_ = a.ensureXrayOutbound()
 	}
 	jsonObj(c, st, nil)
@@ -129,11 +129,11 @@ func (a *WarpController) install(c *gin.Context) {
 }
 
 func (a *WarpController) uninstall(c *gin.Context) {
-	a.removeXrayRouting()
 	if err := warp.Uninstall(); err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.warp.uninstallFailed"), err)
 		return
 	}
+	a.removeXrayRouting()
 	jsonMsg(c, I18nWeb(c, "pages.warp.uninstallSuccess"), nil)
 }
 

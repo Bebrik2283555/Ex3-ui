@@ -42,3 +42,39 @@ func TestValidateCheckURL(t *testing.T) {
 		}
 	}
 }
+
+func TestInstallScriptIPv4OnlyAndSafeReconnect(t *testing.T) {
+	script := string(installScript)
+	for _, forbidden := range []string{
+		"--on-disconnect",
+		"--ipv6",
+		"ip -6",
+		"ip6tables",
+		"FAMILY_FILE",
+		"H2_V6",
+		"V6_FAIL",
+		"|| echo \"000 999\"",
+	} {
+		if strings.Contains(script, forbidden) {
+			t.Fatalf("warp-usque.sh must not contain %q", forbidden)
+		}
+	}
+	for _, required := range []string{
+		"--no-tunnel-ipv6",
+		"\"not pollable\"",
+		"EP_POOL=",
+		"H2_SNI=",
+		"tlsmlkem=0",
+		"endpoint_v4",
+		"endpoint_h2_v4",
+		"/run/warp-breakout-ips",
+		"/run/warp-egress-tries",
+		"generate_204",
+		"StartLimitIntervalSec=0",
+		"ExecStopPost=/bin/sh -c '/etc/usque/down.sh",
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("warp-usque.sh missing expected %q", required)
+		}
+	}
+}

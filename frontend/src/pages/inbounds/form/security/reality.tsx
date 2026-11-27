@@ -1,4 +1,3 @@
-import { NativeSelect } from '@/components/form/NativeSelect';
 import { useState, useId } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -113,9 +112,7 @@ export default function RealityForm({
         name={['streamSettings', 'realitySettings', 'settings', 'fingerprint']}
         label="uTLS"
       >
-        <NativeSelect
-          options={Object.values(UTLS_FINGERPRINT).map((fp) => ({ value: fp, label: fp }))}
-        />
+        <Select options={Object.values(UTLS_FINGERPRINT).map((fp) => ({ value: fp, label: fp }))} />
       </FormField>
       <Form.Item
         htmlFor={`${uid}-target`}

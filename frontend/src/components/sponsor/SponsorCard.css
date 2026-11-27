@@ -47,7 +47,7 @@
   justify-content: center;
   font-weight: 600;
   font-size: 18px;
-  color: var(--ant-color-primary);
+  color: var(--ant-color-primary-text);
   background: var(--ant-color-primary-bg);
 }
 
@@ -90,7 +90,7 @@
 .sponsor-visit {
   flex: 0 0 auto;
   font-size: 13px;
-  color: var(--ant-color-primary);
+  color: var(--ant-color-primary-text);
   white-space: nowrap;
 }
 

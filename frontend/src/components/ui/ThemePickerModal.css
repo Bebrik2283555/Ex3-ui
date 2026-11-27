@@ -82,7 +82,7 @@
 
 .theme-picker-check {
   font-size: 11px;
-  color: var(--ant-color-primary);
+  color: var(--ant-color-primary-text);
 }
 
 .theme-picker-desc {

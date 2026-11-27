@@ -223,7 +223,9 @@ func (s *CoreService) coreInfo(protocol model.Protocol, rows []*model.Inbound) C
 	if file, err := os.Stat(info.Binary); err == nil && !file.IsDir() {
 		info.Installed = true
 		info.Size = file.Size()
-		info.Modified = file.ModTime().Unix()
+		if mod := file.ModTime().Unix(); mod >= 946684800 {
+			info.Modified = mod
+		}
 	}
 
 	manager := sidecar.GetManager()

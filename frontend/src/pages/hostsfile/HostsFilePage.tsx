@@ -101,12 +101,20 @@ function HostsFileTab() {
     }
   };
 
-  if (isError) {
+  if (isError && !data) {
     return <Result status="error" title={t('pages.hostsfile.getFailed')} />;
   }
 
+  if (isLoading && !data) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+        <Spin aria-live="off" />
+      </div>
+    );
+  }
+
   return (
-    <Spin aria-live="off" spinning={isLoading}>
+    <>
       <Card
         title={t('pages.hostsfile.editorTitle')}
         variant="borderless"
@@ -163,7 +171,7 @@ function HostsFileTab() {
           />
         </Card>
       )}
-    </Spin>
+    </>
   );
 }
 
@@ -178,7 +186,7 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
   const [domainsText, setDomainsText] = useState('');
   const [settingsForm] = Form.useForm<{ dnsServer: string; intervalHours: number }>();
 
-  const { data: status, isLoading, refetch } = useDnsResolverStatus(3000);
+  const { data: status, isLoading, isError, refetch } = useDnsResolverStatus(3000);
   const { saveSettings, saveDomains, resolve, testDns } = useDnsResolverMutations();
   const [testResult, setTestResult] = useState<DnsTestResult | null>(null);
   const [testingDns, setTestingDns] = useState(false);
@@ -352,8 +360,20 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
     },
   ];
 
+  if (isError && !status) {
+    return <Result status="error" title={t('pages.dnsresolver.statusCard')} />;
+  }
+
+  if (isLoading && !status) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+        <Spin aria-live="off" />
+      </div>
+    );
+  }
+
   return (
-    <Spin aria-live="off" spinning={isLoading}>
+    <>
       {/* Status Card */}
       <Card
         title={t('pages.dnsresolver.statusCard')}
@@ -548,7 +568,7 @@ function DnsResolverTab({ messageApi }: { messageApi: MessageApi }) {
           </Text>
         </div>
       </Modal>
-    </Spin>
+    </>
   );
 }
 

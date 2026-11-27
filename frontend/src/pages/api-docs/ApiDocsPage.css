@@ -362,7 +362,7 @@
 
 :is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .btn.execute {
   background: var(--sw-accent);
-  color: #fff;
+  color: var(--ant-color-text-light-solid);
   border-color: var(--sw-accent);
 }
 
@@ -452,11 +452,11 @@
 :is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info__contact a,
 :is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info__license a,
 :is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info__tos a {
-  color: var(--sw-accent);
+  color: var(--ant-color-link);
 }
 
 :is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui a:hover {
-  color: var(--ant-color-primary-hover);
+  color: var(--ant-color-link-hover);
 }
 
 :is(.api-docs-page.is-dark, .api-docs-page.theme-themed) .swagger-ui .info .title small {

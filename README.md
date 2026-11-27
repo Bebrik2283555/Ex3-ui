@@ -18,8 +18,11 @@
 
 - **Поддержка ядер для обхода блокировок через звонки российских сервисов из белого списка:**
   - [qWDTT](https://github.com/SpaceNeuroX/proxy-turn-vk-android) — форк [WDTT](https://github.com/amurcanov/proxy-turn-vk-android)
-  - [olcRTC](https://github.com/openlibrecommunity/olcrtc) — TCP-over-WebRTC (Jitsi, Telemost, WbStream).
-    Проект переведён автором в EoL, но продолжает работать и остаётся в панели.
+  - [olcRTC](https://github.com/ghostlane-project/olcrtc) — TCP-over-WebRTC туннель от проекта [Ghostlane](https://github.com/ghostlane-project/ghostlane)
+    (форк заархивированного [openlibrecommunity/olcrtc](https://github.com/openlibrecommunity/olcrtc)).
+    Поддерживает Jitsi, Yandex Telemost, WbStream, Sber SaluteJazz, VK Calls, MTS Link и MAX Calls,
+    транспорты `datachannel`, `vp8channel`, `seichannel`, `videochannel`, шифрование OLC2 / фрейминг OLVC v5,
+    UDP over WebRTC (`udp.enabled`) и опциональную маршрутизацию через Xray.
   - [CSQTT](https://github.com/amurcanov/csqtt)
 - **zapret** — обход DPI-блокировок ([zapret-linux-easy](https://github.com/ImMALWARE/zapret-linux-easy), интегрирован в панель).
   При установке дополнительно прописывает GitHub и Discord в `/etc/hosts` отдельным блоком
@@ -95,7 +98,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/Bebrik2283555/Ex3-ui/main/inst
 | mtg-multi (MTProto) | [mhsanaei/mtg-multi](https://github.com/mhsanaei/mtg-multi) | MIT |
 | qWDTT (fork WDTT) | [SpaceNeuroX/proxy-turn-vk-android](https://github.com/SpaceNeuroX/proxy-turn-vk-android) | GPL-3.0 |
 | WDTT | [amurcanov/proxy-turn-vk-android](https://github.com/amurcanov/proxy-turn-vk-android) | GPL-3.0 |
-| olcRTC (EoL upstream) | [openlibrecommunity/olcrtc](https://github.com/openlibrecommunity/olcrtc) | WTFPL-2.0 |
+| olcRTC | [ghostlane-project/olcrtc](https://github.com/ghostlane-project/olcrtc) | Apache-2.0 |
 | zapret | [ImMALWARE/zapret-linux-easy](https://github.com/ImMALWARE/zapret-linux-easy) | MIT |
 | CSQTT | [amurcanov/csqtt](https://github.com/amurcanov/csqtt) | PolyForm Noncommercial 1.0.0 |
 

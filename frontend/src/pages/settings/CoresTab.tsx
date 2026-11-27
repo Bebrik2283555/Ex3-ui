@@ -129,7 +129,7 @@ function SidecarPanel({ core }: { core: CoreInfo }) {
           )}
           {core.installed && (
             <Descriptions.Item label={t('pages.cores.updatedAt')}>
-              {new Date(core.modified * 1000).toLocaleString()}
+              {core.modified >= 946684800 ? new Date(core.modified * 1000).toLocaleString() : '—'}
             </Descriptions.Item>
           )}
         </Descriptions>

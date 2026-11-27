@@ -70,3 +70,38 @@ func TestInboundLinksSidecarWithoutClients(t *testing.T) {
 		t.Fatalf("inboundLinks() = %q, want peer/pass from inbound settings", links[0])
 	}
 }
+
+func TestThroneSubscriptionIncludesOLCRTCName(t *testing.T) {
+	dbtest.InitDB(t, filepath.Join(t.TempDir(), "x-ui.db"))
+	db := database.GetDB()
+
+	key := strings.Repeat("ab", 32)
+	inbound := &model.Inbound{
+		Tag:      "in-0-any",
+		Remark:   "new",
+		Protocol: model.OLCRTC,
+		Enable:   true,
+		Port:     0,
+		Settings: `{"clients":[{"email":"Me","password":"pw","enable":true}],"sidecar":{"provider":"vkcalls","roomId":"https://vk.ru/call/join/room1","cryptoKey":"` + key + `","transport":"vp8channel"}}`,
+	}
+	if err := db.Create(inbound).Error; err != nil {
+		t.Fatalf("create olcrtc inbound: %v", err)
+	}
+	rec := &model.ClientRecord{Email: "Me", SubID: "sub-throne", Enable: true}
+	if err := db.Create(rec).Error; err != nil {
+		t.Fatalf("create client: %v", err)
+	}
+	if err := db.Create(&model.ClientInbound{ClientId: rec.Id, InboundId: inbound.Id}).Error; err != nil {
+		t.Fatalf("link client: %v", err)
+	}
+
+	req := (&SubService{}).ForRequest("sub.example.com")
+	req.forceSidecars = true
+	links, _, _, _, err := req.getSubs("sub-throne")
+	if err != nil {
+		t.Fatalf("getSubs: %v", err)
+	}
+	if len(links) != 1 || !strings.HasSuffix(links[0], "#"+key+"$new") {
+		t.Fatalf("throne olcrtc links = %q, want suffix #%s$new", links, key)
+	}
+}

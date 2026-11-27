@@ -89,8 +89,8 @@
 
 .bulk-count {
   font-size: 12px;
-  background: color-mix(in srgb, var(--ant-color-primary) 12%, transparent);
-  color: var(--ant-color-primary);
+  background: var(--ant-color-primary-bg);
+  color: var(--ant-color-primary-text);
   padding: 1px 8px;
   border-radius: 10px;
 }

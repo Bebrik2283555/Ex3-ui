@@ -115,8 +115,8 @@
 
 .sidebar-docs:hover,
 .sidebar-docs:focus-visible {
-  background-color: color-mix(in srgb, var(--ant-color-primary) 12%, transparent);
-  color: var(--ant-color-primary);
+  background-color: var(--ant-color-primary-bg);
+  color: var(--ant-color-primary-text);
   transform: scale(1.08);
   outline: none;
 }
@@ -146,8 +146,8 @@
 
 .sidebar-theme-cycle:hover,
 .sidebar-theme-cycle:focus-visible {
-  background-color: color-mix(in srgb, var(--ant-color-primary) 12%, transparent);
-  color: var(--ant-color-primary);
+  background-color: var(--ant-color-primary-bg);
+  color: var(--ant-color-primary-text);
   transform: scale(1.08);
   outline: none;
 }
@@ -268,8 +268,8 @@
 
 .sidebar-pin:hover,
 .sidebar-pin:focus-visible {
-  background-color: color-mix(in srgb, var(--ant-color-primary) 10%, transparent);
-  color: var(--ant-color-primary);
+  background-color: var(--ant-color-primary-bg);
+  color: var(--ant-color-primary-text);
   transform: scale(1.08);
   outline: none;
 }
@@ -304,7 +304,7 @@
 
 .sider-version:hover,
 .sider-version:focus-visible {
-  color: var(--ant-color-primary);
+  color: var(--ant-color-primary-text);
   outline: none;
 }
 
@@ -356,8 +356,8 @@ body.dark .ant-drawer-body .drawer-menu .ant-menu-item-group-list {
 .sider-nav .ant-menu-item-selected,
 .sider-utility .ant-menu-item-selected,
 .drawer-menu .ant-menu-item-selected {
-  background-color: color-mix(in srgb, var(--ant-color-primary) 20%, transparent) !important;
-  color: var(--ant-color-primary) !important;
+  background-color: var(--ant-color-primary-bg) !important;
+  color: var(--ant-color-primary-text) !important;
 }
 
 .sider-nav .ant-menu-item-active:not(.ant-menu-item-selected),
@@ -366,6 +366,6 @@ body.dark .ant-drawer-body .drawer-menu .ant-menu-item-group-list {
 .sider-nav .ant-menu-item:not(.ant-menu-item-selected):not(.ant-menu-item-disabled):hover,
 .sider-utility .ant-menu-item:not(.ant-menu-item-selected):not(.ant-menu-item-disabled):hover,
 .drawer-menu .ant-menu-item:not(.ant-menu-item-selected):not(.ant-menu-item-disabled):hover {
-  background-color: color-mix(in srgb, var(--ant-color-primary) 10%, transparent) !important;
-  color: var(--ant-color-primary) !important;
+  background-color: var(--ant-control-item-bg-hover) !important;
+  color: var(--ant-color-primary-text-hover) !important;
 }

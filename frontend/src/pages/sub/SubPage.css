@@ -261,7 +261,7 @@ body.theme-custom .subscription-page {
   font-size: 12px;
   background: var(--ant-color-fill-quaternary);
   border: 1px solid var(--ant-color-border-secondary);
-  color: var(--ant-color-primary);
+  color: var(--ant-color-primary-text);
 }
 
 .sub-rows {
@@ -317,7 +317,7 @@ body.theme-custom .subscription-page {
 }
 
 a.sub-row-title:hover {
-  color: var(--ant-color-primary);
+  color: var(--ant-color-primary-text-hover);
 }
 
 .sub-row-url {
@@ -434,7 +434,7 @@ a.sub-row-title:hover {
   border-radius: 9px;
   border: 1px solid var(--ant-color-border-secondary);
   background: var(--ant-color-primary-bg);
-  color: var(--ant-color-primary);
+  color: var(--ant-color-primary-text);
   font-weight: 600;
 }
 

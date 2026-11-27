@@ -1,4 +1,3 @@
-import { NativeSelect } from '@/components/form/NativeSelect';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   AutoComplete,
@@ -408,7 +407,7 @@ function TcpMasksList({
                 }
               />
               {allowPresets && (
-                <NativeSelect
+                <Select
                   id={`${uid}-tcp-presets`}
                   size="small"
                   style={{ minWidth: 160 }}
@@ -479,7 +478,7 @@ function TcpMaskItem({
       </Divider>
 
       <Form.Item label="Type" name={[fieldName, 'type']}>
-        <NativeSelect
+        <Select
           onChange={(v) =>
             form.setFieldValue([...absolutePath, 'settings'], defaultTcpMaskSettings(v))
           }
@@ -1124,7 +1123,7 @@ function UdpMaskItem({
       </Divider>
 
       <Form.Item label="Type" name={[fieldName, 'type']}>
-        <NativeSelect onChange={onTypeChange} options={options} />
+        <Select onChange={onTypeChange} options={options} />
       </Form.Item>
 
       <Form.Item
@@ -1148,7 +1147,7 @@ function UdpMaskItem({
             return (
               <>
                 <Form.Item label="Header" name={[fieldName, 'settings', 'header']}>
-                  <NativeSelect
+                  <Select
                     options={[
                       { value: '', label: 'Original / AES-128-GCM' },
                       { value: 'dns', label: 'DNS' },
@@ -1328,7 +1327,7 @@ function SalamanderUdpMaskSettings({
             : 'Scrambles each packet into random-looking bytes.'
         }
       >
-        <NativeSelect
+        <Select
           id={`${uid}-salamander-mode`}
           value={mode}
           onChange={(next) => {
@@ -1948,7 +1947,7 @@ function ItemEditor({
     <>
       {allowVariables && (
         <Form.Item label="Kind" htmlFor={`${uid}-kind`}>
-          <NativeSelect
+          <Select
             id={`${uid}-kind`}
             value={kind}
             onChange={onKindChange}
@@ -1958,7 +1957,7 @@ function ItemEditor({
       )}
       {kind === 'bytes' && (
         <Form.Item label="Type" name={[fieldName, 'type']}>
-          <NativeSelect
+          <Select
             onChange={onTypeChange}
             options={[
               { value: 'array', label: 'Array' },
@@ -2123,7 +2122,7 @@ function QuicParamsForm({
   return (
     <>
       <Form.Item label="Congestion" name={[...base, 'congestion']}>
-        <NativeSelect
+        <Select
           options={[
             { value: 'reno', label: 'Reno' },
             { value: 'bbr', label: 'BBR' },

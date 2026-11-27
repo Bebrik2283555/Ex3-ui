@@ -1,4 +1,3 @@
-import { NativeSelect } from '@/components/form/NativeSelect';
 import { useEffect, useRef, useState, useId } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -767,7 +766,21 @@ export default function InboundFormModal({
   });
 
   const title =
-    mode === 'edit' ? t('pages.inbounds.modifyInbound') : t('pages.inbounds.addInbound');
+    mode === 'edit' ? (
+      t('pages.inbounds.modifyInbound')
+    ) : (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span>{t('pages.inbounds.addInbound')}</span>
+        <Button
+          type="primary"
+          size="small"
+          icon={<AppstoreAddOutlined aria-hidden />}
+          onClick={() => setTemplateOpen(true)}
+        >
+          {t('pages.inbounds.form.createFromTemplate')}
+        </Button>
+      </div>
+    );
 
   const okText = mode === 'edit' ? t('pages.clients.submitEdit') : t('create');
 
@@ -802,7 +815,7 @@ export default function InboundFormModal({
       )}
 
       <FormField name="protocol" label={t('pages.inbounds.protocol')}>
-        <NativeSelect id="protocol" disabled={mode === 'edit'} options={PROTOCOL_OPTIONS} />
+        <Select id="protocol" disabled={mode === 'edit'} options={PROTOCOL_OPTIONS} />
       </FormField>
 
       {!SIDECAR_PROTOCOLS.has(protocol) && (
@@ -822,7 +835,7 @@ export default function InboundFormModal({
             label={t('pages.inbounds.form.shareAddrStrategy')}
             tooltip={t('pages.inbounds.form.shareAddrStrategyHelp')}
           >
-            <NativeSelect
+            <Select
               options={SHARE_ADDR_STRATEGIES.filter(
                 (strategy) => strategy !== 'node' || nodeShareOptionAvailable,
               ).map((strategy) => ({
@@ -909,7 +922,7 @@ export default function InboundFormModal({
       </Form.Item>
 
       <FormField name="trafficReset" label={t('pages.inbounds.periodicTrafficResetTitle')}>
-        <NativeSelect
+        <Select
           options={TRAFFIC_RESETS.map((r) => ({
             value: r,
             label: t(`pages.inbounds.periodicTrafficReset.${r}`),
@@ -1089,7 +1102,7 @@ export default function InboundFormModal({
     <>
       {hasSelectableTransport && (
         <Form.Item htmlFor={`${uid}-network`} label={t('transmission')}>
-          <NativeSelect
+          <Select
             id={`${uid}-network`}
             style={{ width: '75%' }}
             value={network}
@@ -1329,18 +1342,6 @@ export default function InboundFormModal({
         )}
       >
         <FormProvider {...methods}>
-          {mode === 'add' && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-              <Button
-                type="primary"
-                size="small"
-                icon={<AppstoreAddOutlined aria-hidden />}
-                onClick={() => setTemplateOpen(true)}
-              >
-                {t('pages.inbounds.form.createFromTemplate')}
-              </Button>
-            </div>
-          )}
           <Form
             colon={false}
             labelCol={{ sm: { span: 8 } }}

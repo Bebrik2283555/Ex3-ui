@@ -103,7 +103,7 @@ export default function DomainSetupModal({ open, onClose, onDone }: DomainSetupM
     <Modal
       open={open}
       title={t('pages.inbounds.form.templateDomainTitle')}
-      okText={null}
+      okButtonProps={{ style: { display: 'none' } }}
       cancelText={t('close')}
       onCancel={onClose}
       width={520}

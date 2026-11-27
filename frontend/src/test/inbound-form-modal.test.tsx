@@ -1,5 +1,5 @@
 import { describe, it, expect, onTestFinished, vi } from 'vitest';
-import { screen, act, render, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
+import { screen, act, render, cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 import InboundFormModal from '@/pages/inbounds/form/InboundFormModal';
 import { DBInbound } from '@/models/dbinbound';
@@ -224,9 +224,10 @@ describe('InboundFormModal', () => {
       });
     };
     const selectedStrategy = () =>
-      within(screen.getByRole('combobox', { name: 'Share address strategy' })).getByRole('option', {
-        selected: true,
-      }).textContent;
+      (
+        screen.getByRole('combobox', { name: 'Share address strategy' }).closest('.ant-select')
+          ?.textContent ?? ''
+      ).trim();
     const modal = (nodes: never[], fetched: boolean) => (
       <AntdRootConfig>
         <ThemeProvider>
@@ -330,8 +331,7 @@ describe('InboundFormModal', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Stream' }));
     const transport = screen.getByRole('combobox', { name: 'Transmission' });
-    const option = within(transport).getByRole('option', { name: 'XDRIVE' }) as HTMLOptionElement;
-    fireEvent.change(transport, { target: { value: option.value } });
+    chooseSelectOption(transport.id, 'XDRIVE');
     for (const [label, value] of [
       ['Remote folder', 'xray-tunnel'],
       ['Client ID', 'id.apps.googleusercontent.com'],

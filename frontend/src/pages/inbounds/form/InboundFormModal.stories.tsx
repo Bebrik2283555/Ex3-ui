@@ -90,26 +90,27 @@ export const SelectableOptions: Story = {
     const page = within(canvasElement.ownerDocument.body);
     const opener = canvas.getByRole('button', { name: 'Add inbound' });
     await userEvent.click(opener);
-    const dialog = await page.findByRole('dialog', { name: 'Add Inbound' });
+    const dialog = await page.findByRole('dialog', { name: /^Add Inbound/ });
+    const selectOption = async (combobox: HTMLElement, optionName: string) => {
+      await userEvent.click(combobox);
+      const dropdown = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          '.ant-select-dropdown:not(.ant-select-dropdown-hidden)',
+        ),
+      ).at(-1);
+      if (!dropdown) throw new Error(`Open select dropdown not found for '${optionName}'`);
+      await userEvent.click(within(dropdown).getByRole('option', { name: optionName }));
+    };
     const protocol = within(dialog).getByRole('combobox', { name: 'Protocol' });
-    await userEvent.selectOptions(
-      protocol,
-      within(protocol).getByRole('option', { name: 'shadowsocks' }),
-    );
-    await expect(protocol).toHaveDisplayValue('shadowsocks');
+    await selectOption(protocol, 'shadowsocks');
+    await expect(protocol.closest('.ant-select')).toHaveTextContent('shadowsocks');
     await expect(protocol).toHaveFocus();
     await userEvent.click(within(dialog).getByRole('tab', { name: 'Protocol' }));
     const cipher = within(dialog).getByRole('combobox', { name: 'Encryption method' });
-    await userEvent.selectOptions(
-      cipher,
-      within(cipher).getByRole('option', { name: 'chacha20-ietf-poly1305' }),
-    );
+    await selectOption(cipher, 'chacha20-ietf-poly1305');
     await userEvent.click(within(dialog).getByRole('tab', { name: 'Stream' }));
     const transport = within(dialog).getByRole('combobox', { name: 'Transmission' });
-    await userEvent.selectOptions(
-      transport,
-      within(transport).getByRole('option', { name: 'WebSocket' }),
-    );
+    await selectOption(transport, 'WebSocket');
     await expect(within(dialog).getByRole('textbox', { name: 'Path' })).toHaveValue('/');
     await userEvent.click(within(dialog).getAllByRole('button', { name: 'Close' })[0]);
     await waitFor(() => expect(opener).toHaveFocus());
